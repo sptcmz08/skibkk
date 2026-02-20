@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+  SUPERUSER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PROMPTPAY
+  BANK_TRANSFER
+  PACKAGE
+  CASH
+  ADMIN_OVERRIDE
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  phone     String?
+  role      Role     @default(CUSTOMER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings     Booking[]
+  payments     Payment[]
+  userPackages UserPackage[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Court {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  operatingHours OperatingHours[]
+  bookingItems   BookingItem[]
+  pricingRules   PricingRule[]
+
+  @@map("courts")
+}
+
+model OperatingHours {
+  id        String    @id @default(uuid())
+  courtId   String
+  dayOfWeek DayOfWeek
+  openTime  String // "09:00"
+  closeTime String // "00:00" (midnight)
+  isClosed  Boolean   @default(false)
+
+  court Court @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@unique([courtId, dayOfWeek])
+  @@map("operating_hours")
+}
+
+model SpecialClosedDate {
+  id        String   @id @default(uuid())
+  date      DateTime @db.Date
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@map("special_closed_dates")
+}
+
+model PricingRule {
+  id          String      @id @default(uuid())
+  courtId     String? // null = applies to all courts
+  daysOfWeek  DayOfWeek[] // which days this rule applies
+  startTime   String // "09:00"
+  endTime     String // "15:00"
+  price       Float
+  includesVat Boolean     @default(false)
+  isActive    Boolean     @default(true)
+  priority    Int         @default(0) // higher priority overrides
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  court Court? @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@map("pricing_rules")
+}
+
+model Booking {
+  id              String        @id @default(uuid())
+  userId          String
+  bookingNumber   String        @unique
+  status          BookingStatus @default(PENDING)
+  totalAmount     Float
+  notes           String?
+  isBookerLearner Boolean       @default(false)
+  createdByAdmin  Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  bookingItems BookingItem[]
+  participants Participant[]
+  payments     Payment[]
+  invoice      Invoice?
+
+  @@map("bookings")
+}
+
+model BookingItem {
+  id        String   @id @default(uuid())
+  bookingId String
+  courtId   String
+  date      DateTime @db.Date
+  startTime String // "09:00"
+  endTime   String // "10:00"
+  price     Float
+  teacherId String?
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  court   Court    @relation(fields: [courtId], references: [id])
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+
+  @@unique([courtId, date, startTime])
+  @@map("booking_items")
+}
+
+model Participant {
+  id        String  @id @default(uuid())
+  bookingId String
+  name      String
+  sportType String
+  age       Int?
+  shoeSize  String?
+  weight    Float?
+  height    Float?
+  phone     String?
+  isBooker  Boolean @default(false)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("participants")
+}
+
+model Payment {
+  id         String        @id @default(uuid())
+  bookingId  String
+  userId     String
+  method     PaymentMethod
+  amount     Float
+  slipUrl    String?
+  slipHash   String? // for duplicate detection
+  status     PaymentStatus @default(PENDING)
+  verifiedAt DateTime?
+  verifiedBy String?
+  packageId  String? // if paid by package
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("payments")
+}
+
+model Package {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  totalHours  Int
+  price       Float
+  validDays   Int      @default(30) // days until expiry
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userPackages UserPackage[]
+
+  @@map("packages")
+}
+
+model UserPackage {
+  id             String   @id @default(uuid())
+  userId         String
+  packageId      String
+  remainingHours Float
+  purchasedAt    DateTime @default(now())
+  expiresAt      DateTime
+
+  user    User    @relation(fields: [userId], references: [id])
+  package Package @relation(fields: [packageId], references: [id])
+
+  @@map("user_packages")
+}
+
+model Teacher {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  specialty String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedules    TeacherSchedule[]
+  evaluations  TeacherEvaluation[]
+  bookingItems BookingItem[]
+
+  @@map("teachers")
+}
+
+model TeacherSchedule {
+  id        String    @id @default(uuid())
+  teacherId String
+  dayOfWeek DayOfWeek
+  startTime String
+  endTime   String
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_schedules")
+}
+
+model TeacherEvaluation {
+  id        String   @id @default(uuid())
+  teacherId String
+  bookingId String?
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_evaluations")
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  bookingId     String   @unique
+  invoiceNumber String   @unique
+  companyName   String?
+  taxId         String?
+  address       String?
+  totalAmount   Float
+  vatAmount     Float?
+  grandTotal    Float
+  issuedAt      DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("invoices")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String // BOOKING_CREATE, BOOKING_EDIT, BOOKING_CANCEL, etc.
+  entityType String // booking, court, user, etc.
+  entityId   String
+  details    String? // JSON string of changes
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model UsedSlip {
+  id        String   @id @default(uuid())
+  slipHash  String   @unique
+  paymentId String
+  createdAt DateTime @default(now())
+
+  @@map("used_slips")
+}
