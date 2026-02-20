@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
             data: {
                 name: body.name,
                 description: body.description || null,
+                sportType: body.sportType || null,
                 sortOrder: body.sortOrder || 0,
                 operatingHours: {
                     create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({

@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
                 return {
                     courtId: court.id,
                     courtName: court.name,
+                    sportType: court.sportType ?? null,
                     closed: true,
                     slots: [],
                 }
@@ -106,8 +107,9 @@ export async function GET(req: NextRequest) {
             return {
                 courtId: court.id,
                 courtName: court.name,
+                sportType: court.sportType ?? null,
                 closed: false,
-                slots,
+                slots: slots.map(s => ({ ...s, available: s.status === 'available' })),
             }
         })
 

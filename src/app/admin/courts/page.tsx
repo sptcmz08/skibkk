@@ -11,8 +11,10 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อาทิตย์' },
 ]
 
+const SPORT_TYPES = ['ฟุตบอล', 'ฟุตซอล', 'แบดมินตัน', 'บาสเกตบอล', 'วอลเลย์บอล', 'เทนนิส', 'ปิงปอง', 'สควอช', 'อื่นๆ']
+
 interface Court {
-    id: string; name: string; description: string | null; isActive: boolean; sortOrder: number
+    id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; sortOrder: number
     operatingHours: Array<{ id: string; dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
 }
 
@@ -21,7 +23,7 @@ export default function CourtsManagement() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
-    const [form, setForm] = useState({ name: '', description: '', sortOrder: 0 })
+    const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0 })
     const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
     const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string }>>([])
     const [newClosedDate, setNewClosedDate] = useState({ date: '', reason: '' })
@@ -43,7 +45,7 @@ export default function CourtsManagement() {
     const openModal = (court?: Court) => {
         if (court) {
             setEditingCourt(court)
-            setForm({ name: court.name, description: court.description || '', sortOrder: court.sortOrder })
+            setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder })
             setHours(DAYS.map(d => {
                 const existing = court.operatingHours.find(h => h.dayOfWeek === d.key)
                 return existing ? { dayOfWeek: d.key, openTime: existing.openTime, closeTime: existing.closeTime, isClosed: existing.isClosed }
@@ -51,7 +53,7 @@ export default function CourtsManagement() {
             }))
         } else {
             setEditingCourt(null)
-            setForm({ name: '', description: '', sortOrder: 0 })
+            setForm({ name: '', description: '', sportType: '', sortOrder: 0 })
             setHours(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
         }
         setShowModal(true)
@@ -148,6 +150,13 @@ export default function CourtsManagement() {
                             <div className="input-group">
                                 <label style={{ color: 'var(--a-text-secondary)' }}>ชื่อสนาม</label>
                                 <input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="เช่น สนาม A" />
+                            </div>
+                            <div className="input-group">
+                                <label style={{ color: 'var(--a-text-secondary)' }}>ประเภทกีฬา</label>
+                                <select className="admin-input" value={form.sportType} onChange={e => setForm({ ...form, sportType: e.target.value })}>
+                                    <option value="">-- เลือกประเภทกีฬา --</option>
+                                    {SPORT_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
                             <div className="input-group">
                                 <label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label>

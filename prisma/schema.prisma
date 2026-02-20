@@ -66,6 +66,7 @@ model Court {
   id          String   @id @default(uuid())
   name        String
   description String?
+  sportType   String? // e.g. "ฟุตบอล", "แบดมินตัน", "บาสเกตบอล"
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
