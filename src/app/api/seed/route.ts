@@ -24,44 +24,44 @@ export async function GET(req: NextRequest) {
         // Action: seed - create sample courts + pricing
         if (action === 'seed') {
             // Create courts
-            const courtA = await prisma.court.upsert({
-                where: { id: 'court-a' },
-                update: {},
+            const courtSki = await prisma.court.upsert({
+                where: { id: 'court-ski' },
+                update: { sportType: 'สกี้', name: 'Slope สกี้ A', description: 'สโลปสกี้หลัก สำหรับทุกระดับ' },
                 create: {
-                    id: 'court-a',
-                    name: 'Slope A',
-                    description: 'สโลปหลัก สำหรับทุกระดับ',
+                    id: 'court-ski',
+                    name: 'Slope สกี้ A',
+                    description: 'สโลปสกี้หลัก สำหรับทุกระดับ',
+                    sportType: 'สกี้',
                     sortOrder: 1,
                 },
             })
 
-            const courtB = await prisma.court.upsert({
-                where: { id: 'court-b' },
-                update: {},
+            const courtSnow = await prisma.court.upsert({
+                where: { id: 'court-snow' },
+                update: { sportType: 'สโนบอร์ด', name: 'Slope สโนบอร์ด B', description: 'สโลปสโนบอร์ด สำหรับผู้เริ่มต้นและขั้นกลาง' },
                 create: {
-                    id: 'court-b',
-                    name: 'Slope B',
-                    description: 'สโลปสำหรับผู้เริ่มต้น',
+                    id: 'court-snow',
+                    name: 'Slope สโนบอร์ด B',
+                    description: 'สโลปสโนบอร์ด สำหรับผู้เริ่มต้นและขั้นกลาง',
+                    sportType: 'สโนบอร์ด',
                     sortOrder: 2,
                 },
             })
 
-            // Create operating hours for both courts (Mon-Sun, 10:00-22:00)
+            // Create operating hours (08:00-23:00, every day)
             const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const
-            for (const court of [courtA, courtB]) {
+            for (const court of [courtSki, courtSnow]) {
                 for (const day of days) {
                     await prisma.operatingHours.upsert({
                         where: { courtId_dayOfWeek: { courtId: court.id, dayOfWeek: day } },
-                        update: { openTime: '10:00', closeTime: '22:00', isClosed: false },
-                        create: { courtId: court.id, dayOfWeek: day, openTime: '10:00', closeTime: '22:00', isClosed: false },
+                        update: { openTime: '08:00', closeTime: '23:00', isClosed: false },
+                        create: { courtId: court.id, dayOfWeek: day, openTime: '08:00', closeTime: '23:00', isClosed: false },
                     })
                 }
             }
 
             // Create pricing rules
-            // Weekday: 1,800/hr, Weekend: 2,200/hr
-            for (const court of [courtA, courtB]) {
-                // Delete existing rules for this court
+            for (const court of [courtSki, courtSnow]) {
                 await prisma.pricingRule.deleteMany({ where: { courtId: court.id } })
 
                 // Weekday pricing
@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
                     data: {
                         courtId: court.id,
                         daysOfWeek: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
-                        startTime: '10:00',
-                        endTime: '22:00',
+                        startTime: '08:00',
+                        endTime: '23:00',
                         price: 1800,
                         priority: 1,
                     },
@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
                     data: {
                         courtId: court.id,
                         daysOfWeek: ['SATURDAY', 'SUNDAY'],
-                        startTime: '10:00',
-                        endTime: '22:00',
+                        startTime: '08:00',
+                        endTime: '23:00',
                         price: 2200,
                         priority: 1,
                     },
@@ -91,8 +91,8 @@ export async function GET(req: NextRequest) {
 
             return NextResponse.json({
                 message: 'Seed data created!',
-                courts: [courtA, courtB],
-                operatingHours: '10:00-22:00 ทุกวัน',
+                courts: [courtSki, courtSnow],
+                operatingHours: '08:00-23:00 ทุกวัน',
                 pricing: 'วันธรรมดา ฿1,800/ชม., วันหยุด ฿2,200/ชม.',
             })
         }

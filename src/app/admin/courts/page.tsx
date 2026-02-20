@@ -11,7 +11,7 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อาทิตย์' },
 ]
 
-const SPORT_TYPES = ['ฟุตบอล', 'ฟุตซอล', 'แบดมินตัน', 'บาสเกตบอล', 'วอลเลย์บอล', 'เทนนิส', 'ปิงปอง', 'สควอช', 'อื่นๆ']
+const SPORT_TYPES = ['สกี้', 'สโนบอร์ด', 'ฟุตบอล', 'ฟุตซอล', 'แบดมินตัน', 'บาสเกตบอล', 'วอลเลย์บอล', 'เทนนิส', 'ปิงปอง', 'สควอช', 'อื่นๆ']
 
 interface Court {
     id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; sortOrder: number
@@ -24,7 +24,7 @@ export default function CourtsManagement() {
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
     const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0 })
-    const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
+    const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '08:00', closeTime: '23:00', isClosed: false })))
     const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string }>>([])
     const [newClosedDate, setNewClosedDate] = useState({ date: '', reason: '' })
 
