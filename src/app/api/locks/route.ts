@@ -15,29 +15,35 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'sessionId and slots required' }, { status: 400 })
         }
 
-        const expiresAt = new Date(Date.now() + LOCK_DURATION_MS)
+        const newExpiresAt = new Date(Date.now() + LOCK_DURATION_MS)
         const results = []
 
         for (const slot of slots) {
             try {
-                // Check if slot is already locked by another session
+                // Check if slot is already locked
                 const existing = await prisma.slotLock.findUnique({
                     where: { courtId_date_startTime: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime } },
                 })
 
-                if (existing && existing.sessionId !== sessionId && existing.expiresAt > new Date()) {
-                    const secondsLeft = Math.ceil((existing.expiresAt.getTime() - Date.now()) / 1000)
-                    results.push({ ...slot, success: false, reason: 'locked_by_other', secondsLeft })
+                if (existing && existing.expiresAt > new Date()) {
+                    if (existing.sessionId !== sessionId) {
+                        // Locked by another session — conflict
+                        const secondsLeft = Math.ceil((existing.expiresAt.getTime() - Date.now()) / 1000)
+                        results.push({ ...slot, success: false, reason: 'locked_by_other', secondsLeft })
+                        continue
+                    }
+                    // Same session — keep existing expiry (don't reset timer!)
+                    results.push({ ...slot, success: true, expiresAt: existing.expiresAt })
                     continue
                 }
 
-                // Upsert lock (create or refresh expiry for same session)
+                // New lock or expired lock — create with fresh 20-minute expiry
                 await prisma.slotLock.upsert({
                     where: { courtId_date_startTime: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime } },
-                    update: { sessionId, expiresAt },
-                    create: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime, sessionId, expiresAt },
+                    update: { sessionId, expiresAt: newExpiresAt },
+                    create: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime, sessionId, expiresAt: newExpiresAt },
                 })
-                results.push({ ...slot, success: true, expiresAt })
+                results.push({ ...slot, success: true, expiresAt: newExpiresAt })
             } catch {
                 results.push({ ...slot, success: false, reason: 'error' })
             }
