@@ -283,40 +283,40 @@ export default function HomePage() {
             </section>
 
             {/* ===== GALLERY / ATMOSPHERE SECTION ===== */}
-            {gallery.length > 0 && (
-                <section style={{
-                    padding: '80px 24px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}>
-                    <div style={{
-                        position: 'absolute', inset: 0,
-                        background: 'var(--c-gradient)', opacity: 0.04,
-                    }} />
-                    <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            style={{ textAlign: 'center', marginBottom: '48px' }}
-                        >
-                            <h2 style={{
-                                fontSize: '42px', fontWeight: 800, fontFamily: "'Inter', sans-serif",
-                                letterSpacing: '-1.5px', marginBottom: '16px',
-                            }}>
-                                บรรยากาศภายในสนาม
-                            </h2>
-                            <p style={{ color: 'var(--c-text-secondary)', fontSize: '18px', maxWidth: '600px', margin: '0 auto' }}>
-                                สัมผัสบรรยากาศจริงจากผู้มาใช้บริการ
-                            </p>
-                        </motion.div>
-
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                            gap: '16px',
+            <section style={{
+                padding: '80px 24px',
+                position: 'relative',
+                overflow: 'hidden',
+            }}>
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'var(--c-gradient)', opacity: 0.04,
+                }} />
+                <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        style={{ textAlign: 'center', marginBottom: '48px' }}
+                    >
+                        <h2 style={{
+                            fontSize: '42px', fontWeight: 800, fontFamily: "'Inter', sans-serif",
+                            letterSpacing: '-1.5px', marginBottom: '16px',
                         }}>
-                            {gallery.map((url, i) => (
+                            บรรยากาศการเรียนการสอน
+                        </h2>
+                        <p style={{ color: 'var(--c-text-secondary)', fontSize: '18px', maxWidth: '600px', margin: '0 auto' }}>
+                            สัมผัสบรรยากาศจริงจากผู้มาใช้บริการ
+                        </p>
+                    </motion.div>
+
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                        gap: '16px',
+                    }}>
+                        {gallery.length > 0 ? (
+                            gallery.map((url, i) => (
                                 <motion.div
                                     key={i}
                                     initial={{ opacity: 0, scale: 0.95 }}
@@ -343,11 +343,33 @@ export default function HomePage() {
                                         pointerEvents: 'none',
                                     }} />
                                 </motion.div>
-                            ))}
-                        </div>
+                            ))
+                        ) : (
+                            /* Placeholder cards when no gallery images yet */
+                            [1, 2, 3].map(i => (
+                                <motion.div
+                                    key={i}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    whileInView={{ opacity: 1, scale: 1 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: i * 0.1 }}
+                                    style={{
+                                        borderRadius: '16px', overflow: 'hidden',
+                                        border: '1px solid var(--c-glass-border)',
+                                        aspectRatio: '4/3',
+                                        background: 'var(--c-glass)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        flexDirection: 'column', gap: '12px',
+                                    }}
+                                >
+                                    <span style={{ fontSize: '48px', opacity: 0.3 }}>📷</span>
+                                    <span style={{ color: 'var(--c-text-muted)', fontSize: '14px' }}>เร็วๆ นี้</span>
+                                </motion.div>
+                            ))
+                        )}
                     </div>
-                </section>
-            )}
+                </div>
+            </section>
 
             {/* ===== CTA SECTION ===== */}
             <section style={{
