@@ -30,7 +30,7 @@ export default function BookingPage() {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         if (stored.length === 0) { router.push('/courts'); return }
         setCart(stored)
-        fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.user) setUser(d.user) }).catch(() => { })
+        fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json()).then(d => { if (d.user) setUser(d.user) }).catch(() => { })
     }, [router])
 
     // Max participants: 2 per hour total

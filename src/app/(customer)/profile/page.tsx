@@ -25,12 +25,12 @@ export default function ProfilePage() {
 
     useEffect(() => {
         Promise.all([
-            fetch('/api/auth/me').then(r => r.json()),
-            fetch('/api/bookings').then(r => r.json()),
-        ]).then(([userData, bookingData]) => {
-            if (userData.user) setUser(userData.user)
+            fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json()),
+            fetch('/api/bookings', { cache: 'no-store' }).then(r => r.json()),
+        ]).then(([authData, bookingsData]) => {
+            if (authData.user) setUser(authData.user)
             else { router.push('/login'); return }
-            if (bookingData.bookings) setBookings(bookingData.bookings)
+            if (bookingsData.bookings) setBookings(bookingsData.bookings)
         }).catch(() => toast.error('ไม่สามารถโหลดข้อมูลได้')).finally(() => setLoading(false))
     }, [router])
 

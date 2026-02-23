@@ -11,9 +11,8 @@ export default function HomePage() {
     const [currentSlide, setCurrentSlide] = useState(0)
 
     useEffect(() => {
-        fetch('/api/settings')
-            .then(r => r.json())
-            .then(data => {
+        fetch('/api/settings', { cache: 'no-store' })
+            .then(r => r.json()).then(data => {
                 if (data.banners) setBanners(JSON.parse(data.banners))
                 if (data.gallery) setGallery(JSON.parse(data.gallery))
             })

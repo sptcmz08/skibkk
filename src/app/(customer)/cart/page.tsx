@@ -85,9 +85,9 @@ export default function CartPage() {
         useEffect(() => {
             const check = async () => {
                 try {
-                    const res = await fetch(`/api/locks/check?sessionId=${getSessionId()}`)
-                    const d = await res.json()
-                    if (d.active && d.expiresAt) setExpiresAt(new Date(d.expiresAt))
+                    const res = await fetch(`/api/locks/check?sessionId=${getSessionId()}`, { cache: 'no-store' })
+                    const data = await res.json()
+                    if (data.active && data.expiresAt) setExpiresAt(new Date(data.expiresAt))
                     else setExpiresAt(null)
                 } catch { }
             }

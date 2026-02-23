@@ -24,13 +24,13 @@ export default function CustomerLayout({
         setCartCount(cart.length)
 
         // Check auth
-        fetch('/api/auth/me')
+        fetch('/api/auth/me', { cache: 'no-store' })
             .then((r) => r.ok ? r.json() : null)
             .then((data) => { if (data?.user) setUser(data.user) })
             .catch(() => { })
 
         // Load site settings (logo)
-        fetch('/api/settings')
+        fetch('/api/settings', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => { if (data.logo) setLogoUrl(data.logo) })
             .catch(() => { })

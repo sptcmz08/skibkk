@@ -137,7 +137,7 @@ export default function CourtsPage() {
         const fetchCourts = async () => {
             setLoadingCourts(true)
             try {
-                const res = await fetch('/api/courts')
+                const res = await fetch('/api/courts', { cache: 'no-store' })
                 const data = await res.json()
                 if (data.courts) {
                     const types = [...new Set<string>(
@@ -162,7 +162,7 @@ export default function CourtsPage() {
         if (!silent) setLoading(true)
         try {
             const sessionId = getSessionId()
-            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}`)
+            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) {
                 const filtered = selectedSport
