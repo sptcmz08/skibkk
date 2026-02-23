@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
     LayoutDashboard, MapPin, DollarSign, Package, Calendar,
     Users, GraduationCap, FileText, BarChart3, Clock, Shield,
-    LogOut, Menu, X, ChevronDown
+    LogOut, Menu, X, ChevronDown, Settings
 } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/reports', icon: BarChart3, label: 'สรุปการจอง', section: '' },
         { href: '/admin/availability', icon: Clock, label: 'ตรวจสอบเวลาว่าง', section: '' },
         { href: '/admin/users', icon: Shield, label: 'ผู้ใช้งาน', section: 'ระบบ' },
+        { href: '/admin/settings', icon: Settings, label: 'ตั้งค่าเว็บไซต์', section: '' },
     ]
 
     const getPageTitle = () => {

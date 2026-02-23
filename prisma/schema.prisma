@@ -324,3 +324,12 @@ model UsedSlip {
 
   @@map("used_slips")
 }
+
+model SiteSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique // "logo", "banners", "gallery"
+  value     String // JSON string
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}

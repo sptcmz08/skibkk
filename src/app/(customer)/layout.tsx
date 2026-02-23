@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { ShoppingCart, User, Menu, X, LogOut, Calendar, Home } from 'lucide-react'
@@ -17,6 +16,7 @@ export default function CustomerLayout({
     const [cartCount, setCartCount] = useState(0)
     const [user, setUser] = useState<{ name: string; email: string } | null>(null)
     const [menuOpen, setMenuOpen] = useState(false)
+    const [logoUrl, setLogoUrl] = useState('/logo.png')
 
     useEffect(() => {
         // Load cart from localStorage
@@ -27,6 +27,12 @@ export default function CustomerLayout({
         fetch('/api/auth/me')
             .then((r) => r.ok ? r.json() : null)
             .then((data) => { if (data?.user) setUser(data.user) })
+            .catch(() => { })
+
+        // Load site settings (logo)
+        fetch('/api/settings')
+            .then(r => r.json())
+            .then(data => { if (data.logo) setLogoUrl(data.logo) })
             .catch(() => { })
 
         // Listen for cart updates
@@ -53,7 +59,7 @@ export default function CustomerLayout({
         <div className="customer-layout">
             <nav className="customer-nav">
                 <Link href="/" className="logo">
-                    <Image src="/logo.png" alt="SKIBKK" width={48} height={48} style={{ borderRadius: '8px', objectFit: 'contain' }} priority />
+                    <img src={logoUrl} alt="SKIBKK" style={{ height: '48px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
                 </Link>
 
                 <ul className="nav-links">
