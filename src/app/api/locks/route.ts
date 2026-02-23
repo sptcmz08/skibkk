@@ -52,7 +52,13 @@ export async function POST(req: NextRequest) {
         // Cleanup expired locks while we're here
         await prisma.slotLock.deleteMany({ where: { expiresAt: { lt: new Date() } } })
 
-        return NextResponse.json({ results, expiresAt })
+        // Return the earliest expiresAt from successful locks
+        const successfulLocks = results.filter(r => r.success && r.expiresAt)
+        const earliestExpiry = successfulLocks.length > 0
+            ? successfulLocks.reduce((min, r) => r.expiresAt < min ? r.expiresAt : min, successfulLocks[0].expiresAt)
+            : null
+
+        return NextResponse.json({ results, expiresAt: earliestExpiry })
     } catch (error) {
         console.error('POST /api/locks error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })

@@ -25,19 +25,8 @@ export default function CartPage() {
         setMounted(true)
         const stored: CartItem[] = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         setCart(stored)
-
-        // Lock all cart items on page load (refresh expiry)
-        if (stored.length > 0) {
-            const sessionId = getSessionId()
-            fetch('/api/locks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionId,
-                    slots: stored.map(i => ({ courtId: i.courtId, date: i.date, startTime: i.startTime })),
-                }),
-            }).catch(() => { })
-        }
+        // Note: locks are created on the courts page when adding to cart.
+        // We do NOT re-lock here to avoid resetting the 20-min countdown timer.
     }, [])
 
     const removeItem = (index: number) => {
