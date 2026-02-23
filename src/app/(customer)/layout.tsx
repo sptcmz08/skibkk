@@ -52,7 +52,6 @@ export default function CustomerLayout({
 
     return (
         <div className="customer-layout">
-            <CartTimer />
             <nav className="customer-nav">
                 <Link href="/" className="logo">
                     <div className="logo-icon">🏟️</div>
@@ -73,6 +72,7 @@ export default function CustomerLayout({
                 </ul>
 
                 <div className="nav-actions">
+                    <CartTimer />
                     <Link href="/cart" className="cart-btn">
                         <ShoppingCart size={20} />
                         {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
