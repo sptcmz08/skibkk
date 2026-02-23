@@ -53,9 +53,11 @@ export async function POST(req: NextRequest) {
         await prisma.slotLock.deleteMany({ where: { expiresAt: { lt: new Date() } } })
 
         // Return the earliest expiresAt from successful locks
-        const successfulLocks = results.filter(r => r.success && r.expiresAt)
-        const earliestExpiry = successfulLocks.length > 0
-            ? successfulLocks.reduce((min, r) => r.expiresAt < min ? r.expiresAt : min, successfulLocks[0].expiresAt)
+        const expiries = results
+            .filter(r => r.success && 'expiresAt' in r)
+            .map(r => (r as { expiresAt: Date }).expiresAt)
+        const earliestExpiry = expiries.length > 0
+            ? expiries.reduce((min, e) => e < min ? e : min, expiries[0])
             : null
 
         return NextResponse.json({ results, expiresAt: earliestExpiry })
