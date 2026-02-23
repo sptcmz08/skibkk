@@ -4,6 +4,8 @@ import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateBookingNumber } from '@/lib/utils'
 import { sendBookingConfirmation } from '@/lib/mailer'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
     try {
         const user = await getCurrentUser()

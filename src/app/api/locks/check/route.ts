@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/locks/check?sessionId=xxx
 // Returns the earliest expiry for the session's locks (for countdown timer)
 export async function GET(req: NextRequest) {
