@@ -12,19 +12,24 @@ export default function CartTimer() {
 
     // Poll server every 5s for the lock expiry
     useEffect(() => {
+        console.log('[CartTimer] Component mounted')
         const check = async () => {
             const sessionId = getSessionId()
+            console.log('[CartTimer] Checking locks for session:', sessionId)
             if (!sessionId) return
             try {
                 const res = await fetch(`/api/locks/check?sessionId=${sessionId}`)
                 const data = await res.json()
+                console.log('[CartTimer] API response:', data)
                 if (data.active && data.expiresAt) {
                     setExpiresAt(new Date(data.expiresAt))
                     toastedRef.current = false
                 } else {
                     setExpiresAt(null)
                 }
-            } catch { /* ignore */ }
+            } catch (err) {
+                console.error('[CartTimer] Error:', err)
+            }
         }
         check()
         const id = setInterval(check, 5000)

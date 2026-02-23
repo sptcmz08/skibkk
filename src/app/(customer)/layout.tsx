@@ -1,12 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { ShoppingCart, User, Menu, X, LogOut, Calendar, Home } from 'lucide-react'
-import dynamic from 'next/dynamic'
-
-const CartTimer = dynamic(() => import('@/components/CartTimer'), { ssr: false })
+import CartTimer from '@/components/CartTimer'
 
 export default function CustomerLayout({
     children,
@@ -54,8 +53,7 @@ export default function CustomerLayout({
         <div className="customer-layout">
             <nav className="customer-nav">
                 <Link href="/" className="logo">
-                    <div className="logo-icon">🏟️</div>
-                    <span className="logo-text">SKIBKK</span>
+                    <Image src="/logo.png" alt="SKIBKK" width={48} height={48} style={{ borderRadius: '8px', objectFit: 'contain' }} priority />
                 </Link>
 
                 <ul className="nav-links">
