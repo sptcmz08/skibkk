@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'SKIBKK - จองสนามกีฬาออนไลน์',
   description: 'ระบบจองสนามกีฬาออนไลน์ ง่าย สะดวก รวดเร็ว ดูตารางว่าง เลือกเวลา ชำระเงินออนไลน์',
