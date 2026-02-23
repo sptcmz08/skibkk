@@ -35,7 +35,7 @@ export default function CourtsManagement() {
     const fetchCourts = async () => {
         setLoading(true)
         try {
-            const res = await fetch('/api/courts')
+            const res = await fetch('/api/courts', { cache: 'no-store' })
             const data = await res.json()
             if (data.courts) setCourts(data.courts)
         } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }

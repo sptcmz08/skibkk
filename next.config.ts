@@ -1,8 +1,31 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/courts',
+        permanent: false,
+      },
+    ]
+  },
   async headers() {
     return [
+      {
+        // Explicitly prevent caching on root document too (some patterns can miss "/")
+        source: '/',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+        ],
+      },
       {
         // Don't cache HTML pages and any other document
         source: '/((?!_next/static|_next/image|favicon.ico|uploads).*)',
@@ -10,6 +33,10 @@ const nextConfig: NextConfig = {
           {
             key: 'Cache-Control',
             value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
           },
         ],
       },

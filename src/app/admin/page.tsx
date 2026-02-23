@@ -18,7 +18,7 @@ export default function AdminDashboard() {
     }>>([])
 
     useEffect(() => {
-        fetch('/api/bookings')
+        fetch('/api/bookings', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.bookings) {
@@ -35,7 +35,7 @@ export default function AdminDashboard() {
             })
             .catch(() => { })
 
-        fetch('/api/courts')
+        fetch('/api/courts', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.courts) {

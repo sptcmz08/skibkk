@@ -16,7 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [user, setUser] = useState<{ name: string; role: string } | null>(null)
 
     useEffect(() => {
-        fetch('/api/auth/me')
+        fetch('/api/auth/me', { cache: 'no-store' })
             .then(r => r.json())
             .then(d => {
                 if (d.user && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(d.user.role)) {

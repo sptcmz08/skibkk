@@ -14,7 +14,12 @@ export async function GET() {
             },
             orderBy: { sortOrder: 'asc' },
         })
-        return NextResponse.json({ courts })
+        return NextResponse.json({ courts }, {
+            headers: {
+                'Cache-Control': 'no-store, max-age=0, must-revalidate',
+                'Pragma': 'no-cache',
+            },
+        })
     } catch (error) {
         console.error('Courts GET error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
