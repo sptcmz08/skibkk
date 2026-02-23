@@ -14,7 +14,7 @@ export default function ReportsPage() {
     const [dailyData, setDailyData] = useState<Array<{ date: string; bookings: number; revenue: number }>>([])
 
     useEffect(() => {
-        fetch('/api/bookings')
+        fetch('/api/bookings', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.bookings) {

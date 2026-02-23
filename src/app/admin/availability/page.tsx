@@ -17,7 +17,7 @@ export default function AvailabilityPage() {
     const fetchData = useCallback(async () => {
         setLoading(true)
         try {
-            const res = await fetch(`/api/availability?date=${selectedDate}`)
+            const res = await fetch(`/api/availability?date=${selectedDate}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) setAvailability(data.availability)
         } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }

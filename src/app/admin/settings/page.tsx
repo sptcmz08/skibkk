@@ -16,7 +16,7 @@ export default function AdminSettingsPage() {
     const galleryInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        fetch('/api/settings')
+        fetch('/api/settings', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.logo) setLogo(data.logo)
