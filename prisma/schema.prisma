@@ -79,6 +79,21 @@ model Court {
   @@map("courts")
 }
 
+model SlotLock {
+  id        String   @id @default(uuid())
+  courtId   String
+  date      String // "2026-02-21"
+  startTime String // "10:00"
+  sessionId String // per-browser UUID from localStorage
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([courtId, date, startTime])
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("slot_locks")
+}
+
 model OperatingHours {
   id        String    @id @default(uuid())
   courtId   String

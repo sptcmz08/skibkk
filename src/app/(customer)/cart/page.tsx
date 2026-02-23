@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { getSessionId } from '@/lib/session'
 
 interface CartItem {
     courtId: string
@@ -22,16 +23,40 @@ export default function CartPage() {
 
     useEffect(() => {
         setMounted(true)
-        const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
+        const stored: CartItem[] = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         setCart(stored)
+
+        // Lock all cart items on page load (refresh expiry)
+        if (stored.length > 0) {
+            const sessionId = getSessionId()
+            fetch('/api/locks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    slots: stored.map(i => ({ courtId: i.courtId, date: i.date, startTime: i.startTime })),
+                }),
+            }).catch(() => { })
+        }
     }, [])
 
     const removeItem = (index: number) => {
+        const item = cart[index]
         const newCart = cart.filter((_, i) => i !== index)
         setCart(newCart)
         localStorage.setItem('skibkk-cart', JSON.stringify(newCart))
         window.dispatchEvent(new Event('cart-updated'))
         toast.success('ลบรายการแล้ว')
+        // Release lock for this slot
+        const sessionId = getSessionId()
+        fetch('/api/locks', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId,
+                slots: [{ courtId: item.courtId, date: item.date, startTime: item.startTime }],
+            }),
+        }).catch(() => { })
     }
 
     const clearCart = () => {
@@ -39,6 +64,13 @@ export default function CartPage() {
         localStorage.setItem('skibkk-cart', '[]')
         window.dispatchEvent(new Event('cart-updated'))
         toast.success('ล้างตะกร้าแล้ว')
+        // Release all locks for this session
+        const sessionId = getSessionId()
+        fetch('/api/locks', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+        }).catch(() => { })
     }
 
     const total = cart.reduce((sum, item) => sum + item.price, 0)

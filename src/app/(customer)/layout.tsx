@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { ShoppingCart, User, Menu, X, LogOut, Calendar, Home } from 'lucide-react'
+import dynamic from 'next/dynamic'
+
+const CartTimer = dynamic(() => import('@/components/CartTimer'), { ssr: false })
 
 export default function CustomerLayout({
     children,
@@ -49,6 +52,7 @@ export default function CustomerLayout({
 
     return (
         <div className="customer-layout">
+            <CartTimer />
             <nav className="customer-nav">
                 <Link href="/" className="logo">
                     <div className="logo-icon">🏟️</div>

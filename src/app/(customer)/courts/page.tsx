@@ -1,16 +1,20 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Calendar, Clock, MapPin, ShoppingCart, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { motion } from 'framer-motion'
+import { Calendar, Clock, MapPin, ShoppingCart, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { getSessionId } from '@/lib/session'
 
 interface Slot {
     startTime: string
     endTime: string
     available: boolean
     price: number
+    status: 'available' | 'booked' | 'locked' | 'mine'
+    lockedByOther: boolean
+    secondsLeft: number
 }
 
 interface CourtData {
@@ -117,6 +121,7 @@ export default function CourtsPage() {
     const [cart, setCart] = useState<CartItem[]>([])
     const [loading, setLoading] = useState(false)
     const [loadingCourts, setLoadingCourts] = useState(true)
+    const pollRef = useRef<NodeJS.Timeout | null>(null)
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -153,10 +158,11 @@ export default function CourtsPage() {
     }
 
     // Fetch availability when date selected
-    const fetchAvailability = useCallback(async (dateStr: string) => {
-        setLoading(true)
+    const fetchAvailability = useCallback(async (dateStr: string, silent = false) => {
+        if (!silent) setLoading(true)
         try {
-            const res = await fetch(`/api/availability?date=${dateStr}`)
+            const sessionId = getSessionId()
+            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}`)
             const data = await res.json()
             if (data.availability) {
                 const filtered = selectedSport
@@ -171,9 +177,17 @@ export default function CourtsPage() {
                     })
                 }
             }
-        } catch { toast.error('ไม่สามารถโหลดข้อมูลได้') }
-        finally { setLoading(false) }
+        } catch { if (!silent) toast.error('ไม่สามารถโหลดข้อมูลได้') }
+        finally { if (!silent) setLoading(false) }
     }, [selectedSport])
+
+    // Poll availability every 5s when on step 3
+    useEffect(() => {
+        if (step === 3 && selectedDate) {
+            pollRef.current = setInterval(() => fetchAvailability(selectedDate, true), 5000)
+        }
+        return () => { if (pollRef.current) clearInterval(pollRef.current) }
+    }, [step, selectedDate, fetchAvailability])
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)
@@ -184,17 +198,41 @@ export default function CourtsPage() {
     const isInCart = (courtId: string, date: string, startTime: string) =>
         cart.some(i => i.courtId === courtId && i.date === date && i.startTime === startTime)
 
-    const toggleSlot = (court: CourtData, slot: Slot) => {
+    const toggleSlot = async (court: CourtData, slot: Slot) => {
         if (!selectedDate) return
         if (isInCart(court.courtId, selectedDate, slot.startTime)) {
+            // Remove from cart & release lock
             updateCart(cart.filter(i => !(i.courtId === court.courtId && i.date === selectedDate && i.startTime === slot.startTime)))
+            const sessionId = getSessionId()
+            fetch('/api/locks', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, slots: [{ courtId: court.courtId, date: selectedDate, startTime: slot.startTime }] }),
+            }).catch(() => { })
             toast.success('ลบออกจากตะกร้าแล้ว')
         } else {
+            // Try to lock first
+            const sessionId = getSessionId()
+            const lockRes = await fetch('/api/locks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, slots: [{ courtId: court.courtId, date: selectedDate, startTime: slot.startTime }] }),
+            })
+            const lockData = await lockRes.json()
+            const result = lockData.results?.[0]
+
+            if (result?.success === false && result?.reason === 'locked_by_other') {
+                const m = Math.floor(result.secondsLeft / 60)
+                const s = result.secondsLeft % 60
+                toast.error(`สล็อตนี้ถูก Lock โดยคนอื่น (เหลือ ${m}:${String(s).padStart(2, '0')})`, { duration: 4000 })
+                return
+            }
+
             updateCart([...cart, {
                 courtId: court.courtId, courtName: court.courtName,
                 date: selectedDate, startTime: slot.startTime, endTime: slot.endTime, price: slot.price,
             }])
-            toast.success(`เพิ่ม ${slot.startTime} ลงตะกร้าแล้ว`)
+            toast.success(`เพิ่ม ${slot.startTime} ลงตะกร้าแล้ว — Lock 20 นาที`)
         }
     }
 
@@ -414,26 +452,61 @@ export default function CourtsPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
                         {currentCourt.slots.map(slot => {
                             const inCart = selectedDate ? isInCart(currentCourt.courtId, selectedDate, slot.startTime) : false
-                            const booked = !slot.available && !inCart
+                            const isLockedByOther = slot.lockedByOther && !inCart
+                            const isBooked = !slot.available && !inCart && !isLockedByOther
+                            const isDisabled = isBooked || isLockedByOther
+
+                            // Countdown for locked-by-other slots
+                            const lockMins = isLockedByOther ? Math.floor(slot.secondsLeft / 60) : 0
+                            const lockSecs = isLockedByOther ? slot.secondsLeft % 60 : 0
+
                             return (
                                 <motion.button key={slot.startTime}
-                                    whileHover={!booked ? { scale: 1.04 } : undefined}
-                                    whileTap={!booked ? { scale: 0.96 } : undefined}
-                                    onClick={() => !booked && toggleSlot(currentCourt, slot)}
-                                    disabled={booked}
+                                    whileHover={!isDisabled ? { scale: 1.04 } : undefined}
+                                    whileTap={!isDisabled ? { scale: 0.96 } : undefined}
+                                    onClick={() => !isDisabled && toggleSlot(currentCourt, slot)}
+                                    disabled={isDisabled}
                                     style={{
-                                        padding: '16px 8px', borderRadius: '12px',
-                                        cursor: booked ? 'not-allowed' : 'pointer',
-                                        border: inCart ? '2px solid var(--c-primary)' : booked ? '2px solid rgba(255,255,255,0.03)' : '2px solid rgba(255,255,255,0.08)',
-                                        background: inCart ? 'rgba(102,126,234,0.2)' : booked ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.04)',
-                                        color: booked ? 'var(--c-text-muted)' : inCart ? 'var(--c-primary-light)' : 'var(--c-text)',
+                                        padding: '14px 8px', borderRadius: '12px',
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                        border: inCart
+                                            ? '2px solid var(--c-primary)'
+                                            : isLockedByOther
+                                                ? '2px solid rgba(245,158,11,0.4)'
+                                                : isBooked
+                                                    ? '2px solid rgba(255,255,255,0.03)'
+                                                    : '2px solid rgba(255,255,255,0.08)',
+                                        background: inCart
+                                            ? 'rgba(102,126,234,0.2)'
+                                            : isLockedByOther
+                                                ? 'rgba(245,158,11,0.08)'
+                                                : isBooked
+                                                    ? 'rgba(255,255,255,0.01)'
+                                                    : 'rgba(255,255,255,0.04)',
+                                        color: isBooked
+                                            ? 'var(--c-text-muted)'
+                                            : inCart
+                                                ? 'var(--c-primary-light)'
+                                                : isLockedByOther
+                                                    ? '#fcd34d'
+                                                    : 'var(--c-text)',
                                         fontFamily: "'Inter', sans-serif", textAlign: 'center',
-                                        opacity: booked ? 0.35 : 1, transition: 'all 0.15s',
+                                        opacity: isBooked ? 0.3 : 1, transition: 'all 0.15s',
                                     }}>
                                     <div style={{ fontSize: '17px', fontWeight: 700, lineHeight: 1 }}>{slot.startTime}</div>
-                                    {booked && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
+                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
                                     {inCart && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
-                                    {!booked && !inCart && <div style={{ fontSize: '11px', marginTop: '5px', color: 'var(--c-text-muted)' }}>฿{slot.price.toLocaleString()}</div>}
+                                    {isLockedByOther && (
+                                        <div style={{ fontSize: '10px', marginTop: '5px', color: '#f59e0b', fontWeight: 700 }}>
+                                            <Lock size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: '2px' }} />
+                                            {lockMins}:{String(lockSecs).padStart(2, '0')}
+                                        </div>
+                                    )}
+                                    {!isBooked && !inCart && !isLockedByOther && (
+                                        <div style={{ fontSize: '11px', marginTop: '5px', color: 'var(--c-text-muted)' }}>
+                                            ฿{slot.price.toLocaleString()}
+                                        </div>
+                                    )}
                                 </motion.button>
                             )
                         })}
