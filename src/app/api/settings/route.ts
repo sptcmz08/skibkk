@@ -12,7 +12,12 @@ export async function GET() {
         for (const s of settings) {
             result[s.key] = s.value
         }
-        return NextResponse.json(result)
+        return NextResponse.json(result, {
+            headers: {
+                'Cache-Control': 'no-store, max-age=0, must-revalidate',
+                'Pragma': 'no-cache',
+            }
+        })
     } catch (error) {
         console.error('GET /api/settings error:', error)
         return NextResponse.json({}, { status: 500 })

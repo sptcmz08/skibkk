@@ -6,10 +6,14 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
     try {
         const user = await getCurrentUser()
-        if (!user) {
-            return NextResponse.json({ user: null }, { status: 401 })
+        const headers = {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            'Pragma': 'no-cache',
         }
-        return NextResponse.json({ user })
+        if (!user) {
+            return NextResponse.json({ user: null }, { status: 401, headers })
+        }
+        return NextResponse.json({ user }, { headers })
     } catch {
         return NextResponse.json({ user: null }, { status: 401 })
     }
