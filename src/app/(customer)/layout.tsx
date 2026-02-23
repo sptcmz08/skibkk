@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { ShoppingCart, User, Menu, X, LogOut, Calendar, Home } from 'lucide-react'
+import { ShoppingCart, User, Menu, X, LogOut } from 'lucide-react'
 import CartTimer from '@/components/CartTimer'
 
 export default function CustomerLayout({
@@ -44,36 +44,22 @@ export default function CustomerLayout({
         return () => window.removeEventListener('cart-updated', handleCartUpdate)
     }, [])
 
-    const navLinks = [
-        { href: '/', label: 'หน้าแรก', icon: Home },
-        { href: '/courts', label: 'จองสนาม', icon: Calendar },
-    ]
+
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
         setUser(null)
-        router.push('/')
+        router.push('/courts')
     }
 
     return (
         <div className="customer-layout">
             <nav className="customer-nav">
-                <Link href="/" className="logo">
+                <Link href="/courts" className="logo">
                     <img src={logoUrl} alt="SKIBKK" style={{ height: '48px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
                 </Link>
 
-                <ul className="nav-links">
-                    {navLinks.map((link) => (
-                        <li key={link.href}>
-                            <Link
-                                href={link.href}
-                                className={`nav-link ${pathname === link.href ? 'active' : ''}`}
-                            >
-                                {link.label}
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+
 
                 <div className="nav-actions">
                     <CartTimer />
@@ -120,28 +106,7 @@ export default function CustomerLayout({
                     flexDirection: 'column',
                     gap: '8px',
                 }}>
-                    {navLinks.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            onClick={() => setMenuOpen(false)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                padding: '16px',
-                                color: pathname === link.href ? 'var(--c-primary)' : 'var(--c-text)',
-                                textDecoration: 'none',
-                                fontSize: '18px',
-                                fontWeight: 600,
-                                borderRadius: '12px',
-                                background: pathname === link.href ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
-                            }}
-                        >
-                            <link.icon size={22} />
-                            {link.label}
-                        </Link>
-                    ))}
+
                     <div style={{ borderTop: '1px solid var(--c-border)', margin: '12px 0' }} />
                     {user ? (
                         <>
