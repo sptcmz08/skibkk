@@ -138,6 +138,18 @@ export default function BookingPage() {
 
     return (
         <div style={{ maxWidth: '700px', margin: '0 auto', padding: '32px 24px' }}>
+            {/* Back button */}
+            {step < 3 && (
+                <button
+                    onClick={() => step === 1 ? router.back() : setStep(1)}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '0',
+                        color: 'var(--c-text-secondary)', fontSize: '14px', fontWeight: 600, marginBottom: '20px',
+                    }}>
+                    <ArrowLeft size={16} /> ย้อนกลับ
+                </button>
+            )}
             {/* Steps indicator */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '40px' }}>
                 {['ข้อมูลผู้เรียน', 'ชำระเงิน', 'สำเร็จ'].map((label, i) => (

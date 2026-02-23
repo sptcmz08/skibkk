@@ -449,7 +449,7 @@ export default function CourtsPage() {
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '10px' }}>
                         {currentCourt.slots.map(slot => {
                             const inCart = selectedDate ? isInCart(currentCourt.courtId, selectedDate, slot.startTime) : false
                             const isLockedByOther = slot.lockedByOther && !inCart
@@ -493,7 +493,9 @@ export default function CourtsPage() {
                                         fontFamily: "'Inter', sans-serif", textAlign: 'center',
                                         opacity: isBooked ? 0.3 : 1, transition: 'all 0.15s',
                                     }}>
-                                    <div style={{ fontSize: '17px', fontWeight: 700, lineHeight: 1 }}>{slot.startTime}</div>
+                                    <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.3px' }}>
+                                        {slot.startTime}–{slot.endTime}
+                                    </div>
                                     {isBooked && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
                                     {inCart && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
                                     {isLockedByOther && (

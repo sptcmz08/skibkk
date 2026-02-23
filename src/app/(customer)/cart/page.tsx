@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle } from 'lucide-react'
+import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle, ArrowLeft, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getSessionId } from '@/lib/session'
 
@@ -89,8 +89,61 @@ export default function CartPage() {
 
     if (!mounted) return null
 
+    // Inline live countdown for the cart page body (header CartTimer is primary)
+    const CartInlineTimer = () => {
+        const [expiresAt, setExpiresAt] = useState<Date | null>(null)
+        const [secs, setSecs] = useState<number | null>(null)
+        useEffect(() => {
+            const check = async () => {
+                try {
+                    const res = await fetch(`/api/locks/check?sessionId=${getSessionId()}`)
+                    const d = await res.json()
+                    if (d.active && d.expiresAt) setExpiresAt(new Date(d.expiresAt))
+                    else setExpiresAt(null)
+                } catch { }
+            }
+            check()
+            const poll = setInterval(check, 5000)
+            return () => clearInterval(poll)
+        }, [])
+        useEffect(() => {
+            if (!expiresAt) { setSecs(null); return }
+            const tick = () => setSecs(Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)))
+            tick()
+            const id = setInterval(tick, 1000)
+            return () => clearInterval(id)
+        }, [expiresAt])
+        if (secs === null || secs <= 0) return null
+        const m = Math.floor(secs / 60), s = secs % 60
+        const urgent = secs < 120
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: urgent ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)',
+                border: `1px solid ${urgent ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)'}`,
+                borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: urgent ? '#fca5a5' : '#fcd34d', fontWeight: 600, fontSize: '14px' }}>
+                    <Timer size={16} />
+                    <span>เวลา Lock หมดใน</span>
+                </div>
+                <span style={{ fontFamily: "'Inter', monospace", fontSize: '20px', fontWeight: 800, letterSpacing: '2px', color: urgent ? '#ef4444' : '#f59e0b' }}>
+                    {String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+                </span>
+            </div>
+        )
+    }
+
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 24px' }}>
+            {/* Back button */}
+            <button onClick={() => router.back()} style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'none', border: 'none', cursor: 'pointer', padding: '0',
+                color: 'var(--c-text-secondary)', fontSize: '14px', fontWeight: 600, marginBottom: '20px',
+            }}>
+                <ArrowLeft size={16} /> ย้อนกลับ
+            </button>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
                     <h1 style={{ fontSize: '28px', fontWeight: 800, fontFamily: "'Inter', sans-serif", letterSpacing: '-0.5px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -120,14 +173,8 @@ export default function CartPage() {
                     </div>
                 ) : (
                     <>
-                        {/* Countdown warning */}
-                        <div className="countdown-bar">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <AlertCircle size={18} />
-                                <span className="countdown-text">เวลา Lock หมดใน</span>
-                            </div>
-                            <span className="countdown-timer">20:00</span>
-                        </div>
+                        {/* Inline live countdown */}
+                        <CartInlineTimer />
 
                         {/* Cart items grouped by date */}
                         <AnimatePresence>
