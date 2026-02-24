@@ -261,7 +261,7 @@ export default function BookingPage() {
                                 </div>
                                 <div className="input-group">
                                     <label>ไซส์รองเท้า</label>
-                                    <input className="input-field" placeholder="EU size" value={p.shoeSize} onChange={e => updateParticipant(idx, 'shoeSize', e.target.value)} />
+                                    <input className="input-field" placeholder="TH size" value={p.shoeSize} onChange={e => updateParticipant(idx, 'shoeSize', e.target.value)} />
                                 </div>
                                 <div className="input-group">
                                     <label>น้ำหนัก (kg)</label>
