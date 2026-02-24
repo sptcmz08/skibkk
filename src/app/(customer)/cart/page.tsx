@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle, ArrowLeft, Timer } from 'lucide-react'
+import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle, ArrowLeft, Timer, UserPlus, LogIn, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Link from 'next/link'
 import { getSessionId } from '@/lib/session'
 
 interface CartItem {
@@ -20,13 +21,18 @@ export default function CartPage() {
     const router = useRouter()
     const [cart, setCart] = useState<CartItem[]>([])
     const [mounted, setMounted] = useState(false)
+    const [user, setUser] = useState<{ name: string; email: string; phone: string } | null>(null)
+    const [showAuthModal, setShowAuthModal] = useState(false)
 
     useEffect(() => {
         setMounted(true)
         const stored: CartItem[] = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         setCart(stored)
-        // Note: locks are created on the courts page when adding to cart.
-        // We do NOT re-lock here to avoid resetting the 20-min countdown timer.
+        // Check auth status
+        fetch('/api/auth/me', { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.user) setUser(data.user) })
+            .catch(() => { })
     }, [])
 
     const removeItem = (index: number) => {
@@ -274,7 +280,13 @@ export default function CartPage() {
                             whileTap={{ scale: 0.98 }}
                             className="btn btn-success btn-block btn-lg"
                             style={{ marginTop: '20px' }}
-                            onClick={() => router.push('/booking')}
+                            onClick={() => {
+                                if (user) {
+                                    router.push('/booking')
+                                } else {
+                                    setShowAuthModal(true)
+                                }
+                            }}
                         >
                             ดำเนินการจอง
                             <ArrowRight size={20} />
@@ -282,6 +294,79 @@ export default function CartPage() {
                     </>
                 )}
             </motion.div>
+
+            {/* Auth required modal */}
+            <AnimatePresence>
+                {showAuthModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowAuthModal(false)}
+                        style={{
+                            position: 'fixed', inset: 0, zIndex: 100,
+                            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '24px',
+                        }}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                                width: '100%', maxWidth: '440px',
+                                background: 'var(--c-bg-secondary, #1a1a2e)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '20px', padding: '36px',
+                                textAlign: 'center', position: 'relative',
+                            }}
+                        >
+                            <button
+                                onClick={() => setShowAuthModal(false)}
+                                style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: 'var(--c-text-muted)', cursor: 'pointer' }}
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <div style={{
+                                width: '72px', height: '72px', borderRadius: '50%',
+                                background: 'rgba(102,126,234,0.15)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto 20px',
+                            }}>
+                                <AlertCircle size={36} style={{ color: 'var(--c-primary)' }} />
+                            </div>
+
+                            <h3 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>
+                                กรุณาเข้าสู่ระบบ
+                            </h3>
+                            <p style={{ color: 'var(--c-text-secondary)', fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
+                                สมัครสมาชิกหรือเข้าสู่ระบบเพื่อดำเนินการจองต่อ<br />
+                                ข้อมูลในตะกร้าของคุณจะยังคงอยู่
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <Link
+                                    href="/register?returnUrl=/cart"
+                                    className="btn btn-primary btn-block"
+                                    style={{ padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
+                                >
+                                    <UserPlus size={18} /> สมัครสมาชิก
+                                </Link>
+                                <Link
+                                    href="/login?returnUrl=/cart"
+                                    className="btn btn-secondary btn-block"
+                                    style={{ padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
+                                >
+                                    <LogIn size={18} /> เข้าสู่ระบบ
+                                </Link>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

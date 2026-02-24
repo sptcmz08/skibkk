@@ -24,13 +24,39 @@ export default function BookingPage() {
     const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER'>('PROMPTPAY')
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
-    const [user, setUser] = useState<{ name: string; phone: string } | null>(null)
+    const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
 
     useEffect(() => {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         if (stored.length === 0) { router.push('/courts'); return }
         setCart(stored)
-        fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json()).then(d => { if (d.user) setUser(d.user) }).catch(() => { })
+        // Check auth — if not logged in, redirect back to cart (which will show auth modal)
+        fetch('/api/auth/me', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(d => {
+                if (d.user) {
+                    setUser(d.user)
+                    // Auto-fill first participant with user profile data
+                    setParticipants(prev => {
+                        const updated = [...prev]
+                        if (updated.length > 0 && !updated[0].name) {
+                            updated[0] = {
+                                ...updated[0],
+                                name: d.user.name || '',
+                                phone: d.user.phone || '',
+                            }
+                        }
+                        return updated
+                    })
+                } else {
+                    toast.error('กรุณาเข้าสู่ระบบก่อนดำเนินการจอง')
+                    router.push('/cart')
+                }
+            })
+            .catch(() => {
+                toast.error('กรุณาเข้าสู่ระบบก่อนดำเนินการจอง')
+                router.push('/cart')
+            })
     }, [router])
 
     // Max participants: 2 per hour total

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, User, Phone, UserPlus } from 'lucide-react'
@@ -9,6 +9,8 @@ import toast from 'react-hot-toast'
 
 export default function RegisterPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const returnUrl = searchParams.get('returnUrl') || '/courts'
     const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', phone: '' })
     const [showPw, setShowPw] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -32,7 +34,7 @@ export default function RegisterPage() {
                 return
             }
             toast.success('สมัครสมาชิกสำเร็จ!')
-            router.push('/courts')
+            router.push(returnUrl)
             router.refresh()
         } catch {
             toast.error('เกิดข้อผิดพลาด')
@@ -179,7 +181,7 @@ export default function RegisterPage() {
 
                     <div style={{ textAlign: 'center', marginTop: '24px', color: 'var(--c-text-secondary)', fontSize: '14px' }}>
                         มีบัญชีแล้ว?{' '}
-                        <Link href="/login" style={{ color: 'var(--c-primary-light)', textDecoration: 'none', fontWeight: 600 }}>
+                        <Link href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`} style={{ color: 'var(--c-primary-light)', textDecoration: 'none', fontWeight: 600 }}>
                             เข้าสู่ระบบ
                         </Link>
                     </div>
