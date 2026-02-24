@@ -434,7 +434,7 @@ export default function BookingPage() {
                                     alignItems: 'center',
                                     gap: '16px',
                                     border: paymentMethod === method.value ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
-                                    background: paymentMethod === method.value ? 'rgba(102,126,234,0.1)' : undefined,
+                                    background: paymentMethod === method.value ? 'rgba(245,166,35,0.1)' : undefined,
                                     textAlign: 'left',
                                 }}
                             >
@@ -457,7 +457,7 @@ export default function BookingPage() {
                                     {qrDataUrl ? (
                                         <img src={qrDataUrl} alt="PromptPay QR" style={{ width: '200px', height: '200px' }} />
                                     ) : (
-                                        <div className="spinner" style={{ width: '30px', height: '30px', borderTopColor: '#667eea' }} />
+                                        <div className="spinner" style={{ width: '30px', height: '30px', borderTopColor: '#f5a623' }} />
                                     )}
                                 </div>
                                 <p style={{ fontWeight: 700, fontSize: '16px' }}>สแกน QR Code เพื่อชำระเงิน</p>
@@ -480,7 +480,7 @@ export default function BookingPage() {
                                             style={{
                                                 padding: '14px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                                                 border: selectedPackageId === pkg.id ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
-                                                background: selectedPackageId === pkg.id ? 'rgba(102,126,234,0.15)' : 'rgba(255,255,255,0.04)',
+                                                background: selectedPackageId === pkg.id ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.04)',
                                                 color: 'var(--c-text)', fontFamily: 'inherit',
                                             }}
                                         >
@@ -490,7 +490,7 @@ export default function BookingPage() {
                                                 <span>หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
                                             </div>
                                             {pkg.remainingHours < cart.length && (
-                                                <div style={{ fontSize: '12px', color: '#f5576c', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>
+                                                <div style={{ fontSize: '12px', color: '#e17055', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>
                                             )}
                                         </button>
                                     ))}
@@ -499,7 +499,7 @@ export default function BookingPage() {
                         ) : (
                             <div>
                                 <p style={{ fontWeight: 700, marginBottom: '12px' }}>ข้อมูลบัญชีธนาคาร</p>
-                                <div style={{ background: 'rgba(102,126,234,0.08)', padding: '16px', borderRadius: '8px', fontSize: '14px', lineHeight: 2 }}>
+                                <div style={{ background: 'rgba(245,166,35,0.08)', padding: '16px', borderRadius: '8px', fontSize: '14px', lineHeight: 2 }}>
                                     <div><strong>ธนาคาร:</strong> กสิกรไทย</div>
                                     <div><strong>เลขบัญชี:</strong> xxx-x-xxxxx-x</div>
                                     <div><strong>ชื่อบัญชี:</strong> SKIBKK Co., Ltd.</div>

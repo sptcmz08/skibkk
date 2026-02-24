@@ -1,28 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sarabun:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Customer Theme - Modern Dark */
-  --c-bg: #0a0a1a;
-  --c-bg-secondary: #111128;
-  --c-bg-card: rgba(255, 255, 255, 0.05);
-  --c-bg-card-hover: rgba(255, 255, 255, 0.08);
-  --c-glass: rgba(255, 255, 255, 0.07);
-  --c-glass-border: rgba(255, 255, 255, 0.12);
-  --c-text: #ffffff;
-  --c-text-secondary: #a0a0b8;
-  --c-text-muted: #6b6b80;
-  --c-primary: #667eea;
-  --c-primary-light: #7c94f4;
-  --c-secondary: #764ba2;
-  --c-accent: #f093fb;
-  --c-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --c-gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --c-gradient-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  --c-success: #38ef7d;
-  --c-warning: #ffc107;
-  --c-danger: #f5576c;
-  --c-border: rgba(255, 255, 255, 0.1);
-  --c-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  /* Customer Theme - Yellow / White / Gray */
+  --c-bg: #f8f9fa;
+  --c-bg-secondary: #ffffff;
+  --c-bg-card: rgba(255, 255, 255, 0.85);
+  --c-bg-card-hover: rgba(255, 255, 255, 0.95);
+  --c-glass: rgba(255, 255, 255, 0.7);
+  --c-glass-border: rgba(0, 0, 0, 0.08);
+  --c-text: #2d3436;
+  --c-text-secondary: #636e72;
+  --c-text-muted: #b2bec3;
+  --c-primary: #f5a623;
+  --c-primary-light: #f7b731;
+  --c-secondary: #e6951a;
+  --c-accent: #fdcb6e;
+  --c-gradient: linear-gradient(135deg, #f5a623 0%, #e6951a 100%);
+  --c-gradient-accent: linear-gradient(135deg, #fdcb6e 0%, #f5a623 100%);
+  --c-gradient-success: linear-gradient(135deg, #00b894 0%, #55efc4 100%);
+  --c-success: #00b894;
+  --c-warning: #fdcb6e;
+  --c-danger: #e17055;
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   --c-radius: 16px;
   --c-radius-sm: 8px;
   --c-radius-lg: 24px;
@@ -69,12 +69,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 /* ==================== CUSTOMER LAYOUT ==================== */
@@ -95,7 +95,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(10, 10, 26, 0.85);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--c-border);
 }
@@ -231,12 +231,12 @@ body {
 .btn-primary {
   background: var(--c-gradient);
   color: white;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 20px rgba(245, 166, 35, 0.3);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 30px rgba(245, 166, 35, 0.4);
 }
 
 .btn-secondary {
@@ -253,17 +253,17 @@ body {
 .btn-accent {
   background: var(--c-gradient-accent);
   color: white;
-  box-shadow: 0 4px 20px rgba(240, 147, 251, 0.3);
+  box-shadow: 0 4px 20px rgba(253, 203, 110, 0.3);
 }
 
 .btn-accent:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(240, 147, 251, 0.4);
+  box-shadow: 0 8px 30px rgba(253, 203, 110, 0.4);
 }
 
 .btn-success {
   background: var(--c-gradient-success);
-  color: #0a0a1a;
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -367,7 +367,7 @@ body {
 
 .input-field:focus {
   border-color: var(--c-primary);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
 }
 
 .input-field::placeholder {
@@ -382,8 +382,8 @@ select.input-field {
 }
 
 select.input-field option {
-  background: #1a1a2e;
-  color: #ffffff;
+  background: #ffffff;
+  color: #2d3436;
   padding: 8px;
 }
 

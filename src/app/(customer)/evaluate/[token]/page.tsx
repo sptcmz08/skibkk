@@ -7,7 +7,7 @@ import { Star, CheckCircle, Heart, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ratingLabels = ['', 'ปรับปรุง', 'พอใช้', 'ดี', 'ดีมาก']
-const ratingColors = ['', '#f5576c', '#ffc107', '#38ef7d', '#667eea']
+const ratingColors = ['', '#f5576c', '#ffc107', '#38ef7d', '#f5a623']
 const comebackLabels = ['', 'ไม่ต้องการ', 'ไม่แน่ใจ', 'ต้องการ']
 
 export default function EvaluatePage() {
@@ -134,7 +134,7 @@ export default function EvaluatePage() {
                     <div style={{
                         width: '64px', height: '64px', borderRadius: '20px',
                         background: 'var(--c-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 16px', boxShadow: '0 8px 32px rgba(102,126,234,0.3)',
+                        margin: '0 auto 16px', boxShadow: '0 8px 32px rgba(245,166,35,0.3)',
                     }}>
                         <Star size={32} style={{ color: 'white' }} />
                     </div>
@@ -163,7 +163,7 @@ export default function EvaluatePage() {
                             <label style={{ fontSize: '13px', color: 'var(--c-text-secondary)' }}>ชื่อเทรนเนอร์</label>
                             <div style={{
                                 padding: '12px 16px', borderRadius: '8px', marginTop: '6px',
-                                background: 'rgba(102,126,234,0.1)', fontWeight: 700, fontSize: '16px',
+                                background: 'rgba(245,166,35,0.1)', fontWeight: 700, fontSize: '16px',
                                 color: 'var(--c-primary-light)',
                             }}>
                                 {teacherName}

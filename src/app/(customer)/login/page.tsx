@@ -53,8 +53,8 @@ export default function LoginPage() {
             position: 'relative',
             overflow: 'hidden',
         }}>
-            <div style={{ position: 'absolute', top: '20%', right: '20%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(102,126,234,0.1), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: '20%', left: '20%', width: '250px', height: '250px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(118,75,162,0.08), transparent)', filter: 'blur(50px)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: '20%', right: '20%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,166,35,0.1), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '20%', left: '20%', width: '250px', height: '250px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(230,149,26,0.08), transparent)', filter: 'blur(50px)', pointerEvents: 'none' }} />
 
             <motion.div
                 initial={{ opacity: 0, y: 30 }}

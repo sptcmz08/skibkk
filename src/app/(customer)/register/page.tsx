@@ -53,7 +53,7 @@ export default function RegisterPage() {
             position: 'relative',
             overflow: 'hidden',
         }}>
-            <div style={{ position: 'absolute', top: '15%', left: '15%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,147,251,0.1), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: '15%', left: '15%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(253,203,110,0.1), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
 
             <motion.div
                 initial={{ opacity: 0, y: 30 }}

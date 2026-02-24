@@ -67,7 +67,7 @@ function StepWizard({ step }: { step: 1 | 2 | 3 }) {
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '6px',
                             padding: '6px 12px', borderRadius: '8px',
-                            background: done ? 'rgba(16,185,129,0.08)' : active ? 'rgba(102,126,234,0.12)' : 'transparent',
+                            background: done ? 'rgba(16,185,129,0.08)' : active ? 'rgba(245,166,35,0.12)' : 'transparent',
                         }}>
                             <div style={{
                                 width: '24px', height: '24px', borderRadius: '50%',
@@ -97,7 +97,7 @@ function SportBadge({ sport, onClick }: { sport: string; onClick: () => void }) 
         <div onClick={onClick} style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
             padding: '8px 18px', borderRadius: '999px', cursor: 'pointer',
-            background: 'rgba(102,126,234,0.12)', border: '1px solid rgba(102,126,234,0.25)',
+            background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.25)',
         }}>
             <span>{SPORT_ICONS[sport] || '🏟️'}</span>
             <span style={{ fontWeight: 700, color: 'var(--c-primary-light)', fontSize: '14px' }}>{sport}</span>
@@ -379,7 +379,7 @@ export default function CourtsPage() {
                             const isClosed = dayStatus === 'closed'
 
                             // Color dot
-                            const dotColor = dayStatus === 'full' ? '#f5576c' : dayStatus === 'almost_full' ? '#f5a623' : dayStatus === 'available' ? '#00b894' : 'transparent'
+                            const dotColor = dayStatus === 'full' ? '#e17055' : dayStatus === 'almost_full' ? '#f5a623' : dayStatus === 'available' ? '#00b894' : 'transparent'
 
                             return (
                                 <motion.button
@@ -390,8 +390,8 @@ export default function CourtsPage() {
                                     disabled={isPast || isClosed}
                                     style={{
                                         aspectRatio: '1', borderRadius: '10px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
-                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(102,126,234,0.4)' : '2px solid transparent',
-                                        background: isSelected ? 'rgba(102,126,234,0.2)' : isClosed ? 'rgba(255,255,255,0.02)' : isToday ? 'rgba(102,126,234,0.08)' : 'rgba(255,255,255,0.02)',
+                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.4)' : '2px solid transparent',
+                                        background: isSelected ? 'rgba(245,166,35,0.2)' : isClosed ? 'rgba(255,255,255,0.02)' : isToday ? 'rgba(245,166,35,0.08)' : 'rgba(255,255,255,0.02)',
                                         color: isPast || isClosed ? 'rgba(255,255,255,0.15)' : isSelected ? 'white' : isSun ? '#f87171' : isSat ? '#818cf8' : 'var(--c-text)',
                                         fontWeight: isSelected || isToday ? 800 : 500,
                                         fontSize: '14px', fontFamily: "'Inter', sans-serif",
@@ -403,7 +403,7 @@ export default function CourtsPage() {
                                     {!isPast && !isClosed && dayInfo && (
                                         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor, display: 'block' }} />
                                     )}
-                                    {isClosed && <span style={{ fontSize: '8px', color: '#f5576c' }}>ปิด</span>}
+                                    {isClosed && <span style={{ fontSize: '8px', color: '#e17055' }}>ปิด</span>}
                                 </motion.button>
                             )
                         })}
@@ -458,7 +458,7 @@ export default function CourtsPage() {
                                 <button key={court.courtId} onClick={() => setSelectedCourt(court.courtId)} style={{
                                     padding: '11px 26px', borderRadius: '12px', cursor: 'pointer', fontFamily: 'inherit',
                                     border: active ? '2px solid var(--c-primary)' : '2px solid rgba(255,255,255,0.08)',
-                                    background: active ? 'rgba(102,126,234,0.15)' : 'rgba(255,255,255,0.03)',
+                                    background: active ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)',
                                     color: active ? 'var(--c-primary-light)' : 'var(--c-text-secondary)',
                                     fontWeight: 700, fontSize: '14px',
                                 }}>
@@ -485,7 +485,7 @@ export default function CourtsPage() {
                     <div style={{ textAlign: 'center', padding: '60px', color: 'var(--c-text-muted)' }}>
                         <Clock size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
                         <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--c-text-secondary)' }}>ไม่มีเวลาว่างในวันนี้</p>
-                        <button onClick={() => setStep(2)} style={{ marginTop: '16px', background: 'rgba(102,126,234,0.15)', border: '1px solid rgba(102,126,234,0.3)', borderRadius: '10px', padding: '10px 24px', cursor: 'pointer', color: 'var(--c-primary-light)', fontFamily: 'inherit', fontWeight: 600 }}>
+                        <button onClick={() => setStep(2)} style={{ marginTop: '16px', background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: '10px', padding: '10px 24px', cursor: 'pointer', color: 'var(--c-primary-light)', fontFamily: 'inherit', fontWeight: 600 }}>
                             เลือกวันอื่น
                         </button>
                     </div>
@@ -519,7 +519,7 @@ export default function CourtsPage() {
                                                     ? '2px solid rgba(255,255,255,0.03)'
                                                     : '2px solid rgba(255,255,255,0.08)',
                                         background: inCart
-                                            ? 'rgba(102,126,234,0.2)'
+                                            ? 'rgba(245,166,35,0.2)'
                                             : isLockedByOther
                                                 ? 'rgba(245,158,11,0.08)'
                                                 : isBooked

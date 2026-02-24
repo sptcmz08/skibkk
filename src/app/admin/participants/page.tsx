@@ -57,7 +57,7 @@ export default function ParticipantsPage() {
                                     <Copy size={12} /> คัดลอก
                                 </button>
                                 <button onClick={() => { window.open(data.evaluationUrl, '_blank'); toast.dismiss(t.id) }}
-                                    style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', background: '#667eea', color: 'white', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', background: '#f5a623', color: 'white', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                     <ExternalLink size={12} /> เปิด
                                 </button>
                             </div>

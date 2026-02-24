@@ -335,7 +335,7 @@ export default function CartPage() {
 
                             <div style={{
                                 width: '72px', height: '72px', borderRadius: '50%',
-                                background: 'rgba(102,126,234,0.15)',
+                                background: 'rgba(245,166,35,0.15)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 margin: '0 auto 20px',
                             }}>
