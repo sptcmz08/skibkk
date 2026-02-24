@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { User, Calendar, Clock, MapPin, Package, Settings, LogOut, History } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { User, Calendar, Clock, MapPin, Package, Settings, History, Mail, Phone, Shield, ChevronRight, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface UserData {
     id: string; name: string; email: string; phone: string; role: string
+    lineDisplayName?: string; lineAvatar?: string
 }
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string
@@ -34,139 +35,265 @@ export default function ProfilePage() {
         }).catch(() => toast.error('ไม่สามารถโหลดข้อมูลได้')).finally(() => setLoading(false))
     }, [router])
 
-    const statusBadge = (status: string) => {
-        const map: Record<string, { class: string; label: string }> = {
-            PENDING: { class: 'badge-pending', label: 'รอชำระเงิน' },
-            CONFIRMED: { class: 'badge-success', label: 'ยืนยันแล้ว' },
-            CANCELLED: { class: 'badge-danger', label: 'ยกเลิก' },
-        }
-        const s = map[status] || { class: 'badge-info', label: status }
-        return <span className={`badge ${s.class}`}>{s.label}</span>
+    const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED')
+    const totalSpent = confirmedBookings.reduce((s, b) => s + b.totalAmount, 0)
+    const totalHours = confirmedBookings.reduce((s, b) => s + b.bookingItems.length, 0)
+
+    const statusConfig: Record<string, { bg: string; color: string; label: string }> = {
+        PENDING: { bg: 'rgba(255,193,7,0.12)', color: '#ffc107', label: 'รอชำระเงิน' },
+        CONFIRMED: { bg: 'rgba(56,239,125,0.12)', color: '#38ef7d', label: 'ยืนยันแล้ว' },
+        CANCELLED: { bg: 'rgba(245,87,108,0.12)', color: '#f5576c', label: 'ยกเลิก' },
     }
 
     if (loading) return <div className="loading-page"><div className="spinner" /></div>
     if (!user) return null
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
-            {/* Profile header */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card" style={{ cursor: 'default', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
-                <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: 'var(--c-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 800, color: 'white', fontFamily: "'Inter'" }}>
-                    {user.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex: 1 }}>
-                    <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '4px' }}>{user.name}</h1>
-                    <p style={{ color: 'var(--c-text-secondary)', fontSize: '14px' }}>{user.email}</p>
-                    {user.phone && <p style={{ color: 'var(--c-text-muted)', fontSize: '13px' }}>{user.phone}</p>}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <span className="badge badge-info">{user.role === 'CUSTOMER' ? 'สมาชิก' : user.role}</span>
+        <div style={{ maxWidth: '960px', margin: '0 auto', padding: '0 24px 60px' }}>
+
+            {/* ── Hero Profile Banner ── */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                    position: 'relative', overflow: 'hidden',
+                    borderRadius: '24px', marginBottom: '28px',
+                    background: 'linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 50%, rgba(240,147,251,0.1) 100%)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                }}
+            >
+                {/* Background decoration */}
+                <div style={{ position: 'absolute', top: '-40%', right: '-10%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(102,126,234,0.2), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', bottom: '-30%', left: '10%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,147,251,0.15), transparent)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+
+                <div style={{ position: 'relative', padding: '36px 32px', display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                    {/* Avatar */}
+                    {user.lineAvatar ? (
+                        <img
+                            src={user.lineAvatar}
+                            alt={user.name}
+                            style={{ width: '88px', height: '88px', borderRadius: '24px', border: '3px solid rgba(255,255,255,0.15)', objectFit: 'cover' }}
+                        />
+                    ) : (
+                        <div style={{
+                            width: '88px', height: '88px', borderRadius: '24px',
+                            background: 'var(--c-gradient)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '36px', fontWeight: 900, color: 'white',
+                            fontFamily: "'Inter'", border: '3px solid rgba(255,255,255,0.15)',
+                            boxShadow: '0 8px 32px rgba(102,126,234,0.3)',
+                        }}>
+                            {user.name.charAt(0).toUpperCase()}
+                        </div>
+                    )}
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                            <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>{user.name}</h1>
+                            <span style={{
+                                padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
+                                background: 'rgba(102,126,234,0.2)', color: 'var(--c-primary-light)',
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                            }}>
+                                <Shield size={12} /> {user.role === 'CUSTOMER' ? 'สมาชิก' : user.role}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px', color: 'var(--c-text-secondary)' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Mail size={14} style={{ color: 'var(--c-primary)' }} /> {user.email}
+                            </span>
+                            {user.phone && !user.phone.startsWith('LINE-') && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Phone size={14} style={{ color: 'var(--c-primary)' }} /> {user.phone}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </motion.div>
 
-            {/* Stats */}
-            <div className="grid-3" style={{ marginBottom: '32px' }}>
+            {/* ── Stats Row ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
                 {[
-                    { icon: <Calendar size={24} />, value: bookings.length, label: 'การจองทั้งหมด', gradient: 'var(--c-gradient)' },
-                    { icon: <Clock size={24} />, value: bookings.filter(b => b.status === 'CONFIRMED').length, label: 'จองสำเร็จ', gradient: 'var(--c-gradient-success)' },
-                    { icon: <Package size={24} />, value: `฿${bookings.filter(b => b.status === 'CONFIRMED').reduce((s, b) => s + b.totalAmount, 0).toLocaleString()}`, label: 'ยอดใช้จ่ายรวม', gradient: 'var(--c-gradient-accent)' },
+                    { icon: <Calendar size={22} />, value: bookings.length, label: 'การจองทั้งหมด', gradient: 'var(--c-gradient)', shadow: 'rgba(102,126,234,0.25)' },
+                    { icon: <Clock size={22} />, value: `${totalHours} ชม.`, label: 'เวลาเล่นรวม', gradient: 'var(--c-gradient-success)', shadow: 'rgba(56,239,125,0.25)' },
+                    { icon: <Package size={22} />, value: `฿${totalSpent.toLocaleString()}`, label: 'ยอดใช้จ่าย', gradient: 'var(--c-gradient-accent)', shadow: 'rgba(240,147,251,0.25)' },
                 ].map((stat, i) => (
-                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-                        className="glass-card" style={{ cursor: 'default', textAlign: 'center', padding: '20px' }}
+                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}
+                        style={{
+                            background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
+                            borderRadius: '18px', padding: '22px 18px', textAlign: 'center',
+                            transition: 'transform 0.2s, box-shadow 0.2s',
+                        }}
                     >
-                        <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: stat.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', margin: '0 auto 12px' }}>
+                        <div style={{
+                            width: '46px', height: '46px', borderRadius: '14px',
+                            background: stat.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'white', margin: '0 auto 14px',
+                            boxShadow: `0 6px 20px ${stat.shadow}`,
+                        }}>
                             {stat.icon}
                         </div>
-                        <div style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", marginBottom: '4px' }}>{stat.value}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>{stat.label}</div>
+                        <div style={{ fontSize: '22px', fontWeight: 900, fontFamily: "'Inter'", marginBottom: '2px' }}>{stat.value}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', fontWeight: 500 }}>{stat.label}</div>
                     </motion.div>
                 ))}
             </div>
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+            {/* ── Tab Navigation ── */}
+            <div style={{
+                display: 'inline-flex', gap: '4px', marginBottom: '24px',
+                background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
+                borderRadius: '14px', padding: '4px',
+            }}>
                 {[
-                    { key: 'bookings' as const, icon: <History size={16} />, label: 'ประวัติการจอง' },
-                    { key: 'settings' as const, icon: <Settings size={16} />, label: 'ตั้งค่า' },
+                    { key: 'bookings' as const, icon: <History size={15} />, label: 'ประวัติการจอง' },
+                    { key: 'settings' as const, icon: <Settings size={15} />, label: 'ข้อมูลส่วนตัว' },
                 ].map(t => (
                     <button key={t.key} onClick={() => setTab(t.key)}
-                        className={`btn ${tab === t.key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '7px',
+                            padding: '10px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                            fontSize: '14px', fontWeight: 600, fontFamily: 'inherit',
+                            transition: 'all 0.2s',
+                            background: tab === t.key ? 'var(--c-gradient)' : 'transparent',
+                            color: tab === t.key ? 'white' : 'var(--c-text-muted)',
+                            boxShadow: tab === t.key ? '0 4px 15px rgba(102,126,234,0.3)' : 'none',
+                        }}
                     >
                         {t.icon} {t.label}
                     </button>
                 ))}
             </div>
 
-            {/* Booking History */}
-            {tab === 'bookings' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {bookings.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--c-text-muted)' }}>
-                            <Calendar size={48} style={{ marginBottom: '16px', opacity: 0.4 }} />
-                            <p style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--c-text-secondary)' }}>ยังไม่มีประวัติการจอง</p>
-                            <a href="/courts" className="btn btn-primary btn-sm" style={{ display: 'inline-flex' }}>
-                                จองสนามเลย
-                            </a>
-                        </div>
-                    ) : bookings.map((booking, i) => (
-                        <motion.div key={booking.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                            className="glass-card" style={{ cursor: 'default' }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                                <div>
-                                    <span style={{ fontWeight: 700, fontSize: '15px', fontFamily: "'Inter'" }}>{booking.bookingNumber}</span>
-                                    <span style={{ color: 'var(--c-text-muted)', fontSize: '13px', marginLeft: '12px' }}>
-                                        {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                    </span>
+            {/* ── Booking History ── */}
+            <AnimatePresence mode="wait">
+                {tab === 'bookings' && (
+                    <motion.div key="bookings" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+                    >
+                        {bookings.length === 0 ? (
+                            <div style={{
+                                textAlign: 'center', padding: '60px 20px',
+                                background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
+                                borderRadius: '20px',
+                            }}>
+                                <div style={{
+                                    width: '64px', height: '64px', borderRadius: '20px',
+                                    background: 'rgba(102,126,234,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    margin: '0 auto 16px',
+                                }}>
+                                    <Sparkles size={28} style={{ color: 'var(--c-primary)' }} />
                                 </div>
-                                {statusBadge(booking.status)}
+                                <p style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px', color: 'var(--c-text-secondary)' }}>ยังไม่มีประวัติการจอง</p>
+                                <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '20px' }}>มาสนุกกับกิจกรรมกีฬากัน!</p>
+                                <a href="/courts" className="btn btn-primary btn-sm">จองสนามเลย <ChevronRight size={16} /></a>
                             </div>
-                            {booking.bookingItems.map((item, j) => (
-                                <div key={j} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', fontSize: '14px', color: 'var(--c-text-secondary)' }}>
-                                    <MapPin size={14} style={{ color: 'var(--c-primary)' }} />
-                                    <span style={{ fontWeight: 600, color: 'var(--c-text)' }}>{item.court.name}</span>
-                                    <span>•</span>
-                                    <span>{new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
-                                    <span>{item.startTime}-{item.endTime}</span>
-                                    <span style={{ marginLeft: 'auto', fontWeight: 600 }}>฿{item.price.toLocaleString()}</span>
+                        ) : bookings.map((booking, i) => {
+                            const sc = statusConfig[booking.status] || { bg: 'rgba(102,126,234,0.1)', color: '#667eea', label: booking.status }
+                            return (
+                                <motion.div key={booking.id}
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                                    style={{
+                                        background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
+                                        borderRadius: '18px', padding: '22px 24px',
+                                        transition: 'border-color 0.2s',
+                                    }}
+                                >
+                                    {/* Header */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <span style={{
+                                                fontWeight: 800, fontSize: '15px', fontFamily: "'Inter'",
+                                                background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                                            }}>
+                                                #{booking.bookingNumber}
+                                            </span>
+                                            <span style={{ color: 'var(--c-text-muted)', fontSize: '12px' }}>
+                                                {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        <span style={{
+                                            padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
+                                            background: sc.bg, color: sc.color,
+                                        }}>
+                                            {sc.label}
+                                        </span>
+                                    </div>
+
+                                    {/* Items */}
+                                    {booking.bookingItems.map((item, j) => (
+                                        <div key={j} style={{
+                                            display: 'flex', alignItems: 'center', gap: '10px',
+                                            padding: '10px 14px', marginBottom: '6px',
+                                            background: 'rgba(255,255,255,0.03)', borderRadius: '10px',
+                                            fontSize: '14px', color: 'var(--c-text-secondary)',
+                                        }}>
+                                            <MapPin size={14} style={{ color: 'var(--c-primary)', flexShrink: 0 }} />
+                                            <span style={{ fontWeight: 600, color: 'var(--c-text)' }}>{item.court.name}</span>
+                                            <span style={{ opacity: 0.4 }}>•</span>
+                                            <span>{new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                                            <span>{item.startTime}-{item.endTime}</span>
+                                            <span style={{ marginLeft: 'auto', fontWeight: 700, fontFamily: "'Inter'", color: 'var(--c-text)' }}>฿{item.price.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+
+                                    {/* Footer */}
+                                    <div style={{
+                                        borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '12px', paddingTop: '14px',
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    }}>
+                                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>
+                                            👤 {booking.participants.map(p => p.name).join(', ') || '-'}
+                                        </div>
+                                        <div style={{
+                                            fontWeight: 900, fontFamily: "'Inter'", fontSize: '18px',
+                                            background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                                        }}>
+                                            ฿{booking.totalAmount.toLocaleString()}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )
+                        })}
+                    </motion.div>
+                )}
+
+                {/* ── Settings ── */}
+                {tab === 'settings' && (
+                    <motion.div key="settings" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                        style={{
+                            background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
+                            borderRadius: '20px', padding: '32px',
+                        }}
+                    >
+                        <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <User size={20} style={{ color: 'var(--c-primary)' }} /> ข้อมูลส่วนตัว
+                        </h3>
+                        <div style={{ display: 'grid', gap: '18px' }}>
+                            {[
+                                { label: 'ชื่อ-สกุล', value: user.name, icon: <User size={16} /> },
+                                { label: 'อีเมล', value: user.email, icon: <Mail size={16} /> },
+                                { label: 'เบอร์โทรศัพท์', value: user.phone?.startsWith('LINE-') ? 'ยังไม่ได้ระบุ' : (user.phone || '-'), icon: <Phone size={16} /> },
+                            ].map(field => (
+                                <div key={field.label}>
+                                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--c-text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {field.icon} {field.label}
+                                    </label>
+                                    <div style={{
+                                        padding: '14px 18px', borderRadius: '12px',
+                                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                                        fontSize: '15px', fontWeight: 500, color: 'var(--c-text)',
+                                    }}>
+                                        {field.value}
+                                    </div>
                                 </div>
                             ))}
-                            <div style={{ borderTop: '1px solid var(--c-border)', marginTop: '12px', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>
-                                    ผู้เรียน: {booking.participants.map(p => p.name).join(', ') || '-'}
-                                </div>
-                                <div style={{ fontWeight: 800, fontFamily: "'Inter'", fontSize: '17px' }}>
-                                    ฿{booking.totalAmount.toLocaleString()}
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            )}
-
-            {/* Settings */}
-            {tab === 'settings' && (
-                <div className="glass-card" style={{ cursor: 'default' }}>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <User size={20} /> ข้อมูลส่วนตัว
-                    </h3>
-                    <div style={{ display: 'grid', gap: '16px' }}>
-                        <div className="input-group">
-                            <label>ชื่อ</label>
-                            <input className="input-field" value={user.name} readOnly />
                         </div>
-                        <div className="input-group">
-                            <label>อีเมล</label>
-                            <input className="input-field" value={user.email} readOnly />
-                        </div>
-                        <div className="input-group">
-                            <label>เบอร์โทรศัพท์</label>
-                            <input className="input-field" value={user.phone || '-'} readOnly />
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
