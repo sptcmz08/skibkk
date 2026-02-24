@@ -41,7 +41,12 @@ export async function GET(req: NextRequest) {
                 orderBy: { createdAt: 'desc' },
                 take: 100,
             })
-            return NextResponse.json({ bookings })
+            return NextResponse.json({ bookings }, {
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                },
+            })
         }
 
         if (!user) {
@@ -57,7 +62,12 @@ export async function GET(req: NextRequest) {
             },
             orderBy: { createdAt: 'desc' },
         })
-        return NextResponse.json({ bookings })
+        return NextResponse.json({ bookings }, {
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+            },
+        })
     } catch (error) {
         console.error('Bookings GET error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })

@@ -112,7 +112,12 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        return NextResponse.json({ availability, date: dateStr })
+        return NextResponse.json({ availability, date: dateStr }, {
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+            },
+        })
     } catch (error) {
         console.error('Availability GET error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
