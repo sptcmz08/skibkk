@@ -21,6 +21,7 @@ export default function BookingPage() {
     const [participants, setParticipants] = useState<Participant[]>([
         { name: '', sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false },
     ])
+    const BOOKING_DRAFT_KEY = 'skibkk-booking-draft'
     const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER'>('PROMPTPAY')
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
@@ -57,7 +58,25 @@ export default function BookingPage() {
                 toast.error('กรุณาเข้าสู่ระบบก่อนดำเนินการจอง')
                 router.push('/cart')
             })
+
+        // Restore draft from localStorage
+        try {
+            const draft = JSON.parse(localStorage.getItem(BOOKING_DRAFT_KEY) || 'null')
+            if (draft) {
+                if (draft.participants?.length) setParticipants(draft.participants)
+                if (draft.isBookerLearner !== undefined) setIsBookerLearner(draft.isBookerLearner)
+                if (draft.step) setStep(draft.step)
+            }
+        } catch { /* ignore */ }
     }, [router])
+
+    // Auto-save draft to localStorage on every change
+    useEffect(() => {
+        if (!cart.length) return
+        localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify({
+            participants, isBookerLearner, step,
+        }))
+    }, [participants, isBookerLearner, step, cart.length])
 
     // Max participants: 2 per hour total
     const maxParticipants = cart.length * 2
@@ -147,8 +166,9 @@ export default function BookingPage() {
                 }),
             })
 
-            // Clear cart
+            // Clear cart and draft
             localStorage.setItem('skibkk-cart', '[]')
+            localStorage.removeItem(BOOKING_DRAFT_KEY)
             window.dispatchEvent(new Event('cart-updated'))
             setStep(3) // success
             toast.success('จองสำเร็จ!')
