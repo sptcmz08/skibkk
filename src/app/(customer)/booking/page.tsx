@@ -63,8 +63,7 @@ export default function BookingPage() {
     const maxParticipants = cart.length * 2
 
     const addParticipant = () => {
-        const currentCount = participants.length + (isBookerLearner ? 1 : 0)
-        if (currentCount >= maxParticipants) {
+        if (participants.length >= maxParticipants) {
             toast.error(`จำนวนผู้เรียนเต็มแล้ว (สูงสุด ${maxParticipants} คน)`)
             return
         }
@@ -233,7 +232,7 @@ export default function BookingPage() {
                         >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                                 <h3 style={{ fontSize: '16px', fontWeight: 700 }}>
-                                    ผู้เรียนคนที่ {idx + 1} {p.isBooker && <span style={{ color: 'var(--c-primary)', fontSize: '13px' }}>(ผู้จอง)</span>}
+                                    ผู้เรียนคนที่ {idx + 1} {isBookerLearner && idx === 0 && <span style={{ color: 'var(--c-primary)', fontSize: '13px' }}>(ผู้จอง)</span>}
                                 </h3>
                                 {!p.isBooker && participants.length > 1 && (
                                     <button onClick={() => removeParticipant(idx)} style={{ background: 'none', border: 'none', color: 'var(--c-danger)', cursor: 'pointer', padding: '4px' }}>
@@ -279,7 +278,7 @@ export default function BookingPage() {
                         </motion.div>
                     ))}
 
-                    {(participants.length + (isBookerLearner ? 1 : 0)) < maxParticipants && (
+                    {participants.length < maxParticipants && (
                         <button onClick={addParticipant} className="btn btn-secondary btn-block" style={{ marginBottom: '20px' }}>
                             <Plus size={18} /> เพิ่มผู้เรียน
                         </button>
