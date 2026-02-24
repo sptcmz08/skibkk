@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
             })
 
             if (existingSlip) {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: user.id, action: 'BOOKING_FAIL', entityType: 'payment', entityId: bookingId,
+                        details: JSON.stringify({ reason: 'สลิปซ้ำ', bookingNumber: booking.bookingNumber }),
+                    },
+                })
                 return NextResponse.json(
                     { error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้' },
                     { status: 400 }

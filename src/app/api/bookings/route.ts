@@ -177,3 +177,49 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }
 }
+
+// PATCH — edit/cancel booking (admin)
+export async function PATCH(req: NextRequest) {
+    try {
+        const user = await requireAuth()
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
+
+        const body = await req.json()
+        const { bookingId, action, reason, ...updateData } = body
+
+        const booking = await prisma.booking.findUnique({ where: { id: bookingId } })
+        if (!booking) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
+
+        if (action === 'cancel') {
+            await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } })
+            await prisma.auditLog.create({
+                data: {
+                    userId: user.id, action: 'BOOKING_CANCEL', entityType: 'booking', entityId: bookingId,
+                    details: JSON.stringify({ bookingNumber: booking.bookingNumber, reason: reason || 'Admin cancelled' }),
+                },
+            })
+            return NextResponse.json({ message: 'ยกเลิกการจองสำเร็จ' })
+        }
+
+        const updated = await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: updateData.status || undefined, totalAmount: updateData.totalAmount || undefined },
+            include: { bookingItems: { include: { court: true } }, participants: true, payments: true, user: { select: { name: true } } },
+        })
+
+        await prisma.auditLog.create({
+            data: {
+                userId: user.id, action: 'BOOKING_UPDATE', entityType: 'booking', entityId: bookingId,
+                details: JSON.stringify({ bookingNumber: booking.bookingNumber, changes: updateData }),
+            },
+        })
+
+        return NextResponse.json({ booking: updated })
+    } catch (error) {
+        if ((error as Error).message === 'Unauthorized') return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
+        console.error('Bookings PATCH error:', error)
+        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    }
+}

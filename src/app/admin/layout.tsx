@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
     LayoutDashboard, MapPin, DollarSign, Package, Calendar,
     Users, GraduationCap, FileText, BarChart3, Clock, Shield,
-    LogOut, Menu, X, ChevronDown, Settings, Star
+    LogOut, Menu, X, ChevronDown, Settings, Star, UserPlus, BookOpen
 } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -34,12 +34,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '' },
         { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '' },
         { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง' },
+        { href: '/admin/book', icon: UserPlus, label: 'จองให้ลูกค้า', section: '' },
         { href: '/admin/participants', icon: Users, label: 'ผู้เรียน & ครูสอน', section: '' },
         { href: '/admin/customers', icon: Users, label: 'ลูกค้า', section: '' },
         { href: '/admin/teachers', icon: GraduationCap, label: 'ครูผู้สอน', section: 'บุคลากร' },
         { href: '/admin/evaluations', icon: Star, label: 'แบบประเมิน', section: '' },
         { href: '/admin/invoices', icon: FileText, label: 'ใบกำกับภาษี', section: 'รายงาน' },
+        { href: '/admin/invoice-report', icon: FileText, label: 'รวมใบกำกับภาษี', section: '' },
         { href: '/admin/reports', icon: BarChart3, label: 'สรุปการจอง', section: '' },
+        { href: '/admin/teacher-report', icon: BookOpen, label: 'ชั่วโมงสอน', section: '' },
         { href: '/admin/availability', icon: Clock, label: 'ตรวจสอบเวลาว่าง', section: '' },
         { href: '/admin/users', icon: Shield, label: 'ผู้ใช้งาน', section: 'ระบบ' },
         { href: '/admin/settings', icon: Settings, label: 'ตั้งค่าเว็บไซต์', section: '' },

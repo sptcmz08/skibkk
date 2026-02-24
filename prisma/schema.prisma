@@ -248,14 +248,15 @@ model UserPackage {
 }
 
 model Teacher {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String?
-  email     String?
-  specialty String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  phone      String?
+  email      String?
+  specialty  String?
+  isActive   Boolean  @default(true)
+  workStatus String   @default("ACTIVE") // ACTIVE, ON_LEAVE, SUSPENDED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   schedules    TeacherSchedule[]
   evaluations  TeacherEvaluation[]
@@ -351,4 +352,13 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 
   @@map("site_settings")
+}
+
+model ClosedDate {
+  id        String   @id @default(uuid())
+  date      DateTime @unique
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@map("closed_dates")
 }

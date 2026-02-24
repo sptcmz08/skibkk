@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Image as ImageIcon, GripVertical, Plus, Save, Check } from 'lucide-react'
+import { Upload, Trash2, Image as ImageIcon, GripVertical, Plus, Save, Check, CalendarOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
 
@@ -11,6 +11,9 @@ export default function AdminSettingsPage() {
     const [gallery, setGallery] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [uploading, setUploading] = useState<string | null>(null) // 'logo' | 'banner' | 'gallery'
+    const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string | null }>>([])
+    const [newClosedDate, setNewClosedDate] = useState('')
+    const [newClosedReason, setNewClosedReason] = useState('')
     const logoInputRef = useRef<HTMLInputElement>(null)
     const bannerInputRef = useRef<HTMLInputElement>(null)
     const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -24,6 +27,7 @@ export default function AdminSettingsPage() {
                 if (data.gallery) setGallery(JSON.parse(data.gallery))
             })
             .catch(() => { })
+        fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
     }, [])
 
     const uploadFile = async (file: File): Promise<string | null> => {
@@ -301,6 +305,47 @@ export default function AdminSettingsPage() {
                         </>
                     )}
                 </div>
+            </div>
+
+            {/* Holiday closures */}
+            <div style={cardStyle}>
+                <h2 style={sectionTitle}><CalendarOff size={20} color="#e17055" /> วันหยุดพิเศษ (ปิดสนาม)</h2>
+                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>กำหนดวันที่ปิดสนามพิเศษ เช่น วันปีใหม่ วันสงกรานต์</p>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <input type="date" className="admin-input" style={{ width: '180px' }} value={newClosedDate} onChange={e => setNewClosedDate(e.target.value)} />
+                    <input className="admin-input" style={{ flex: 1, minWidth: '200px' }} placeholder="เหตุผล เช่น วันปีใหม่" value={newClosedReason} onChange={e => setNewClosedReason(e.target.value)} />
+                    <button className="btn-admin" onClick={async () => {
+                        if (!newClosedDate) { toast.error('เลือกวันที่'); return }
+                        const res = await fetch('/api/closed-dates', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ date: newClosedDate, reason: newClosedReason }),
+                        })
+                        if (res.ok) {
+                            toast.success('เพิ่มวันหยุดสำเร็จ')
+                            setNewClosedDate(''); setNewClosedReason('')
+                            fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || []))
+                        } else { toast.error('เกิดข้อผิดพลาด') }
+                    }}><Plus size={16} /> เพิ่ม</button>
+                </div>
+
+                {closedDates.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {closedDates.map(d => (
+                            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                                <div>
+                                    <span style={{ fontWeight: 700 }}>{new Date(d.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                    {d.reason && <span style={{ color: '#636e72', marginLeft: '12px', fontSize: '13px' }}>{d.reason}</span>}
+                                </div>
+                                <button onClick={async () => {
+                                    await fetch('/api/closed-dates', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id }) })
+                                    setClosedDates(prev => prev.filter(x => x.id !== d.id))
+                                    toast.success('ลบวันหยุดแล้ว')
+                                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055' }}><Trash2 size={16} /></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     )

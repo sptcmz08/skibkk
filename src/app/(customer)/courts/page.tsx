@@ -122,6 +122,7 @@ export default function CourtsPage() {
     const [loading, setLoading] = useState(false)
     const [loadingCourts, setLoadingCourts] = useState(true)
     const pollRef = useRef<NodeJS.Timeout | null>(null)
+    const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -202,6 +203,16 @@ export default function CourtsPage() {
         }
         return () => { if (pollRef.current) clearInterval(pollRef.current) }
     }, [step, selectedDate, fetchAvailability])
+
+    // Fetch calendar availability for month coloring
+    useEffect(() => {
+        if (step === 2 && selectedSport) {
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}&sportType=${encodeURIComponent(selectedSport)}`)
+                .then(r => r.json())
+                .then(data => { if (data.availability) setCalAvail(data.availability) })
+                .catch(() => { })
+        }
+    }, [step, viewYear, viewMonth, selectedSport])
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)
@@ -362,25 +373,37 @@ export default function CourtsPage() {
                             const isSelected = dateStr === selectedDate
                             const isSun = date.getDay() === 0
                             const isSat = date.getDay() === 6
+                            const dayInfo = calAvail[dateStr]
+                            const dayStatus = dayInfo?.status || (isPast ? 'past' : 'available')
+                            const freeSlots = dayInfo ? dayInfo.totalSlots - dayInfo.bookedSlots : 0
+                            const isClosed = dayStatus === 'closed'
+
+                            // Color dot
+                            const dotColor = dayStatus === 'full' ? '#f5576c' : dayStatus === 'almost_full' ? '#f5a623' : dayStatus === 'available' ? '#00b894' : 'transparent'
 
                             return (
                                 <motion.button
                                     key={dateStr}
-                                    whileHover={!isPast ? { scale: 1.08 } : undefined}
-                                    whileTap={!isPast ? { scale: 0.95 } : undefined}
-                                    onClick={() => !isPast && handleSelectDate(dateStr)}
-                                    disabled={isPast}
+                                    whileHover={!isPast && !isClosed ? { scale: 1.08 } : undefined}
+                                    whileTap={!isPast && !isClosed ? { scale: 0.95 } : undefined}
+                                    onClick={() => !isPast && !isClosed && handleSelectDate(dateStr)}
+                                    disabled={isPast || isClosed}
                                     style={{
-                                        aspectRatio: '1', borderRadius: '10px', cursor: isPast ? 'not-allowed' : 'pointer',
+                                        aspectRatio: '1', borderRadius: '10px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
                                         border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(102,126,234,0.4)' : '2px solid transparent',
-                                        background: isSelected ? 'rgba(102,126,234,0.2)' : isToday ? 'rgba(102,126,234,0.08)' : 'rgba(255,255,255,0.02)',
-                                        color: isPast ? 'rgba(255,255,255,0.15)' : isSelected ? 'white' : isSun ? '#f87171' : isSat ? '#818cf8' : 'var(--c-text)',
+                                        background: isSelected ? 'rgba(102,126,234,0.2)' : isClosed ? 'rgba(255,255,255,0.02)' : isToday ? 'rgba(102,126,234,0.08)' : 'rgba(255,255,255,0.02)',
+                                        color: isPast || isClosed ? 'rgba(255,255,255,0.15)' : isSelected ? 'white' : isSun ? '#f87171' : isSat ? '#818cf8' : 'var(--c-text)',
                                         fontWeight: isSelected || isToday ? 800 : 500,
                                         fontSize: '14px', fontFamily: "'Inter', sans-serif",
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        opacity: isPast ? 0.4 : 1,
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
+                                        opacity: isPast || isClosed ? 0.4 : 1,
+                                        position: 'relative',
                                     }}>
                                     {date.getDate()}
+                                    {!isPast && !isClosed && dayInfo && (
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor, display: 'block' }} />
+                                    )}
+                                    {isClosed && <span style={{ fontSize: '8px', color: '#f5576c' }}>ปิด</span>}
                                 </motion.button>
                             )
                         })}

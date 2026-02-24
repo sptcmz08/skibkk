@@ -49,8 +49,19 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Cleanup expired locks while we're here
-        await prisma.slotLock.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+        // Cleanup expired locks and log as failures
+        const expiredLocks = await prisma.slotLock.findMany({ where: { expiresAt: { lt: new Date() } } })
+        if (expiredLocks.length > 0) {
+            for (const lock of expiredLocks) {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: null, action: 'BOOKING_FAIL', entityType: 'lock', entityId: lock.id,
+                        details: JSON.stringify({ reason: 'ไม่ทำภายในเวลาที่กำหนด', sessionId: lock.sessionId, courtId: lock.courtId, date: lock.date, startTime: lock.startTime }),
+                    },
+                }).catch(() => { })
+            }
+            await prisma.slotLock.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+        }
 
         // Return the earliest expiresAt from successful locks
         const expiries = results

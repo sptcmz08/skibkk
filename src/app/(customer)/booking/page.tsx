@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload } from 'lucide-react'
+import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CartItem {
@@ -22,12 +22,39 @@ export default function BookingPage() {
         { name: '', sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false },
     ])
     const BOOKING_DRAFT_KEY = 'skibkk-booking-draft'
-    const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER'>('PROMPTPAY')
+    const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER' | 'PACKAGE'>('PROMPTPAY')
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
     const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
     const [slipFile, setSlipFile] = useState<File | null>(null)
     const [slipPreview, setSlipPreview] = useState<string | null>(null)
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+    const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string } }>>([])
+    const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
+
+    const total = cart.reduce((s, i) => s + i.price, 0)
+
+    // Generate PromptPay QR when entering payment step
+    useEffect(() => {
+        if (step === 2 && paymentMethod === 'PROMPTPAY' && total > 0 && !qrDataUrl) {
+            fetch('/api/payments/qr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: total }),
+            }).then(r => r.json())
+                .then(data => { if (data.qrDataUrl) setQrDataUrl(data.qrDataUrl) })
+                .catch(() => { })
+        }
+    }, [step, paymentMethod, total, qrDataUrl])
+
+    // Fetch user packages when entering payment step
+    useEffect(() => {
+        if (step === 2) {
+            fetch('/api/user-packages').then(r => r.json())
+                .then(data => setUserPackages(data.packages || []))
+                .catch(() => { })
+        }
+    }, [step])
 
     useEffect(() => {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
@@ -115,7 +142,7 @@ export default function BookingPage() {
         }
     }
 
-    const total = cart.reduce((sum, item) => sum + item.price, 0)
+
 
     const handleSubmitBooking = async () => {
         if (participants.some(p => !p.name || !p.sportType)) {
@@ -157,29 +184,40 @@ export default function BookingPage() {
             }
             setBookingResult({ bookingNumber: data.booking.bookingNumber })
 
-            // Upload slip if attached
-            let slipUrl: string | null = null
-            if (slipFile) {
-                const formData = new FormData()
-                formData.append('file', slipFile)
-                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
-                if (uploadRes.ok) {
-                    const uploadData = await uploadRes.json()
-                    slipUrl = uploadData.url
+            // Handle payment based on method
+            if (paymentMethod === 'PACKAGE' && selectedPackageId) {
+                // Deduct from package
+                const hoursToDeduct = cart.length // 1 hour per slot
+                await fetch('/api/user-packages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userPackageId: selectedPackageId, hoursToDeduct, bookingId: data.booking.id }),
+                })
+            } else {
+                // Upload slip if attached
+                let slipUrl: string | null = null
+                if (slipFile) {
+                    const formData = new FormData()
+                    formData.append('file', slipFile)
+                    const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+                    if (uploadRes.ok) {
+                        const uploadData = await uploadRes.json()
+                        slipUrl = uploadData.url
+                    }
                 }
-            }
 
-            // Submit payment
-            await fetch('/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bookingId: data.booking.id,
-                    method: paymentMethod,
-                    amount: total,
-                    slipUrl,
-                }),
-            })
+                // Submit payment
+                await fetch('/api/payments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bookingId: data.booking.id,
+                        method: paymentMethod,
+                        amount: total,
+                        slipUrl,
+                    }),
+                })
+            }
 
             // Clear cart and draft
             localStorage.setItem('skibkk-cart', '[]')
@@ -359,6 +397,7 @@ export default function BookingPage() {
                         {[
                             { value: 'PROMPTPAY' as const, icon: <QrCode size={24} />, label: 'QR Code พร้อมเพย์', desc: 'สแกนจ่ายได้ทันที' },
                             { value: 'BANK_TRANSFER' as const, icon: <Building2 size={24} />, label: 'โอนผ่านธนาคาร', desc: 'โอนเงินและแนบสลิป' },
+                            ...(userPackages.length > 0 ? [{ value: 'PACKAGE' as const, icon: <Package size={24} />, label: 'ใช้แพ็คเกจ', desc: `มี ${userPackages.length} แพ็คเกจ` }] : []),
                         ].map(method => (
                             <button
                                 key={method.value}
@@ -389,13 +428,48 @@ export default function BookingPage() {
                     <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
                         {paymentMethod === 'PROMPTPAY' ? (
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ width: '200px', height: '200px', background: 'white', borderRadius: '12px', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <QrCode size={120} style={{ color: '#333' }} />
+                                <div style={{ width: '220px', height: '220px', background: 'white', borderRadius: '12px', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                    {qrDataUrl ? (
+                                        <img src={qrDataUrl} alt="PromptPay QR" style={{ width: '200px', height: '200px' }} />
+                                    ) : (
+                                        <div className="spinner" style={{ width: '30px', height: '30px', borderTopColor: '#667eea' }} />
+                                    )}
                                 </div>
                                 <p style={{ fontWeight: 700, fontSize: '16px' }}>สแกน QR Code เพื่อชำระเงิน</p>
-                                <p style={{ color: 'var(--c-text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                                    พร้อมเพย์: xxx-xxx-xxxx (ตั้งค่าได้ใน Admin)
+                                <p style={{ fontSize: '20px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)', marginTop: '8px' }}>฿{total.toLocaleString()}</p>
+                                <p style={{ color: 'var(--c-text-muted)', fontSize: '12px', marginTop: '4px' }}>
+                                    จำนวนเงินจะแสดงอัตโนมัติเมื่อสแกน
                                 </p>
+                            </div>
+                        ) : paymentMethod === 'PACKAGE' ? (
+                            <div>
+                                <p style={{ fontWeight: 700, marginBottom: '12px' }}>เลือกแพ็คเกจที่ต้องการใช้</p>
+                                <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '12px' }}>
+                                    ใช้ {cart.length} ชม. จากแพ็คเกจ (ไม่ต้องชำระเงินเพิ่ม)
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {userPackages.map(pkg => (
+                                        <button
+                                            key={pkg.id}
+                                            onClick={() => setSelectedPackageId(pkg.id)}
+                                            style={{
+                                                padding: '14px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
+                                                border: selectedPackageId === pkg.id ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
+                                                background: selectedPackageId === pkg.id ? 'rgba(102,126,234,0.15)' : 'rgba(255,255,255,0.04)',
+                                                color: 'var(--c-text)', fontFamily: 'inherit',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700, fontSize: '15px' }}>{pkg.package.name}</div>
+                                            <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginTop: '4px', display: 'flex', gap: '16px' }}>
+                                                <span>เหลือ {pkg.remainingHours} ชม.</span>
+                                                <span>หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                                            </div>
+                                            {pkg.remainingHours < cart.length && (
+                                                <div style={{ fontSize: '12px', color: '#f5576c', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         ) : (
                             <div>

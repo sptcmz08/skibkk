@@ -170,6 +170,36 @@ export default function CalendarPage() {
                         ))}
 
                         <div style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                            {viewBooking.status !== 'CANCELLED' && (
+                                <button onClick={async () => {
+                                    const reason = prompt('ระบุเหตุผลในการยกเลิก:')
+                                    if (reason === null) return
+                                    const res = await fetch('/api/bookings', {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ bookingId: viewBooking.id, action: 'cancel', reason }),
+                                    })
+                                    if (res.ok) {
+                                        toast.success('ยกเลิกการจองสำเร็จ')
+                                        setViewBooking(null)
+                                        fetchBookings()
+                                    }
+                                }} className="btn-admin-outline" style={{ color: '#e17055', borderColor: '#e17055' }}>ยกเลิกการจอง</button>
+                            )}
+                            {viewBooking.status === 'PENDING' && (
+                                <button onClick={async () => {
+                                    const res = await fetch('/api/bookings', {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ bookingId: viewBooking.id, status: 'CONFIRMED' }),
+                                    })
+                                    if (res.ok) {
+                                        toast.success('ยืนยันการจองสำเร็จ')
+                                        setViewBooking(null)
+                                        fetchBookings()
+                                    }
+                                }} className="btn-admin">ยืนยันการจอง</button>
+                            )}
                             <button onClick={() => setViewBooking(null)} className="btn-admin-outline">ปิด</button>
                         </div>
                     </div>
