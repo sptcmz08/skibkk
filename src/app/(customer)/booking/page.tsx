@@ -26,6 +26,8 @@ export default function BookingPage() {
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
     const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
+    const [slipFile, setSlipFile] = useState<File | null>(null)
+    const [slipPreview, setSlipPreview] = useState<string | null>(null)
 
     useEffect(() => {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
@@ -155,6 +157,18 @@ export default function BookingPage() {
             }
             setBookingResult({ bookingNumber: data.booking.bookingNumber })
 
+            // Upload slip if attached
+            let slipUrl: string | null = null
+            if (slipFile) {
+                const formData = new FormData()
+                formData.append('file', slipFile)
+                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+                if (uploadRes.ok) {
+                    const uploadData = await uploadRes.json()
+                    slipUrl = uploadData.url
+                }
+            }
+
             // Submit payment
             await fetch('/api/payments', {
                 method: 'POST',
@@ -163,6 +177,7 @@ export default function BookingPage() {
                     bookingId: data.booking.id,
                     method: paymentMethod,
                     amount: total,
+                    slipUrl,
                 }),
             })
 
@@ -399,18 +414,54 @@ export default function BookingPage() {
                         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Upload size={18} /> แนบหลักฐานการชำระเงิน
                         </h3>
-                        <div style={{
-                            border: '2px dashed var(--c-glass-border)',
-                            borderRadius: '12px',
-                            padding: '32px',
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                        }}>
-                            <Upload size={32} style={{ color: 'var(--c-text-muted)', marginBottom: '8px' }} />
-                            <p style={{ color: 'var(--c-text-secondary)', fontSize: '14px' }}>คลิกหรือลากไฟล์มาวาง</p>
-                            <p style={{ color: 'var(--c-text-muted)', fontSize: '12px', marginTop: '4px' }}>รองรับ JPG, PNG ขนาดไม่เกิน 5MB</p>
-                        </div>
+
+                        {slipPreview ? (
+                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                <img src={slipPreview} alt="slip" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '12px', border: '1px solid var(--c-glass-border)' }} />
+                                <button
+                                    onClick={() => { setSlipFile(null); setSlipPreview(null) }}
+                                    style={{
+                                        position: 'absolute', top: '8px', right: '8px',
+                                        width: '32px', height: '32px', borderRadius: '50%',
+                                        background: 'rgba(245,87,108,0.9)', color: 'white',
+                                        border: 'none', cursor: 'pointer', fontSize: '16px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}
+                                >✕</button>
+                                <p style={{ fontSize: '13px', color: 'var(--c-text-secondary)', marginTop: '8px' }}>
+                                    📎 {slipFile?.name}
+                                </p>
+                            </div>
+                        ) : (
+                            <label style={{ cursor: 'pointer', display: 'block' }}>
+                                <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (!file) return
+                                        if (file.size > 5 * 1024 * 1024) {
+                                            toast.error('ไฟล์ต้องไม่เกิน 5MB')
+                                            return
+                                        }
+                                        setSlipFile(file)
+                                        setSlipPreview(URL.createObjectURL(file))
+                                    }}
+                                />
+                                <div style={{
+                                    border: '2px dashed var(--c-glass-border)',
+                                    borderRadius: '12px',
+                                    padding: '32px',
+                                    textAlign: 'center',
+                                    transition: 'all 0.2s',
+                                }}>
+                                    <Upload size={32} style={{ color: 'var(--c-text-muted)', marginBottom: '8px' }} />
+                                    <p style={{ color: 'var(--c-text-secondary)', fontSize: '14px' }}>คลิกเพื่อเลือกไฟล์</p>
+                                    <p style={{ color: 'var(--c-text-muted)', fontSize: '12px', marginTop: '4px' }}>รองรับ JPG, PNG ขนาดไม่เกิน 5MB</p>
+                                </div>
+                            </label>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px' }}>
