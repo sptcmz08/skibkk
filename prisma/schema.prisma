@@ -188,8 +188,10 @@ model Participant {
   height    Float?
   phone     String?
   isBooker  Boolean @default(false)
+  teacherId String?
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
 
   @@map("participants")
 }
@@ -258,6 +260,7 @@ model Teacher {
   schedules    TeacherSchedule[]
   evaluations  TeacherEvaluation[]
   bookingItems BookingItem[]
+  participants Participant[]
 
   @@map("teachers")
 }
@@ -275,12 +278,25 @@ model TeacherSchedule {
 }
 
 model TeacherEvaluation {
-  id        String   @id @default(uuid())
-  teacherId String
-  bookingId String?
-  rating    Int // 1-5
-  comment   String?
-  createdAt DateTime @default(now())
+  id              String    @id @default(uuid())
+  teacherId       String
+  bookingId       String?
+  token           String    @unique @default(uuid()) // for public form link
+  evaluatorName   String?
+  // Trainer ratings (1=ปรับปรุง 2=พอใช้ 3=ดี 4=ดีมาก)
+  trainingQuality Int? // คุณภาพการฝึกสอน
+  communication   Int? // การสื่อสาร
+  dedication      Int? // ความใส่ใจและความตั้งใจในการสอน
+  // General ratings
+  serviceRating   Int? // การบริการ
+  venueRating     Int? // สถานที่
+  // Comeback preference (1=ไม่ต้องการ 2=ไม่แน่ใจ 3=ต้องการ)
+  comebackPref    Int?
+  rating          Int       @default(0) // overall average
+  comment         String? // ข้อเสนอแนะ
+  isSubmitted     Boolean   @default(false)
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
 
   teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
