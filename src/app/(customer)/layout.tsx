@@ -49,7 +49,7 @@ export default function CustomerLayout({
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
         setUser(null)
-        router.push('/courts')
+        window.location.href = '/courts'
     }
 
     return (

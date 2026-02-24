@@ -22,10 +22,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 if (d.user && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(d.user.role)) {
                     setUser(d.user)
                 } else {
-                    router.push('/login')
+                    router.push('/courts')
                 }
             })
-            .catch(() => router.push('/login'))
+            .catch(() => router.push('/courts'))
     }, [router])
 
     const navItems = [
@@ -50,7 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
-        router.push('/login')
+        window.location.href = '/courts'
     }
 
     // Group items by section
