@@ -378,8 +378,12 @@ export default function CourtsPage() {
                             const freeSlots = dayInfo ? dayInfo.totalSlots - dayInfo.bookedSlots : 0
                             const isClosed = dayStatus === 'closed'
 
-                            // Color dot
-                            const dotColor = dayStatus === 'full' ? '#e17055' : dayStatus === 'almost_full' ? '#f5a623' : dayStatus === 'available' ? '#00b894' : 'transparent'
+                            // Status colors & labels
+                            const statusConfig = dayStatus === 'full'
+                                ? { bg: 'rgba(225,112,85,0.15)', border: 'rgba(225,112,85,0.4)', text: 'เต็มแล้ว', color: '#e17055' }
+                                : dayStatus === 'almost_full'
+                                    ? { bg: 'rgba(245,166,35,0.15)', border: 'rgba(245,166,35,0.4)', text: `เหลือ ${freeSlots} ชม.`, color: '#f5a623' }
+                                    : { bg: 'rgba(0,184,148,0.1)', border: 'rgba(0,184,148,0.3)', text: 'ว่าง', color: '#00b894' }
 
                             return (
                                 <motion.button
@@ -390,26 +394,52 @@ export default function CourtsPage() {
                                     disabled={isPast || isClosed}
                                     style={{
                                         aspectRatio: '1', borderRadius: '10px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
-                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.4)' : '2px solid transparent',
-                                        background: isSelected ? 'rgba(245,166,35,0.2)' : isClosed ? 'rgba(255,255,255,0.02)' : isToday ? 'rgba(245,166,35,0.08)' : 'rgba(255,255,255,0.02)',
-                                        color: isPast || isClosed ? 'rgba(255,255,255,0.15)' : isSelected ? 'white' : isSun ? '#f87171' : isSat ? '#818cf8' : 'var(--c-text)',
-                                        fontWeight: isSelected || isToday ? 800 : 500,
+                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.5)' : `1px solid ${!isPast && !isClosed && dayInfo ? statusConfig.border : 'transparent'}`,
+                                        background: isSelected ? 'rgba(245,166,35,0.25)'
+                                            : isPast ? 'rgba(0,0,0,0.03)'
+                                                : isClosed ? 'rgba(225,112,85,0.06)'
+                                                    : dayInfo ? statusConfig.bg
+                                                        : isToday ? 'rgba(245,166,35,0.08)' : 'transparent',
+                                        color: isPast ? '#b2bec3' : isClosed ? '#b2bec3' : isSelected ? 'var(--c-text)' : isSun ? '#e17055' : isSat ? '#6c5ce7' : 'var(--c-text)',
+                                        fontWeight: isSelected || isToday ? 800 : 600,
                                         fontSize: '14px', fontFamily: "'Inter', sans-serif",
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
-                                        opacity: isPast || isClosed ? 0.4 : 1,
-                                        position: 'relative',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1px',
+                                        opacity: isPast ? 0.5 : isClosed ? 0.4 : 1,
+                                        position: 'relative', minHeight: '52px',
+                                        textDecoration: isPast ? 'line-through' : 'none',
                                     }}>
                                     {date.getDate()}
                                     {!isPast && !isClosed && dayInfo && (
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor, display: 'block' }} />
+                                        <span style={{
+                                            fontSize: '7px', fontWeight: 700, color: statusConfig.color,
+                                            lineHeight: 1, whiteSpace: 'nowrap',
+                                        }}>
+                                            {statusConfig.text}
+                                        </span>
                                     )}
-                                    {isClosed && <span style={{ fontSize: '8px', color: '#e17055' }}>ปิด</span>}
+                                    {isClosed && <span style={{ fontSize: '7px', color: '#e17055', fontWeight: 700 }}>ปิด</span>}
+                                    {isPast && <span style={{ fontSize: '7px', color: '#b2bec3' }}>ผ่านแล้ว</span>}
                                 </motion.button>
                             )
                         })}
                     </div>
 
-                    <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--c-text-muted)', marginTop: '20px' }}>
+                    {/* Status legend */}
+                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
+                        {[
+                            { color: '#00b894', label: 'ว่าง' },
+                            { color: '#f5a623', label: 'ใกล้เต็ม' },
+                            { color: '#e17055', label: 'เต็ม' },
+                            { color: '#b2bec3', label: 'ผ่านแล้ว' },
+                        ].map(s => (
+                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--c-text-secondary)' }}>
+                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: s.color, display: 'block' }} />
+                                {s.label}
+                            </div>
+                        ))}
+                    </div>
+
+                    <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--c-text-muted)', marginTop: '12px' }}>
                         <Calendar size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '6px' }} />
                         เลือกวันที่ต้องการจอง (สามารถจองล่วงหน้าได้)
                     </p>
@@ -513,32 +543,39 @@ export default function CourtsPage() {
                                         cursor: isDisabled ? 'not-allowed' : 'pointer',
                                         border: inCart
                                             ? '2px solid var(--c-primary)'
-                                            : isLockedByOther
-                                                ? '2px solid rgba(245,158,11,0.4)'
-                                                : isBooked
-                                                    ? '2px solid rgba(255,255,255,0.03)'
-                                                    : '2px solid rgba(255,255,255,0.08)',
+                                            : isPast
+                                                ? '2px solid rgba(225,112,85,0.2)'
+                                                : isLockedByOther
+                                                    ? '2px solid rgba(245,158,11,0.4)'
+                                                    : isBooked
+                                                        ? '2px solid rgba(0,0,0,0.03)'
+                                                        : '2px solid rgba(0,0,0,0.06)',
                                         background: inCart
                                             ? 'rgba(245,166,35,0.2)'
-                                            : isLockedByOther
-                                                ? 'rgba(245,158,11,0.08)'
-                                                : isBooked
-                                                    ? 'rgba(255,255,255,0.01)'
-                                                    : 'rgba(255,255,255,0.04)',
-                                        color: isBooked
-                                            ? 'var(--c-text-muted)'
-                                            : inCart
-                                                ? 'var(--c-primary-light)'
+                                            : isPast
+                                                ? 'rgba(225,112,85,0.06)'
                                                 : isLockedByOther
-                                                    ? '#fcd34d'
-                                                    : 'var(--c-text)',
+                                                    ? 'rgba(245,158,11,0.08)'
+                                                    : isBooked
+                                                        ? 'rgba(0,0,0,0.02)'
+                                                        : 'rgba(255,255,255,0.6)',
+                                        color: isPast
+                                            ? '#b2bec3'
+                                            : isBooked
+                                                ? 'var(--c-text-muted)'
+                                                : inCart
+                                                    ? 'var(--c-primary)'
+                                                    : isLockedByOther
+                                                        ? '#f59e0b'
+                                                        : 'var(--c-text)',
                                         fontFamily: "'Inter', sans-serif", textAlign: 'center',
-                                        opacity: isBooked ? 0.3 : 1, transition: 'all 0.15s',
+                                        opacity: isBooked ? 0.35 : isPast ? 0.5 : 1, transition: 'all 0.15s',
+                                        textDecoration: isPast ? 'line-through' : 'none',
                                     }}>
                                     <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.3px' }}>
                                         {slot.startTime}–{slot.endTime}
                                     </div>
-                                    {isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>เลยเวลาแล้ว</div>}
+                                    {isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: '#e17055', fontWeight: 700 }}>⛔ เลยเวลา</div>}
                                     {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
                                     {inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
                                     {isLockedByOther && (
@@ -563,8 +600,8 @@ export default function CourtsPage() {
             <div style={{
                 position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
                 padding: '14px 24px',
-                background: 'rgba(13,13,35,0.96)', backdropFilter: 'blur(20px)',
-                borderTop: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)',
+                borderTop: '1px solid rgba(0,0,0,0.06)',
             }}>
                 <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                     {cart.length > 0 ? (
