@@ -86,7 +86,8 @@ export async function sendBookingConfirmation(to: string, bookingData: BookingEm
     ${itemsTableHtml(bookingData.items)}
 
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 10px; text-align: center; margin-top: 8px;">
-      <p style="margin: 0; font-size: 20px; font-weight: 700;">ยอดรวม: ฿${bookingData.totalAmount.toLocaleString()}</p>
+      <p style="margin: 0; font-size: 16px; font-weight: 700;">📍 สถานที่: SKI BKK ซอยรามอินทรา40 กทม.</p>
+      <a href="https://maps.app.goo.gl/K73h3Wgm3Kx2dv6R9" style="color: #e0e7ff; font-size: 13px; margin-top: 6px; display: inline-block;">ดูแผนที่ Google Maps →</a>
     </div>
 
     <div style="background: #fffbeb; padding: 14px 18px; border-radius: 10px; margin-top: 16px; border-left: 4px solid #f59e0b;">
@@ -122,7 +123,8 @@ export async function sendBookingReminder(to: string, bookingData: BookingEmailD
     ${itemsTableHtml(bookingData.items)}
 
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 10px; text-align: center; margin-top: 8px;">
-      <p style="margin: 0; font-size: 20px; font-weight: 700;">ยอดรวม: ฿${bookingData.totalAmount.toLocaleString()}</p>
+      <p style="margin: 0; font-size: 16px; font-weight: 700;">📍 สถานที่: SKI BKK ซอยรามอินทรา40 กทม.</p>
+      <a href="https://maps.app.goo.gl/K73h3Wgm3Kx2dv6R9" style="color: #e0e7ff; font-size: 13px; margin-top: 6px; display: inline-block;">ดูแผนที่ Google Maps →</a>
     </div>
 
     <div style="background: #ecfdf5; padding: 14px 18px; border-radius: 10px; margin-top: 16px; border-left: 4px solid #10b981;">

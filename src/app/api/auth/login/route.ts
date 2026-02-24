@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'บัญชีถูกระงับการใช้งาน' }, { status: 403 })
         }
 
+        // LINE-only users don't have a password
+        if (!user.password) {
+            return NextResponse.json({ error: 'บัญชีนี้ใช้ LINE Login กรุณาเข้าสู่ระบบผ่าน LINE' }, { status: 400 })
+        }
+
         const valid = await verifyPassword(data.password, user.password)
         if (!valid) {
             return NextResponse.json({ error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }, { status: 401 })

@@ -7,7 +7,7 @@ const registerSchema = z.object({
     email: z.string().email('อีเมลไม่ถูกต้อง'),
     password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
     name: z.string().min(1, 'กรุณาระบุชื่อ'),
-    phone: z.string().optional(),
+    phone: z.string().min(9, 'กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง'),
 })
 
 export async function POST(req: NextRequest) {
@@ -15,9 +15,16 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         const data = registerSchema.parse(body)
 
-        const existing = await prisma.user.findUnique({ where: { email: data.email } })
-        if (existing) {
+        // Check duplicate email
+        const existingEmail = await prisma.user.findUnique({ where: { email: data.email } })
+        if (existingEmail) {
             return NextResponse.json({ error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 400 })
+        }
+
+        // Check duplicate phone
+        const existingPhone = await prisma.user.findUnique({ where: { phone: data.phone } })
+        if (existingPhone) {
+            return NextResponse.json({ error: 'เบอร์โทรนี้ถูกใช้งานแล้ว' }, { status: 400 })
         }
 
         const hashedPassword = await hashPassword(data.password)
@@ -26,7 +33,7 @@ export async function POST(req: NextRequest) {
                 email: data.email,
                 password: hashedPassword,
                 name: data.name,
-                phone: data.phone || null,
+                phone: data.phone,
             },
         })
 
