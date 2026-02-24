@@ -34,8 +34,8 @@ export default function InvoicesPage() {
         fetch('/api/bookings')
             .then(r => r.json())
             .then(data => {
-                const confirmed = (data.bookings || []).filter((b: Booking) => b.status === 'CONFIRMED')
-                setBookings(confirmed)
+                const all = (data.bookings || []).filter((b: Booking) => b.status !== 'CANCELLED')
+                setBookings(all)
             })
             .catch(() => toast.error('โหลดข้อมูลไม่สำเร็จ'))
             .finally(() => setLoading(false))
