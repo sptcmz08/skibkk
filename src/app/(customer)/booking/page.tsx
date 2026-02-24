@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package } from 'lucide-react'
+import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CartItem {
@@ -31,6 +31,9 @@ export default function BookingPage() {
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
     const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string } }>>([])
     const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
+    const [showTerms, setShowTerms] = useState(false)
+    const [termsText, setTermsText] = useState('')
+    const [termsAccepted, setTermsAccepted] = useState(false)
 
     const total = cart.reduce((s, i) => s + i.price, 0)
 
@@ -60,6 +63,16 @@ export default function BookingPage() {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         if (stored.length === 0) { router.push('/courts'); return }
         setCart(stored)
+
+        // Fetch booking terms from settings
+        fetch('/api/settings', { cache: 'no-store' }).then(r => r.json())
+            .then(data => {
+                if (data.booking_terms) {
+                    setTermsText(data.booking_terms)
+                    setShowTerms(true)
+                }
+            }).catch(() => { })
+
         // Check auth — if not logged in, redirect back to cart (which will show auth modal)
         fetch('/api/auth/me', { cache: 'no-store' })
             .then(r => r.json())
@@ -107,8 +120,8 @@ export default function BookingPage() {
         }))
     }, [participants, isBookerLearner, step, cart.length])
 
-    // Max participants: 2 per hour total
-    const maxParticipants = cart.length * 2
+    // Max participants: 2 for customer booking
+    const maxParticipants = 2
 
     const addParticipant = () => {
         if (participants.length >= maxParticipants) {
@@ -125,6 +138,18 @@ export default function BookingPage() {
     const updateParticipant = (idx: number, field: keyof Participant, value: string) => {
         const updated = [...participants]
         updated[idx] = { ...updated[idx], [field]: value }
+        // Snowboard lock: if participant 1 changes sport, force all others to match
+        if (field === 'sportType' && idx === 0 && value === 'สโนว์บอร์ด') {
+            for (let i = 1; i < updated.length; i++) {
+                updated[i] = { ...updated[i], sportType: 'สโนว์บอร์ด' }
+            }
+            toast('ผู้เรียนทุกคนต้องเล่นสโนว์บอร์ดเหมือนกัน', { icon: '⚠️' })
+        }
+        // If not first participant and first is snowboard, force snowboard
+        if (field === 'sportType' && idx > 0 && updated[0].sportType === 'สโนว์บอร์ด' && value !== 'สโนว์บอร์ด') {
+            updated[idx] = { ...updated[idx], sportType: 'สโนว์บอร์ด' }
+            toast.error('ผู้เรียนคนที่ 1 เลือกสโนว์บอร์ด คนอื่นต้องเลือกเหมือนกัน')
+        }
         setParticipants(updated)
     }
 
@@ -594,6 +619,39 @@ export default function BookingPage() {
                         </button>
                     </div>
                 </motion.div>
+            )}
+
+            {/* Booking Terms Modal */}
+            {showTerms && !termsAccepted && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+                }}>
+                    <div style={{
+                        background: 'var(--c-bg)', borderRadius: '20px', maxWidth: '500px', width: '100%',
+                        padding: '32px', maxHeight: '80vh', overflow: 'auto',
+                        border: '1px solid var(--c-glass-border)',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                            <AlertTriangle size={24} style={{ color: '#f5a623' }} />
+                            <h2 style={{ fontSize: '20px', fontWeight: 800 }}>เงื่อนไขการจอง</h2>
+                        </div>
+                        <div style={{
+                            whiteSpace: 'pre-wrap', fontSize: '14px', lineHeight: 1.8,
+                            color: 'var(--c-text-secondary)', marginBottom: '24px',
+                            padding: '16px', background: 'var(--c-glass)', borderRadius: '12px',
+                        }}>
+                            {termsText}
+                        </div>
+                        <button
+                            onClick={() => { setTermsAccepted(true); setShowTerms(false) }}
+                            className="btn btn-primary btn-block"
+                            style={{ fontWeight: 700, fontSize: '16px' }}
+                        >
+                            ยอมรับเงื่อนไข
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     )

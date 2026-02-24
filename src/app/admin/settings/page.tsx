@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Image as ImageIcon, GripVertical, Plus, Save, Check, CalendarOff } from 'lucide-react'
+import { Upload, Trash2, Image as ImageIcon, GripVertical, Plus, Save, Check, CalendarOff, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
 
@@ -14,6 +14,7 @@ export default function AdminSettingsPage() {
     const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string | null }>>([])
     const [newClosedDate, setNewClosedDate] = useState('')
     const [newClosedReason, setNewClosedReason] = useState('')
+    const [bookingTerms, setBookingTerms] = useState('')
     const logoInputRef = useRef<HTMLInputElement>(null)
     const bannerInputRef = useRef<HTMLInputElement>(null)
     const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -25,6 +26,7 @@ export default function AdminSettingsPage() {
                 if (data.logo) setLogo(data.logo)
                 if (data.banners) setBanners(JSON.parse(data.banners))
                 if (data.gallery) setGallery(JSON.parse(data.gallery))
+                if (data.booking_terms) setBookingTerms(data.booking_terms)
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
@@ -305,6 +307,21 @@ export default function AdminSettingsPage() {
                         </>
                     )}
                 </div>
+            </div>
+
+            {/* Booking Terms */}
+            <div style={cardStyle}>
+                <h2 style={sectionTitle}><FileText size={20} color="#f5a623" /> เงื่อนไขการจอง</h2>
+                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '12px' }}>ข้อความจะแสดงเป็น popup ตอนลูกค้ากดจอง (เว้นว่าง = ไม่แสดง popup)</p>
+                <textarea
+                    className="admin-input"
+                    rows={6}
+                    style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.8 }}
+                    placeholder="พิมพ์เงื่อนไขการจองที่นี่..."
+                    value={bookingTerms}
+                    onChange={e => setBookingTerms(e.target.value)}
+                    onBlur={() => { saveSetting('booking_terms', bookingTerms); toast.success('บันทึกเงื่อนไขแล้ว') }}
+                />
             </div>
 
             {/* Holiday closures */}
