@@ -69,11 +69,22 @@ export async function GET(req: NextRequest) {
 
             const timeSlots = generateTimeSlots(hours.openTime, hours.closeTime)
 
+            // Check if the requested date is today (Bangkok time)
+            const nowBkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+            const todayBkk = `${nowBkk.getFullYear()}-${String(nowBkk.getMonth() + 1).padStart(2, '0')}-${String(nowBkk.getDate()).padStart(2, '0')}`
+            const isToday = dateStr === todayBkk
+            const currentHour = nowBkk.getHours()
+            const currentMinute = nowBkk.getMinutes()
+
             const slots = timeSlots.map((time) => {
                 const isBooked = bookedSlots.has(`${court.id}:${time}`)
                 const lock = lockMap.get(`${court.id}:${time}`)
                 const isLockedByMe = lock?.sessionId === sessionId
                 const isLockedByOther = lock && lock.sessionId !== sessionId
+
+                // Check if this slot's start time has already passed (Bangkok time)
+                const [slotH, slotM] = time.split(':').map(Number)
+                const isPast = isToday && (slotH < currentHour || (slotH === currentHour && slotM <= currentMinute))
 
                 let price = 0
                 for (const rule of court.pricingRules) {
@@ -94,8 +105,9 @@ export async function GET(req: NextRequest) {
                     startTime: time,
                     endTime,
                     price,
-                    available: !isBooked && !isLockedByOther,
-                    status: isBooked ? 'booked' : isLockedByMe ? 'mine' : isLockedByOther ? 'locked' : 'available',
+                    available: !isBooked && !isLockedByOther && !isPast,
+                    isPast,
+                    status: isPast ? 'past' : isBooked ? 'booked' : isLockedByMe ? 'mine' : isLockedByOther ? 'locked' : 'available',
                     lockedByMe: isLockedByMe,
                     lockedByOther: !!isLockedByOther,
                     lockedUntil: isLockedByOther ? lock!.expiresAt : null,

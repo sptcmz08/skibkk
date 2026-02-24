@@ -126,6 +126,20 @@ export default function CourtsPage() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
+    // Get current Bangkok time for disabling past slots
+    const getNowBangkok = () => {
+        const now = new Date()
+        const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+        return { hour: bkk.getHours(), minute: bkk.getMinutes(), dateStr: `${bkk.getFullYear()}-${String(bkk.getMonth() + 1).padStart(2, '0')}-${String(bkk.getDate()).padStart(2, '0')}` }
+    }
+
+    const isSlotPast = (dateStr: string, startTime: string) => {
+        const bkk = getNowBangkok()
+        if (dateStr !== bkk.dateStr) return false
+        const [h, m] = startTime.split(':').map(Number)
+        return h < bkk.hour || (h === bkk.hour && m <= bkk.minute)
+    }
+
     // Load cart
     useEffect(() => {
         const saved = localStorage.getItem('skibkk-cart')
@@ -200,6 +214,10 @@ export default function CourtsPage() {
 
     const toggleSlot = async (court: CourtData, slot: Slot) => {
         if (!selectedDate) return
+        if (isSlotPast(selectedDate, slot.startTime)) {
+            toast.error('ไม่สามารถจองเวลาที่ผ่านมาแล้วได้')
+            return
+        }
         if (isInCart(court.courtId, selectedDate, slot.startTime)) {
             // Remove from cart & release lock
             updateCart(cart.filter(i => !(i.courtId === court.courtId && i.date === selectedDate && i.startTime === slot.startTime)))
@@ -452,9 +470,10 @@ export default function CourtsPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '10px' }}>
                         {currentCourt.slots.map(slot => {
                             const inCart = selectedDate ? isInCart(currentCourt.courtId, selectedDate, slot.startTime) : false
+                            const isPast = selectedDate ? isSlotPast(selectedDate, slot.startTime) : false
                             const isLockedByOther = slot.lockedByOther && !inCart
                             const isBooked = !slot.available && !inCart && !isLockedByOther
-                            const isDisabled = isBooked || isLockedByOther
+                            const isDisabled = isBooked || isLockedByOther || isPast
 
                             // Countdown for locked-by-other slots
                             const lockMins = isLockedByOther ? Math.floor(slot.secondsLeft / 60) : 0
@@ -496,8 +515,9 @@ export default function CourtsPage() {
                                     <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.3px' }}>
                                         {slot.startTime}–{slot.endTime}
                                     </div>
-                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
-                                    {inCart && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
+                                    {isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>เลยเวลาแล้ว</div>}
+                                    {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
+                                    {inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
                                     {isLockedByOther && (
                                         <div style={{ fontSize: '10px', marginTop: '5px', color: '#f59e0b', fontWeight: 700 }}>
                                             <Lock size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: '2px' }} />
