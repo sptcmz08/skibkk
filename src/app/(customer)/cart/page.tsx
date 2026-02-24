@@ -181,9 +181,18 @@ export default function CartPage() {
                                     exit={{ opacity: 0, height: 0 }}
                                     style={{ marginBottom: '24px' }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--c-text-secondary)', fontSize: '14px', fontWeight: 600 }}>
-                                        <Calendar size={16} />
-                                        {formatDate(date)}
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
+                                        padding: '12px 16px', borderRadius: '12px',
+                                        background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.2)',
+                                    }}>
+                                        <Calendar size={20} style={{ color: '#f5a623' }} />
+                                        <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--c-text)' }}>
+                                            {new Date(date).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                        </span>
+                                        <span style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginLeft: 'auto' }}>
+                                            {items.length} รายการ
+                                        </span>
                                     </div>
 
                                     {items.map((item, idx) => {

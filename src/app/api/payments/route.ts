@@ -54,7 +54,9 @@ export async function POST(req: NextRequest) {
                 amount,
                 slipUrl: body.slipUrl || null,
                 slipHash,
-                status: 'PENDING',
+                status: 'VERIFIED',
+                verifiedAt: new Date(),
+                verifiedBy: 'SYSTEM',
             },
         })
 
@@ -68,23 +70,11 @@ export async function POST(req: NextRequest) {
             })
         }
 
-        // Auto-verify for mock (in production, use EasySlip API)
-        // For now, mark as verified after a delay simulation
-        if (process.env.AUTO_VERIFY_PAYMENTS === 'true') {
-            await prisma.payment.update({
-                where: { id: payment.id },
-                data: {
-                    status: 'VERIFIED',
-                    verifiedAt: new Date(),
-                    verifiedBy: 'SYSTEM',
-                },
-            })
-
-            await prisma.booking.update({
-                where: { id: bookingId },
-                data: { status: 'CONFIRMED' },
-            })
-        }
+        // Auto-confirm booking
+        await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'CONFIRMED' },
+        })
 
         return NextResponse.json({ payment }, { status: 201 })
     } catch (error) {
