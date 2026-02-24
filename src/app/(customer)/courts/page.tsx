@@ -357,14 +357,14 @@ export default function CourtsPage() {
                     </div>
 
                     {/* Day header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '6px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', marginBottom: '6px' }}>
                         {DAY_TH.map(d => (
-                            <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--c-text-muted)', padding: '4px 0' }}>{d}</div>
+                            <div key={d} style={{ textAlign: 'center', fontSize: '13px', fontWeight: 700, color: 'var(--c-text-muted)', padding: '6px 0' }}>{d}</div>
                         ))}
                     </div>
 
                     {/* Calendar grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
                         {calDays.map((date, idx) => {
                             if (!date) return <div key={`empty-${idx}`} />
                             const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -393,32 +393,32 @@ export default function CourtsPage() {
                                     onClick={() => !isPast && !isClosed && handleSelectDate(dateStr)}
                                     disabled={isPast || isClosed}
                                     style={{
-                                        aspectRatio: '1', borderRadius: '10px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
-                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.5)' : `1px solid ${!isPast && !isClosed && dayInfo ? statusConfig.border : 'transparent'}`,
+                                        borderRadius: '12px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
+                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.5)' : `1px solid ${!isPast && !isClosed && dayInfo ? statusConfig.border : '#e9ecef'}`,
                                         background: isSelected ? 'rgba(245,166,35,0.25)'
-                                            : isPast ? 'rgba(0,0,0,0.03)'
+                                            : isPast ? '#f1f2f6'
                                                 : isClosed ? 'rgba(225,112,85,0.06)'
                                                     : dayInfo ? statusConfig.bg
-                                                        : isToday ? 'rgba(245,166,35,0.08)' : 'transparent',
+                                                        : isToday ? 'rgba(245,166,35,0.08)' : '#fff',
                                         color: isPast ? '#b2bec3' : isClosed ? '#b2bec3' : isSelected ? 'var(--c-text)' : isSun ? '#e17055' : isSat ? '#6c5ce7' : 'var(--c-text)',
                                         fontWeight: isSelected || isToday ? 800 : 600,
-                                        fontSize: '14px', fontFamily: "'Inter', sans-serif",
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1px',
-                                        opacity: isPast ? 0.5 : isClosed ? 0.4 : 1,
-                                        position: 'relative', minHeight: '52px',
+                                        fontSize: '15px', fontFamily: "'Inter', sans-serif",
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
+                                        opacity: isPast ? 0.6 : isClosed ? 0.4 : 1,
+                                        position: 'relative', minHeight: '58px', padding: '6px 2px',
                                         textDecoration: isPast ? 'line-through' : 'none',
                                     }}>
                                     {date.getDate()}
                                     {!isPast && !isClosed && dayInfo && (
                                         <span style={{
-                                            fontSize: '7px', fontWeight: 700, color: statusConfig.color,
+                                            fontSize: '9px', fontWeight: 700, color: statusConfig.color,
                                             lineHeight: 1, whiteSpace: 'nowrap',
                                         }}>
                                             {statusConfig.text}
                                         </span>
                                     )}
-                                    {isClosed && <span style={{ fontSize: '7px', color: '#e17055', fontWeight: 700 }}>ปิด</span>}
-                                    {isPast && <span style={{ fontSize: '7px', color: '#b2bec3' }}>ผ่านแล้ว</span>}
+                                    {isClosed && <span style={{ fontSize: '9px', color: '#e17055', fontWeight: 700 }}>ปิด</span>}
+                                    {isPast && <span style={{ fontSize: '8px', color: '#b2bec3' }}>ผ่านแล้ว</span>}
                                 </motion.button>
                             )
                         })}
@@ -596,60 +596,37 @@ export default function CourtsPage() {
                 )}
             </div>
 
-            {/* Bottom cart bar */}
-            <div style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-                padding: '14px 24px',
-                background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)',
-                borderTop: '1px solid rgba(0,0,0,0.06)',
-            }}>
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-                    {cart.length > 0 ? (
-                        <>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px', maxHeight: '90px', overflowY: 'auto' }}>
-                                {cart.map((item, i) => (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                                        <span style={{ fontWeight: 600, color: 'var(--c-text)' }}>{item.courtName}</span>
-                                        <span style={{ color: 'var(--c-text-muted)' }}>•</span>
-                                        <span style={{ color: 'var(--c-text-secondary)' }}>
-                                            {new Date(item.date + 'T00:00:00').getDate()} {MONTH_TH[new Date(item.date + 'T00:00:00').getMonth()]}
-                                        </span>
-                                        <span style={{ color: 'var(--c-text-secondary)' }}>{item.startTime}–{item.endTime}</span>
-                                        <span style={{ marginLeft: 'auto', fontWeight: 700, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
-                                        <button onClick={() => updateCart(cart.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
-                                            <Trash2 size={13} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <button onClick={() => setStep(2)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', flexShrink: 0 }}>
-                                    <ArrowLeft size={15} /> วันอื่น
-                                </button>
-                                <div style={{ flex: 1, textAlign: 'center' }}>
-                                    <span style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>{cart.length} รายการ</span>
-                                    <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: "'Inter'", marginLeft: '12px' }}>
-                                        ฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}
-                                    </span>
-                                </div>
-                                <button onClick={() => router.push('/cart')} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 22px', flexShrink: 0 }}>
-                                    ถัดไป <ArrowRight size={15} />
-                                </button>
-                            </div>
-                        </>
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <button onClick={() => setStep(2)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px' }}>
-                                <ArrowLeft size={15} /> กลับ
-                            </button>
-                            <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', color: 'var(--c-text-muted)' }}>
-                                <ShoppingCart size={15} style={{ display: 'inline', verticalAlign: '-3px', marginRight: '6px' }} />
-                                กดเลือกช่วงเวลาที่ต้องการ
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+            {/* Floating cart FAB */}
+            {cart.length > 0 && (
+                <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    style={{
+                        position: 'fixed', bottom: '24px', right: '24px', zIndex: 50,
+                    }}
+                >
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => router.push('/cart')}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '14px 24px', borderRadius: '999px',
+                            background: 'linear-gradient(135deg, #f5a623 0%, #e6951a 100%)',
+                            color: 'white', border: 'none', cursor: 'pointer',
+                            boxShadow: '0 8px 30px rgba(245,166,35,0.4)',
+                            fontFamily: 'inherit', fontWeight: 700, fontSize: '15px',
+                        }}
+                    >
+                        <ShoppingCart size={20} />
+                        <span>{cart.length} รายการ</span>
+                        <span style={{ fontFamily: "'Inter'", fontWeight: 800 }}>
+                            ฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}
+                        </span>
+                        <ArrowRight size={16} />
+                    </motion.button>
+                </motion.div>
+            )}
         </div>
     )
 }
