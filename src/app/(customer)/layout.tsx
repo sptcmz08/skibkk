@@ -53,7 +53,7 @@ export default function CustomerLayout({
     }
 
     return (
-        <div className="customer-layout">
+        <div className="customer-layout" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <nav className="customer-nav">
                 <Link href="/courts" className="logo">
                     <img src={logoUrl} alt="SKIBKK" style={{ height: '48px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
@@ -125,7 +125,7 @@ export default function CustomerLayout({
                 </div>
             )}
 
-            <main className="customer-main">
+            <main className="customer-main" style={{ flex: 1 }}>
                 {children}
             </main>
 
