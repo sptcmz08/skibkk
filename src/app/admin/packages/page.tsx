@@ -1,113 +1,364 @@
 'use client'
 
-import { useState } from 'react'
-import { Package, Plus, Edit2, Trash2, Users, Clock, X, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface PackageItem {
-    id: string; name: string; hours: number; maxParticipants: number
-    price: number; description: string; isActive: boolean; validDays: number
+    id: string; name: string; totalHours: number; price: number
+    description: string | null; isActive: boolean; validDays: number
+    _count?: { userPackages: number }
+}
+
+interface UserPkg {
+    id: string; remainingHours: number; purchasedAt: string; expiresAt: string
+    user: { id: string; name: string; email: string; phone: string }
+    package: { id: string; name: string; totalHours: number; price: number }
+}
+
+interface CustomerResult {
+    id: string; name: string; email: string; phone: string
 }
 
 export default function PackagesPage() {
-    const [packages, setPackages] = useState<PackageItem[]>([
-        { id: '1', name: 'แพ็คเกจ 10 ชั่วโมง', hours: 10, maxParticipants: 2, price: 16000, description: 'ซื้อ 10 ชม. ลด 15%', isActive: true, validDays: 90 },
-        { id: '2', name: 'แพ็คเกจ 20 ชั่วโมง', hours: 20, maxParticipants: 2, price: 28000, description: 'ซื้อ 20 ชม. ลด 25%', isActive: true, validDays: 180 },
-        { id: '3', name: 'แพ็คเกจครอบครัว', hours: 5, maxParticipants: 4, price: 12000, description: 'สำหรับ 4 คน', isActive: true, validDays: 60 },
-    ])
+    const [packages, setPackages] = useState<PackageItem[]>([])
+    const [userPackages, setUserPackages] = useState<UserPkg[]>([])
+    const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
-    const [form, setForm] = useState({ name: '', hours: '', maxParticipants: '2', price: '', description: '', validDays: '90' })
+    const [editId, setEditId] = useState<string | null>(null)
+    const [form, setForm] = useState({ name: '', totalHours: '', price: '', description: '', validDays: '30' })
 
-    const addPackage = () => {
-        if (!form.name || !form.hours || !form.price) { toast.error('กรุณากรอกข้อมูลให้ครบ'); return }
-        setPackages([...packages, {
-            id: Date.now().toString(), name: form.name, hours: parseInt(form.hours),
-            maxParticipants: parseInt(form.maxParticipants), price: parseFloat(form.price),
-            description: form.description, isActive: true, validDays: parseInt(form.validDays),
-        }])
-        setShowModal(false)
-        toast.success('เพิ่มแพ็คเกจสำเร็จ')
+    // Assign modal
+    const [showAssign, setShowAssign] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchResults, setSearchResults] = useState<CustomerResult[]>([])
+    const [selectedCustomer, setSelectedCustomer] = useState<CustomerResult | null>(null)
+    const [selectedPkgId, setSelectedPkgId] = useState<string>('')
+    const [assigning, setAssigning] = useState(false)
+
+    const fetchData = async () => {
+        setLoading(true)
+        try {
+            const [pkgRes, upRes] = await Promise.all([
+                fetch('/api/packages', { cache: 'no-store' }),
+                fetch('/api/admin/user-packages', { cache: 'no-store' }),
+            ])
+            const pkgData = await pkgRes.json()
+            const upData = await upRes.json()
+            setPackages(pkgData.packages || [])
+            setUserPackages(upData.userPackages || [])
+        } catch { /* ignore */ } finally { setLoading(false) }
     }
 
-    const deletePackage = (id: string) => {
-        setPackages(packages.filter(p => p.id !== id))
-        toast.success('ลบแพ็คเกจแล้ว')
+    useEffect(() => { fetchData() }, [])
+
+    const handleSave = async () => {
+        if (!form.name || !form.totalHours || !form.price) { toast.error('กรุณากรอกข้อมูลให้ครบ'); return }
+        const body = { ...form, ...(editId ? { id: editId } : {}) }
+        const res = await fetch('/api/packages', {
+            method: editId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+        if (res.ok) {
+            toast.success(editId ? 'แก้ไขสำเร็จ' : 'เพิ่มแพ็คเกจสำเร็จ')
+            setShowModal(false); setEditId(null)
+            setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30' })
+            fetchData()
+        } else { toast.error('เกิดข้อผิดพลาด') }
     }
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('ลบแพ็คเกจนี้?')) return
+        const res = await fetch('/api/packages', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        })
+        if (res.ok) { toast.success('ลบแล้ว'); fetchData() } else { toast.error('ลบไม่สำเร็จ') }
+    }
+
+    const openEdit = (pkg: PackageItem) => {
+        setEditId(pkg.id)
+        setForm({
+            name: pkg.name, totalHours: pkg.totalHours.toString(),
+            price: pkg.price.toString(), description: pkg.description || '',
+            validDays: pkg.validDays.toString(),
+        })
+        setShowModal(true)
+    }
+
+    // Search customers
+    const searchCustomers = async (q: string) => {
+        setSearchQuery(q)
+        if (q.length < 2) { setSearchResults([]); return }
+        try {
+            const res = await fetch(`/api/users?search=${encodeURIComponent(q)}`)
+            const data = await res.json()
+            setSearchResults(data.users || [])
+        } catch { /* ignore */ }
+    }
+
+    const handleAssign = async () => {
+        if (!selectedCustomer || !selectedPkgId) { toast.error('เลือกลูกค้าและแพ็คเกจ'); return }
+        setAssigning(true)
+        try {
+            const res = await fetch('/api/admin/user-packages', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: selectedCustomer.id, packageId: selectedPkgId }),
+            })
+            if (res.ok) {
+                toast.success(`มอบแพ็คเกจให้ ${selectedCustomer.name} แล้ว`)
+                setShowAssign(false); setSelectedCustomer(null); setSelectedPkgId('')
+                setSearchQuery(''); setSearchResults([])
+                fetchData()
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'เกิดข้อผิดพลาด')
+            }
+        } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setAssigning(false) }
+    }
+
+    const handleDeleteUserPkg = async (id: string) => {
+        if (!confirm('ยกเลิกแพ็คเกจนี้?')) return
+        const res = await fetch('/api/admin/user-packages', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        })
+        if (res.ok) { toast.success('ยกเลิกแล้ว'); fetchData() } else { toast.error('เกิดข้อผิดพลาด') }
+    }
+
+    const isExpired = (d: string) => new Date(d) < new Date()
+
+    if (loading) return <div style={{ textAlign: 'center', padding: '80px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)' }} /></div>
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>แพ็คเกจ ({packages.length})</h2>
-                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>จัดการแพ็คเกจรายชั่วโมงและข้อเสนอพิเศษ</p>
+                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>จัดการแพ็คเกจรายชั่วโมงและมอบให้ลูกค้า</p>
                 </div>
-                <button onClick={() => setShowModal(true)} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={18} /> เพิ่มแพ็คเกจ
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => setShowAssign(true)} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <UserPlus size={16} /> มอบแพ็คเกจให้ลูกค้า
+                    </button>
+                    <button onClick={() => { setEditId(null); setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30' }); setShowModal(true) }} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Plus size={18} /> เพิ่มแพ็คเกจ
+                    </button>
+                </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                {packages.map(pkg => (
-                    <div key={pkg.id} className="admin-card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Package size={22} />
+            {/* Package cards */}
+            {packages.length === 0 ? (
+                <div className="admin-card" style={{ padding: '60px', textAlign: 'center' }}>
+                    <Package size={48} style={{ color: '#ccc', marginBottom: '12px' }} />
+                    <p style={{ color: 'var(--a-text-muted)', fontWeight: 600 }}>ยังไม่มีแพ็คเกจ</p>
+                    <p style={{ color: 'var(--a-text-muted)', fontSize: '13px' }}>กดปุ่ม "เพิ่มแพ็คเกจ" เพื่อสร้างแพ็คเกจใหม่</p>
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginBottom: '36px' }}>
+                    {packages.map(pkg => (
+                        <div key={pkg.id} className="admin-card" style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Package size={22} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontWeight: 700, color: 'var(--a-text)' }}>{pkg.name}</h3>
+                                        <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{pkg.description || '-'}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 style={{ fontWeight: 700, color: 'var(--a-text)' }}>{pkg.name}</h3>
-                                    <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{pkg.description}</p>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <button onClick={() => openEdit(pkg)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-text-secondary)', cursor: 'pointer' }}><Edit2 size={16} /></button>
+                                    <button onClick={() => handleDelete(pkg.id)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={16} /></button>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <button onClick={() => deletePackage(pkg.id)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
+                                    <Clock size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
+                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg.totalHours}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ชั่วโมง</div>
+                                </div>
+                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
+                                    <Users size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
+                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg._count?.userPackages || 0}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ใช้อยู่</div>
+                                </div>
+                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#fef9e7' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-primary)' }}>฿{pkg.price.toLocaleString()}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ราคา</div>
+                                </div>
+                            </div>
+                            <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--a-text-muted)', textAlign: 'center' }}>
+                                อายุแพ็คเกจ {pkg.validDays} วัน
+                                {!pkg.isActive && <span style={{ color: 'var(--a-danger)', fontWeight: 700, marginLeft: '8px' }}>⛔ ปิดใช้งาน</span>}
                             </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                            <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
-                                <Clock size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
-                                <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg.hours}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ชั่วโมง</div>
-                            </div>
-                            <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
-                                <Users size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
-                                <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg.maxParticipants}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>คน/ชม.</div>
-                            </div>
-                            <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#fef9e7' }}>
-                                <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-primary)' }}>฿{pkg.price.toLocaleString()}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ราคา</div>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--a-text-muted)', textAlign: 'center' }}>
-                            อายุแพ็คเกจ {pkg.validDays} วัน
-                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* User Packages Table */}
+            <div className="admin-card" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Users size={20} style={{ color: 'var(--a-primary)' }} /> ลูกค้าที่มีแพ็คเกจ ({userPackages.length})
+                </h3>
+                {userPackages.length === 0 ? (
+                    <p style={{ color: 'var(--a-text-muted)', textAlign: 'center', padding: '32px', fontSize: '14px' }}>ยังไม่มีลูกค้าที่มีแพ็คเกจ</p>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="admin-table" style={{ width: '100%', fontSize: '14px' }}>
+                            <thead>
+                                <tr>
+                                    <th>ลูกค้า</th>
+                                    <th>แพ็คเกจ</th>
+                                    <th>ชม.เหลือ</th>
+                                    <th>วันที่ซื้อ</th>
+                                    <th>หมดอายุ</th>
+                                    <th>สถานะ</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {userPackages.map(up => {
+                                    const expired = isExpired(up.expiresAt)
+                                    const empty = up.remainingHours <= 0
+                                    return (
+                                        <tr key={up.id}>
+                                            <td>
+                                                <div style={{ fontWeight: 600 }}>{up.user.name}</div>
+                                                <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{up.user.phone || up.user.email}</div>
+                                            </td>
+                                            <td>{up.package.name}</td>
+                                            <td>
+                                                <span style={{ fontWeight: 700, color: empty ? 'var(--a-danger)' : 'var(--a-text)' }}>
+                                                    {up.remainingHours}/{up.package.totalHours} ชม.
+                                                </span>
+                                            </td>
+                                            <td>{new Date(up.purchasedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                            <td>{new Date(up.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                            <td>
+                                                {expired ? (
+                                                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '12px', background: '#fde8e8', color: '#e74c3c', fontWeight: 600 }}>หมดอายุ</span>
+                                                ) : empty ? (
+                                                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '12px', background: '#fef3cd', color: '#e67e22', fontWeight: 600 }}>ใช้หมด</span>
+                                                ) : (
+                                                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '12px', background: '#d4edda', color: '#27ae60', fontWeight: 600 }}>ใช้งานอยู่</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <button onClick={() => handleDeleteUserPkg(up.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-danger)' }}><Trash2 size={14} /></button>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                ))}
+                )}
             </div>
 
+            {/* Create/Edit Package Modal */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '20px', fontWeight: 700 }}>เพิ่มแพ็คเกจใหม่</h2>
+                            <h2 style={{ fontSize: '20px', fontWeight: 700 }}>{editId ? 'แก้ไขแพ็คเกจ' : 'เพิ่มแพ็คเกจใหม่'}</h2>
                             <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
                         </div>
                         <div style={{ display: 'grid', gap: '14px' }}>
-                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>ชื่อแพ็คเกจ</label><input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>ชื่อแพ็คเกจ *</label><input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="เช่น แพ็คเกจ 10 ชั่วโมง" /></div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>จำนวนชั่วโมง</label><input type="number" className="admin-input" value={form.hours} onChange={e => setForm({ ...form, hours: e.target.value })} /></div>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>จำนวนคนต่อชม.</label><input type="number" className="admin-input" value={form.maxParticipants} onChange={e => setForm({ ...form, maxParticipants: e.target.value })} /></div>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>จำนวนชั่วโมง *</label><input type="number" className="admin-input" value={form.totalHours} onChange={e => setForm({ ...form, totalHours: e.target.value })} /></div>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>ราคา (บาท) *</label><input type="number" className="admin-input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>ราคา (บาท)</label><input type="number" className="admin-input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>อายุ (วัน)</label><input type="number" className="admin-input" value={form.validDays} onChange={e => setForm({ ...form, validDays: e.target.value })} /></div>
-                            </div>
-                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label><input className="admin-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>อายุแพ็คเกจ (วัน)</label><input type="number" className="admin-input" value={form.validDays} onChange={e => setForm({ ...form, validDays: e.target.value })} /></div>
+                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label><input className="admin-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="เช่น ซื้อ 10 ชม. ลด 15%" /></div>
                         </div>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
                             <button onClick={() => setShowModal(false)} className="btn-admin-outline">ยกเลิก</button>
-                            <button onClick={addPackage} className="btn-admin"><Save size={16} /> บันทึก</button>
+                            <button onClick={handleSave} className="btn-admin"><Save size={16} /> บันทึก</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Assign Package Modal */}
+            {showAssign && (
+                <div className="modal-overlay" onClick={() => setShowAssign(false)}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: 700 }}>มอบแพ็คเกจให้ลูกค้า</h2>
+                            <button onClick={() => setShowAssign(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                        </div>
+
+                        {/* Search customer */}
+                        <div className="input-group" style={{ marginBottom: '16px' }}>
+                            <label style={{ color: 'var(--a-text-secondary)' }}>ค้นหาลูกค้า (ชื่อ / เบอร์โทร / อีเมล)</label>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+                                <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="พิมพ์ค้นหา..." value={searchQuery} onChange={e => searchCustomers(e.target.value)} />
+                            </div>
+                            {searchResults.length > 0 && !selectedCustomer && (
+                                <div style={{ border: '1px solid #e9ecef', borderRadius: '8px', marginTop: '4px', maxHeight: '200px', overflow: 'auto' }}>
+                                    {searchResults.map(c => (
+                                        <div key={c.id} onClick={() => { setSelectedCustomer(c); setSearchResults([]) }}
+                                            style={{ padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid #f1f2f6', display: 'flex', justifyContent: 'space-between' }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#f8f9fa')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                                        >
+                                            <span style={{ fontWeight: 600 }}>{c.name}</span>
+                                            <span style={{ fontSize: '13px', color: '#636e72' }}>{c.phone || c.email}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Selected customer */}
+                        {selectedCustomer && (
+                            <div style={{ padding: '12px 16px', background: '#f0fff4', borderRadius: '10px', border: '1px solid #c6f6d5', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 700, color: '#2d3436' }}>{selectedCustomer.name}</div>
+                                    <div style={{ fontSize: '13px', color: '#636e72' }}>{selectedCustomer.phone || selectedCustomer.email}</div>
+                                </div>
+                                <button onClick={() => { setSelectedCustomer(null); setSearchQuery('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#636e72' }}><X size={16} /></button>
+                            </div>
+                        )}
+
+                        {/* Select package */}
+                        <div className="input-group" style={{ marginBottom: '16px' }}>
+                            <label style={{ color: 'var(--a-text-secondary)' }}>เลือกแพ็คเกจ</label>
+                            {packages.filter(p => p.isActive).length === 0 ? (
+                                <p style={{ fontSize: '13px', color: 'var(--a-danger)' }}>ยังไม่มีแพ็คเกจ กรุณาสร้างแพ็คเกจก่อน</p>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {packages.filter(p => p.isActive).map(pkg => (
+                                        <div key={pkg.id} onClick={() => setSelectedPkgId(pkg.id)}
+                                            style={{
+                                                padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
+                                                border: selectedPkgId === pkg.id ? '2px solid var(--a-primary)' : '1px solid #e9ecef',
+                                                background: selectedPkgId === pkg.id ? 'var(--a-primary-light)' : 'white',
+                                            }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ fontWeight: 700 }}>{pkg.name}</span>
+                                                <span style={{ fontWeight: 700, color: 'var(--a-primary)' }}>฿{pkg.price.toLocaleString()}</span>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>{pkg.totalHours} ชม. • อายุ {pkg.validDays} วัน</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+                            <button onClick={() => setShowAssign(false)} className="btn-admin-outline">ยกเลิก</button>
+                            <button onClick={handleAssign} className="btn-admin" disabled={assigning || !selectedCustomer || !selectedPkgId}>
+                                {assigning ? 'กำลังบันทึก...' : <><UserPlus size={16} /> มอบแพ็คเกจ</>}
+                            </button>
                         </div>
                     </div>
                 </div>

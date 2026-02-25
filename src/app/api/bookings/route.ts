@@ -79,6 +79,12 @@ export async function POST(req: NextRequest) {
         const user = await requireAuth()
         const body = await req.json()
 
+        // Admin can create bookings on behalf of customers
+        let bookingUserId = user.id
+        if (body.userId && body.createdByAdmin && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
+            bookingUserId = body.userId
+        }
+
         const bookingNumber = generateBookingNumber()
 
         // Verify no conflicts
@@ -103,7 +109,7 @@ export async function POST(req: NextRequest) {
 
         const booking = await prisma.booking.create({
             data: {
-                userId: user.id,
+                userId: bookingUserId,
                 bookingNumber,
                 status: 'PENDING',
                 totalAmount: body.totalAmount,
