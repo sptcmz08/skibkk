@@ -111,6 +111,7 @@ export default function CourtsPage() {
     const router = useRouter()
     const [step, setStep] = useState<1 | 2 | 3>(1)
     const [sportTypes, setSportTypes] = useState<string[]>([])
+    const [sportTypesData, setSportTypesData] = useState<Array<{ name: string; icon: string; color: string }>>([])
     const [allCourts, setAllCourts] = useState<CourtData[]>([])
     const [selectedSport, setSelectedSport] = useState<string | null>(null)
     const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -147,16 +148,26 @@ export default function CourtsPage() {
         if (saved) { try { setCart(JSON.parse(saved)) } catch { /* ignore */ } }
     }, [])
 
-    // Load courts for sport types
+    // Load courts and sport types
     useEffect(() => {
         const fetchCourts = async () => {
             setLoadingCourts(true)
             try {
-                const res = await fetch('/api/courts', { cache: 'no-store' })
-                const data = await res.json()
-                if (data.courts) {
+                const [courtsRes, stRes] = await Promise.all([
+                    fetch('/api/courts', { cache: 'no-store' }),
+                    fetch('/api/sport-types', { cache: 'no-store' }),
+                ])
+                const courtsData = await courtsRes.json()
+                const stData = await stRes.json()
+                if (stData.sportTypes && stData.sportTypes.length > 0) {
+                    const activeTypes = stData.sportTypes.filter((s: any) => s.isActive)
+                    setSportTypesData(activeTypes)
+                    setSportTypes(activeTypes.map((s: any) => s.name))
+                    if (activeTypes.length === 0) setStep(2)
+                } else if (courtsData.courts) {
+                    // Fallback: extract from courts data
                     const types = [...new Set<string>(
-                        data.courts.map((c: { sportType?: string }) => c.sportType).filter(Boolean)
+                        courtsData.courts.map((c: { sportType?: string }) => c.sportType).filter(Boolean)
                     )]
                     setSportTypes(types)
                     if (types.length === 0) setStep(2)
@@ -305,23 +316,28 @@ export default function CourtsPage() {
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-                            {sportTypes.map(type => (
-                                <motion.button key={type} whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}
-                                    onClick={() => { setSelectedSport(type); setStep(2) }}
-                                    style={{
-                                        padding: '36px 20px', borderRadius: '20px', cursor: 'pointer',
-                                        border: '2px solid rgba(255,255,255,0.08)',
-                                        background: 'rgba(255,255,255,0.03)',
-                                        color: 'var(--c-text)', fontFamily: 'inherit',
-                                        textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
-                                    }}>
-                                    <span style={{ fontSize: '52px', lineHeight: 1 }}>{SPORT_ICONS[type] || '🏟️'}</span>
-                                    <span style={{ fontSize: '20px', fontWeight: 800 }}>{type}</span>
-                                    <span style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>
-                                        {allCourts.filter(c => c.sportType === type).length || '...'} สนาม
-                                    </span>
-                                </motion.button>
-                            ))}
+                            {sportTypes.map(type => {
+                                const stData = sportTypesData.find(s => s.name === type)
+                                const icon = stData?.icon || SPORT_ICONS[type] || '🏟️'
+                                const color = stData?.color || '#f59e0b'
+                                return (
+                                    <motion.button key={type} whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}
+                                        onClick={() => { setSelectedSport(type); setStep(2) }}
+                                        style={{
+                                            padding: '36px 20px', borderRadius: '20px', cursor: 'pointer',
+                                            border: `2px solid ${color}33`,
+                                            background: `${color}08`,
+                                            color: 'var(--c-text)', fontFamily: 'inherit',
+                                            textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                                        }}>
+                                        <span style={{ fontSize: '52px', lineHeight: 1 }}>{icon}</span>
+                                        <span style={{ fontSize: '20px', fontWeight: 800 }}>{type}</span>
+                                        <span style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>
+                                            {allCourts.filter(c => c.sportType === type).length || '...'} สนาม
+                                        </span>
+                                    </motion.button>
+                                )
+                            })}
                         </div>
                     )}
                 </motion.div>

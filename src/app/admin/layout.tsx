@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
     LayoutDashboard, MapPin, DollarSign, Package, Calendar,
     Users, GraduationCap, FileText, BarChart3, Clock, Shield,
-    LogOut, Menu, X, ChevronDown, Settings, Star, UserPlus, BookOpen
+    LogOut, Menu, X, ChevronDown, Settings, Star, UserPlus, BookOpen, Dumbbell
 } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -31,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const navItems = [
         { href: '/admin', icon: LayoutDashboard, label: 'แดชบอร์ด', section: '' },
         { href: '/admin/courts', icon: MapPin, label: 'จัดการสนาม', section: 'จัดการ' },
+        { href: '/admin/sport-types', icon: Dumbbell, label: 'ประเภทกีฬา', section: '' },
         { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '' },
         { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '' },
         { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง' },

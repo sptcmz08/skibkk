@@ -11,8 +11,7 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อาทิตย์' },
 ]
 
-const SPORT_TYPES = ['สกี้', 'สโนบอร์ด', 'ฟุตบอล', 'ฟุตซอล', 'แบดมินตัน', 'บาสเกตบอล', 'วอลเลย์บอล', 'เทนนิส', 'ปิงปอง', 'สควอช', 'อื่นๆ']
-
+interface SportType { id: string; name: string; icon: string; color: string }
 interface Court {
     id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; sortOrder: number
     operatingHours: Array<{ id: string; dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
@@ -20,16 +19,17 @@ interface Court {
 
 export default function CourtsManagement() {
     const [courts, setCourts] = useState<Court[]>([])
+    const [sportTypes, setSportTypes] = useState<SportType[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
     const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0 })
     const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '08:00', closeTime: '23:00', isClosed: false })))
-    const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string }>>([])
-    const [newClosedDate, setNewClosedDate] = useState({ date: '', reason: '' })
+    const [selectedFilter, setSelectedFilter] = useState<string | null>(null) // null = all
 
     useEffect(() => {
         fetchCourts()
+        fetchSportTypes()
     }, [])
 
     const fetchCourts = async () => {
@@ -40,6 +40,14 @@ export default function CourtsManagement() {
             if (data.courts) setCourts(data.courts)
         } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }
         finally { setLoading(false) }
+    }
+
+    const fetchSportTypes = async () => {
+        try {
+            const res = await fetch('/api/sport-types', { cache: 'no-store' })
+            const data = await res.json()
+            if (data.sportTypes) setSportTypes(data.sportTypes.filter((s: SportType & { isActive: boolean }) => s.isActive !== false))
+        } catch { /* ignore */ }
     }
 
     const openModal = (court?: Court) => {
@@ -53,7 +61,7 @@ export default function CourtsManagement() {
             }))
         } else {
             setEditingCourt(null)
-            setForm({ name: '', description: '', sportType: '', sortOrder: 0 })
+            setForm({ name: '', description: '', sportType: selectedFilter || '', sortOrder: 0 })
             setHours(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
         }
         setShowModal(true)
@@ -72,11 +80,15 @@ export default function CourtsManagement() {
         } catch { toast.error('เกิดข้อผิดพลาด') }
     }
 
+    const filteredCourts = selectedFilter
+        ? courts.filter(c => c.sportType === selectedFilter)
+        : courts
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>สนามทั้งหมด ({courts.length})</h2>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>จัดการสนาม</h2>
                     <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>จัดการสนามและเวลาเปิด-ปิดของแต่ละสนาม</p>
                 </div>
                 <button onClick={() => openModal()} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -84,54 +96,102 @@ export default function CourtsManagement() {
                 </button>
             </div>
 
+            {/* Sport Type Filter Tabs */}
+            {sportTypes.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={() => setSelectedFilter(null)}
+                        style={{
+                            padding: '8px 20px', borderRadius: '999px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
+                            fontFamily: 'inherit', border: 'none', transition: 'all 0.2s',
+                            background: selectedFilter === null ? '#f59e0b' : '#f3f4f6',
+                            color: selectedFilter === null ? 'white' : '#374151',
+                            boxShadow: selectedFilter === null ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
+                        }}>
+                        🏟️ ทั้งหมด ({courts.length})
+                    </button>
+                    {sportTypes.map(st => {
+                        const count = courts.filter(c => c.sportType === st.name).length
+                        return (
+                            <button key={st.id}
+                                onClick={() => setSelectedFilter(selectedFilter === st.name ? null : st.name)}
+                                style={{
+                                    padding: '8px 20px', borderRadius: '999px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
+                                    fontFamily: 'inherit', border: 'none', transition: 'all 0.2s',
+                                    background: selectedFilter === st.name ? st.color : '#f3f4f6',
+                                    color: selectedFilter === st.name ? 'white' : '#374151',
+                                    boxShadow: selectedFilter === st.name ? `0 2px 8px ${st.color}44` : 'none',
+                                }}>
+                                {st.icon} {st.name} ({count})
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
+
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
-            ) : courts.length === 0 ? (
+            ) : filteredCourts.length === 0 ? (
                 <div className="admin-card" style={{ padding: '60px', textAlign: 'center' }}>
                     <MapPin size={48} style={{ color: 'var(--a-text-muted)', marginBottom: '16px' }} />
-                    <p style={{ fontWeight: 600, color: 'var(--a-text-secondary)', marginBottom: '8px' }}>ยังไม่มีสนาม</p>
-                    <button onClick={() => openModal()} className="btn-admin">เพิ่มสนามแรก</button>
+                    <p style={{ fontWeight: 600, color: 'var(--a-text-secondary)', marginBottom: '8px' }}>
+                        {selectedFilter ? `ไม่มีสนามในประเภท "${selectedFilter}"` : 'ยังไม่มีสนาม'}
+                    </p>
+                    <button onClick={() => openModal()} className="btn-admin">เพิ่มสนาม</button>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
-                    {courts.map(court => (
-                        <div key={court.id} className="admin-card">
-                            <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 800 }}>
-                                        {court.sortOrder + 1}
-                                    </div>
-                                    <div>
-                                        <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{court.name}</h3>
-                                        <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{court.description || 'ไม่มีคำอธิบาย'}</p>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <span className={`badge ${court.isActive ? 'badge-success' : 'badge-danger'}`}>
-                                        {court.isActive ? 'เปิดใช้งาน' : 'ปิด'}
-                                    </span>
-                                    <button onClick={() => openModal(court)} className="btn-admin-outline" style={{ padding: '6px 12px' }}>
-                                        <Edit2 size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                            {/* Operating hours */}
-                            <div style={{ padding: '12px 24px 16px', borderTop: '1px solid var(--a-border)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                {DAYS.map(d => {
-                                    const h = court.operatingHours.find(oh => oh.dayOfWeek === d.key)
-                                    return (
-                                        <div key={d.key} style={{
-                                            padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
-                                            background: h && !h.isClosed ? '#e8f5e9' : '#fde4de',
-                                            color: h && !h.isClosed ? '#2e7d32' : '#c62828',
-                                        }}>
-                                            <strong>{d.label}</strong> {h && !h.isClosed ? `${h.openTime}-${h.closeTime}` : 'ปิด'}
+                    {filteredCourts.map(court => {
+                        const stObj = sportTypes.find(s => s.name === court.sportType)
+                        return (
+                            <div key={court.id} className="admin-card">
+                                <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 800 }}>
+                                            {court.sortOrder + 1}
                                         </div>
-                                    )
-                                })}
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{court.name}</h3>
+                                                {stObj && (
+                                                    <span style={{
+                                                        padding: '2px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                                                        background: stObj.color + '20', color: stObj.color,
+                                                    }}>
+                                                        {stObj.icon} {stObj.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{court.description || 'ไม่มีคำอธิบาย'}</p>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <span className={`badge ${court.isActive ? 'badge-success' : 'badge-danger'}`}>
+                                            {court.isActive ? 'เปิดใช้งาน' : 'ปิด'}
+                                        </span>
+                                        <button onClick={() => openModal(court)} className="btn-admin-outline" style={{ padding: '6px 12px' }}>
+                                            <Edit2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                                {/* Operating hours */}
+                                <div style={{ padding: '12px 24px 16px', borderTop: '1px solid var(--a-border)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                    {DAYS.map(d => {
+                                        const h = court.operatingHours.find(oh => oh.dayOfWeek === d.key)
+                                        return (
+                                            <div key={d.key} style={{
+                                                padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+                                                background: h && !h.isClosed ? '#e8f5e9' : '#fde4de',
+                                                color: h && !h.isClosed ? '#2e7d32' : '#c62828',
+                                            }}>
+                                                <strong>{d.label}</strong> {h && !h.isClosed ? `${h.openTime}-${h.closeTime}` : 'ปิด'}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 
@@ -153,10 +213,25 @@ export default function CourtsManagement() {
                             </div>
                             <div className="input-group">
                                 <label style={{ color: 'var(--a-text-secondary)' }}>ประเภทกีฬา</label>
-                                <select className="admin-input" value={form.sportType} onChange={e => setForm({ ...form, sportType: e.target.value })}>
-                                    <option value="">-- เลือกประเภทกีฬา --</option>
-                                    {SPORT_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                {sportTypes.length > 0 ? (
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        {sportTypes.map(st => (
+                                            <button key={st.id}
+                                                onClick={() => setForm({ ...form, sportType: form.sportType === st.name ? '' : st.name })}
+                                                style={{
+                                                    padding: '8px 16px', borderRadius: '999px', cursor: 'pointer',
+                                                    fontWeight: 600, fontSize: '13px', fontFamily: 'inherit',
+                                                    border: 'none', transition: 'all 0.2s',
+                                                    background: form.sportType === st.name ? st.color : '#f3f4f6',
+                                                    color: form.sportType === st.name ? 'white' : '#374151',
+                                                }}>
+                                                {st.icon} {st.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <input className="admin-input" value={form.sportType} onChange={e => setForm({ ...form, sportType: e.target.value })} placeholder="เช่น สกี้, สโนบอร์ด" />
+                                )}
                             </div>
                             <div className="input-group">
                                 <label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label>

@@ -82,6 +82,17 @@ model Court {
   @@map("courts")
 }
 
+model SportType {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  icon      String  @default("🏟️")
+  color     String  @default("#f59e0b")
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  @@map("sport_types")
+}
+
 model SlotLock {
   id        String   @id @default(uuid())
   courtId   String

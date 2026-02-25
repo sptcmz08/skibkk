@@ -92,8 +92,8 @@ export default function InvoicesPage() {
 
     // Calculate totals from editable items
     const itemTotal = items.reduce((s, item) => s + (item.qty * item.unitPrice), 0)
-    const beforeVat = itemTotal / 1.07
-    const vat = itemTotal - beforeVat
+    const beforeVat = Math.round((itemTotal / 1.07) * 100) / 100
+    const vat = Math.round((itemTotal - beforeVat) * 100) / 100
 
     const updateItem = (idx: number, field: keyof EditableItem, value: string | number) => {
         const updated = [...items]
