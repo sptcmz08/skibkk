@@ -28,27 +28,62 @@ export default function BookingPage() {
     const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
     const [slipFile, setSlipFile] = useState<File | null>(null)
     const [slipPreview, setSlipPreview] = useState<string | null>(null)
-    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
     const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string } }>>([])
     const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
     const [showTerms, setShowTerms] = useState(false)
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
+    const [slipVerifying, setSlipVerifying] = useState(false)
+    const [slipVerified, setSlipVerified] = useState<{ verified: boolean; amount: number; transRef: string; sender: string; receiver: string } | null>(null)
 
     const total = cart.reduce((s, i) => s + i.price, 0)
 
-    // Generate PromptPay QR when entering payment step
-    useEffect(() => {
-        if (step === 2 && paymentMethod === 'PROMPTPAY' && total > 0 && !qrDataUrl) {
-            fetch('/api/payments/qr', {
+
+
+    // Handle slip file selection
+    const handleSlipSelect = (file: File) => {
+        setSlipFile(file)
+        setSlipVerified(null)
+        const reader = new FileReader()
+        reader.onload = (e) => setSlipPreview(e.target?.result as string)
+        reader.readAsDataURL(file)
+    }
+
+    // Verify slip via EasySlip API
+    const handleVerifySlip = async () => {
+        if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
+        setSlipVerifying(true)
+        try {
+            const reader = new FileReader()
+            const base64 = await new Promise<string>((resolve) => {
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.readAsDataURL(slipFile)
+            })
+            const res = await fetch('/api/payments/verify-slip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: total }),
-            }).then(r => r.json())
-                .then(data => { if (data.qrDataUrl) setQrDataUrl(data.qrDataUrl) })
-                .catch(() => { })
+                body: JSON.stringify({ image: base64 }),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.verified) {
+                toast.error(data.error || 'สลิปไม่ถูกต้อง')
+                setSlipVerified(null)
+                return
+            }
+            // Check amount match (allow small difference for rounding)
+            if (Math.abs(data.amount - total) > 1) {
+                toast.error(`จำนวนเงินไม่ตรง: สลิป ฿${data.amount.toLocaleString()} ≠ ยอดจอง ฿${total.toLocaleString()}`)
+                setSlipVerified(null)
+                return
+            }
+            setSlipVerified(data)
+            toast.success('ตรวจสอบสลิปสำเร็จ ✅')
+        } catch {
+            toast.error('เกิดข้อผิดพลาดในการตรวจสอบสลิป')
+        } finally {
+            setSlipVerifying(false)
         }
-    }, [step, paymentMethod, total, qrDataUrl])
+    }
 
     // Fetch user packages when entering payment step
     useEffect(() => {
@@ -174,6 +209,11 @@ export default function BookingPage() {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
             return
         }
+        // Require slip verification for PromptPay
+        if (paymentMethod === 'PROMPTPAY' && !slipVerified) {
+            toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
+            return
+        }
         setLoading(true)
         try {
             const res = await fetch('/api/bookings', {
@@ -219,7 +259,7 @@ export default function BookingPage() {
                     body: JSON.stringify({ userPackageId: selectedPackageId, hoursToDeduct, bookingId: data.booking.id }),
                 })
             } else {
-                // Auto-confirm: create payment and mark as paid
+                // Create payment with slip verification data
                 await fetch('/api/payments', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -227,6 +267,7 @@ export default function BookingPage() {
                         bookingId: data.booking.id,
                         method: paymentMethod,
                         amount: total,
+                        slipData: slipVerified?.transRef || slipPreview,
                     }),
                 })
             }
@@ -419,7 +460,7 @@ export default function BookingPage() {
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <button
-                                    onClick={() => { setPaymentMethod('PROMPTPAY'); setSelectedPackageId(null) }}
+                                    onClick={() => { setPaymentMethod('PROMPTPAY'); setSelectedPackageId(null); setSlipVerified(null) }}
                                     style={{
                                         padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                                         border: paymentMethod !== 'PACKAGE' ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
@@ -454,6 +495,87 @@ export default function BookingPage() {
                         </div>
                     )}
 
+                    {/* PromptPay QR + Slip Upload Section */}
+                    {paymentMethod === 'PROMPTPAY' && (
+                        <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <QrCode size={18} /> สแกน QR Code ชำระเงิน
+                            </h3>
+
+                            {/* QR Code display */}
+                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
+                                    <img src="/qr-payment.png" alt="PromptPay QR - SKI BKK" style={{ width: '260px', height: 'auto', borderRadius: '8px' }} />
+                                </div>
+                                <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>
+                                <div style={{
+                                    display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
+                                    background: 'rgba(245,166,35,0.15)', border: '2px solid rgba(245,166,35,0.4)',
+                                }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
+                                    <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{total.toLocaleString()}</div>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#e17055', marginTop: '10px', fontWeight: 600 }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
+                            </div>
+
+                            {/* Slip upload */}
+                            <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px' }}>
+                                <p style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>📸 อัปโหลดสลิปการโอนเงิน</p>
+                                <label style={{
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                    padding: slipPreview ? '8px' : '24px', borderRadius: '12px', cursor: 'pointer',
+                                    border: `2px dashed ${slipVerified ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                                    background: slipVerified ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
+                                    transition: 'all 0.2s',
+                                }}>
+                                    {slipPreview ? (
+                                        <img src={slipPreview} alt="สลิป" style={{ maxHeight: '200px', borderRadius: '8px', objectFit: 'contain' }} />
+                                    ) : (
+                                        <>
+                                            <Upload size={28} style={{ color: 'var(--c-text-muted)' }} />
+                                            <span style={{ fontSize: '14px', color: 'var(--c-text-secondary)' }}>แตะเพื่อเลือกรูปสลิป</span>
+                                        </>
+                                    )}
+                                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                                        onChange={(e) => { if (e.target.files?.[0]) handleSlipSelect(e.target.files[0]) }} />
+                                </label>
+
+                                {/* Verify button */}
+                                {slipPreview && !slipVerified && (
+                                    <button
+                                        onClick={handleVerifySlip}
+                                        disabled={slipVerifying}
+                                        className="btn btn-primary btn-block"
+                                        style={{ marginTop: '12px', fontWeight: 700 }}
+                                    >
+                                        {slipVerifying ? (
+                                            <><div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> กำลังตรวจสอบ...</>
+                                        ) : (
+                                            <>🔍 ตรวจสอบสลิป</>
+                                        )}
+                                    </button>
+                                )}
+
+                                {/* Verification result */}
+                                {slipVerified && (
+                                    <div style={{
+                                        marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
+                                        background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#10b981', fontWeight: 700 }}>
+                                            <CheckCircle size={18} /> ตรวจสอบสลิปสำเร็จ
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)', display: 'grid', gap: '4px' }}>
+                                            <div>จำนวน: <strong>฿{slipVerified.amount.toLocaleString()}</strong></div>
+                                            <div>ผู้โอน: {slipVerified.sender}</div>
+                                            {slipVerified.transRef && <div>อ้างอิง: {slipVerified.transRef}</div>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ flex: 1 }}>
                             <ArrowLeft size={18} /> กลับ
@@ -463,8 +585,8 @@ export default function BookingPage() {
                             whileTap={{ scale: 0.98 }}
                             onClick={handleSubmitBooking}
                             className="btn btn-success"
-                            style={{ flex: 2 }}
-                            disabled={loading}
+                            style={{ flex: 2, opacity: (paymentMethod === 'PROMPTPAY' && !slipVerified) ? 0.5 : 1 }}
+                            disabled={loading || (paymentMethod === 'PROMPTPAY' && !slipVerified)}
                         >
                             {loading ? <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} /> : <>ยืนยันการจอง <CheckCircle size={18} /></>}
                         </motion.button>
