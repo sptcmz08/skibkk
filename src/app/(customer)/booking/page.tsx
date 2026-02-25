@@ -159,6 +159,7 @@ export default function BookingPage() {
                     setTermsText(data.booking_terms)
                     setShowTerms(true)
                 }
+                if (data.max_participants) setMaxParticipants(parseInt(data.max_participants) || 2)
             }).catch(() => { })
 
         // Check auth — if not logged in, redirect back to cart (which will show auth modal)
@@ -207,8 +208,8 @@ export default function BookingPage() {
         }))
     }, [participants, isBookerLearner, step, cart.length])
 
-    // Max participants: 2 for customer booking
-    const maxParticipants = 2
+    // Max participants: configurable from admin settings (default 2)
+    const [maxParticipants, setMaxParticipants] = useState(2)
 
     const addParticipant = () => {
         if (participants.length >= maxParticipants) {

@@ -124,6 +124,7 @@ export default function CourtsPage() {
     const [loadingCourts, setLoadingCourts] = useState(true)
     const pollRef = useRef<NodeJS.Timeout | null>(null)
     const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
+    const [maxBookingHours, setMaxBookingHours] = useState(0)
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -146,6 +147,11 @@ export default function CourtsPage() {
     useEffect(() => {
         const saved = localStorage.getItem('skibkk-cart')
         if (saved) { try { setCart(JSON.parse(saved)) } catch { /* ignore */ } }
+        // Load max booking hours setting
+        fetch('/api/settings', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => { if (data.max_booking_hours) setMaxBookingHours(parseInt(data.max_booking_hours) || 0) })
+            .catch(() => { })
     }, [])
 
     // Load courts and sport types
@@ -251,6 +257,11 @@ export default function CourtsPage() {
             }).catch(() => { })
             toast.success('ลบออกจากตะกร้าแล้ว')
         } else {
+            // Check max booking hours limit
+            if (maxBookingHours > 0 && cart.length >= maxBookingHours) {
+                toast.error(`จองได้สูงสุด ${maxBookingHours} ชั่วโมงต่อการจอง`, { duration: 3000 })
+                return
+            }
             // Try to lock first
             const sessionId = getSessionId()
             const lockRes = await fetch('/api/locks', {

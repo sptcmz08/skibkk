@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Plus, CalendarOff, FileText } from 'lucide-react'
+import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
 
@@ -12,6 +12,8 @@ export default function AdminSettingsPage() {
     const [newClosedDate, setNewClosedDate] = useState('')
     const [newClosedReason, setNewClosedReason] = useState('')
     const [bookingTerms, setBookingTerms] = useState('')
+    const [maxBookingHours, setMaxBookingHours] = useState(0)
+    const [maxParticipants, setMaxParticipants] = useState(2)
     const logoInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
@@ -20,6 +22,8 @@ export default function AdminSettingsPage() {
             .then(data => {
                 if (data.logo) setLogo(data.logo)
                 if (data.booking_terms) setBookingTerms(data.booking_terms)
+                if (data.max_booking_hours) setMaxBookingHours(parseInt(data.max_booking_hours) || 0)
+                if (data.max_participants) setMaxParticipants(parseInt(data.max_participants) || 2)
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
@@ -193,6 +197,42 @@ export default function AdminSettingsPage() {
                         ))}
                     </div>
                 )}
+            </div>
+
+            {/* Max Booking Hours */}
+            <div style={cardStyle}>
+                <h3 style={{ fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Clock size={20} style={{ color: 'var(--a-primary)' }} /> จำกัดจำนวนชั่วโมงต่อการจอง
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginBottom: '16px' }}>กำหนดจำนวนสูงสุดที่ลูกค้าสามารถจองได้ต่อครั้ง (0 = ไม่จำกัด)</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input type="number" className="admin-input" style={{ width: '120px' }}
+                        value={maxBookingHours} min={0} max={24}
+                        onChange={e => setMaxBookingHours(parseInt(e.target.value) || 0)} />
+                    <span style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ชั่วโมง</span>
+                    <button className="btn-admin" onClick={() => {
+                        saveSetting('max_booking_hours', String(maxBookingHours))
+                        toast.success('บันทึกสำเร็จ')
+                    }}>บันทึก</button>
+                </div>
+            </div>
+
+            {/* Max Participants */}
+            <div style={cardStyle}>
+                <h3 style={{ fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <UserPlus size={20} style={{ color: 'var(--a-primary)' }} /> จำกัดจำนวนผู้เรียนต่อการจอง
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginBottom: '16px' }}>กำหนดจำนวนผู้เรียนสูงสุดที่ลูกค้าสามารถเพิ่มได้ต่อการจอง 1 ครั้ง</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input type="number" className="admin-input" style={{ width: '120px' }}
+                        value={maxParticipants} min={1} max={20}
+                        onChange={e => setMaxParticipants(parseInt(e.target.value) || 2)} />
+                    <span style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>คน</span>
+                    <button className="btn-admin" onClick={() => {
+                        saveSetting('max_participants', String(maxParticipants))
+                        toast.success('บันทึกสำเร็จ')
+                    }}>บันทึก</button>
+                </div>
             </div>
         </div>
     )

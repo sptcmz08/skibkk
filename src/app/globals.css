@@ -27,19 +27,19 @@
   --c-radius-sm: 8px;
   --c-radius-lg: 24px;
 
-  /* Admin Theme - Yellow/White/Gray */
-  --a-bg: #f5f6fa;
-  --a-bg-secondary: #ffffff;
-  --a-sidebar: #1e2530;
+  /* Admin Theme - Yellow/Gray/White */
+  --a-bg: #f5f3ef;
+  --a-bg-secondary: #faf9f6;
+  --a-sidebar: #2a2520;
   --a-sidebar-active: rgba(245, 166, 35, 0.15);
   --a-primary: #f5a623;
   --a-primary-hover: #e6951a;
   --a-primary-light: #fef3d0;
-  --a-text: #2d3436;
-  --a-text-secondary: #636e72;
-  --a-text-muted: #b2bec3;
-  --a-border: #e9ecef;
-  --a-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --a-text: #2d2a26;
+  --a-text-secondary: #6b6560;
+  --a-text-muted: #b5ada5;
+  --a-border: #e8e2da;
+  --a-card-shadow: 0 2px 12px rgba(80, 60, 30, 0.06);
   --a-success: #00b894;
   --a-warning: #fdcb6e;
   --a-danger: #e17055;
@@ -519,7 +519,7 @@ select.input-field option {
 
 .admin-topbar {
   height: 64px;
-  background: white;
+  background: #faf9f6;
   border-bottom: 1px solid var(--a-border);
   display: flex;
   align-items: center;
@@ -548,7 +548,7 @@ select.input-field option {
 
 /* ==================== ADMIN CARDS ==================== */
 .admin-card {
-  background: white;
+  background: #fdfcfa;
   border-radius: 12px;
   border: 1px solid var(--a-border);
   box-shadow: var(--a-card-shadow);
@@ -643,7 +643,7 @@ select.input-field option {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--a-border);
-  background: #fafbfd;
+  background: #f9f6f1;
 }
 
 .admin-table td {
@@ -654,7 +654,7 @@ select.input-field option {
 }
 
 .admin-table tr:hover td {
-  background: #f8f9fa;
+  background: #f7f4ef;
 }
 
 /* ==================== BADGES ==================== */
