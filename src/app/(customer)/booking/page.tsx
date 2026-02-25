@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle } from 'lucide-react'
+import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CartItem {
@@ -35,17 +35,46 @@ export default function BookingPage() {
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
     const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string }>>([])
-    const [slipFallback, setSlipFallback] = useState(false) // When EasySlip is down, allow manual review
 
     const total = cart.reduce((s, i) => s + i.price, 0)
     const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
     const remaining = total - paidTotal
 
+    // Lock countdown timer for payment step
+    const [lockSecondsLeft, setLockSecondsLeft] = useState<number | null>(null)
+    useEffect(() => {
+        if (step !== 2) return
+        let expiresAt: Date | null = null
+        const check = async () => {
+            try {
+                const { getSessionId } = await import('@/lib/session')
+                const sessionId = getSessionId()
+                if (!sessionId) return
+                const res = await fetch(`/api/locks/check?sessionId=${sessionId}`)
+                const data = await res.json()
+                if (data.active && data.expiresAt) {
+                    expiresAt = new Date(data.expiresAt)
+                } else {
+                    expiresAt = null
+                    setLockSecondsLeft(null)
+                }
+            } catch { /* ignore */ }
+        }
+        check()
+        const pollId = setInterval(check, 5000)
+        const tickId = setInterval(() => {
+            if (expiresAt) {
+                const s = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
+                setLockSecondsLeft(s)
+            }
+        }, 1000)
+        return () => { clearInterval(pollId); clearInterval(tickId) }
+    }, [step])
+
 
     // Handle slip file selection
     const handleSlipSelect = (file: File) => {
         setSlipFile(file)
-        setSlipFallback(false)
         const reader = new FileReader()
         reader.onload = (e) => setSlipPreview(e.target?.result as string)
         reader.readAsDataURL(file)
@@ -55,7 +84,6 @@ export default function BookingPage() {
     const handleVerifySlip = async () => {
         if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
         setSlipVerifying(true)
-        setSlipFallback(false)
         try {
             const reader = new FileReader()
             const base64 = await new Promise<string>((resolve) => {
@@ -69,12 +97,7 @@ export default function BookingPage() {
             })
             const data = await res.json()
 
-            // EasySlip is down or can't verify
-            if (data.fallback) {
-                setSlipFallback(true)
-                toast(data.error || 'ระบบตรวจอัตโนมัติไม่พร้อม สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️', duration: 5000 })
-                return
-            }
+            // Check response
             if (!data.verified) {
                 toast.error(data.error || 'สลิปไม่ถูกต้อง')
                 return
@@ -109,8 +132,7 @@ export default function BookingPage() {
                 toast.success('ยอดครบแล้ว! ตรวจสอบสลิปสำเร็จ ✅')
             }
         } catch {
-            setSlipFallback(true)
-            toast('เกิดข้อผิดพลาด สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️' })
+            toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
         } finally {
             setSlipVerifying(false)
         }
@@ -234,23 +256,18 @@ export default function BookingPage() {
 
 
 
-    // Can submit if: all slips cover the total OR fallback mode with slip uploaded OR using package
+    // Can submit if: all slips cover the total OR using package
     const canSubmit = paymentMethod === 'PACKAGE'
         || (remaining <= 1)
-        || (slipFallback && (slipPreview || verifiedSlips.length > 0))
 
     const handleSubmitBooking = async () => {
         if (participants.some(p => !p.name || !p.sportType)) {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
             return
         }
-        // Require slip verification or fallback for PromptPay
-        if (paymentMethod === 'PROMPTPAY' && remaining > 1 && !slipFallback) {
+        // Require slip verification for PromptPay
+        if (paymentMethod === 'PROMPTPAY' && remaining > 1) {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
-            return
-        }
-        if (paymentMethod === 'PROMPTPAY' && slipFallback && !slipPreview) {
-            toast.error('กรุณาอัปโหลดรูปสลิปก่อนยืนยัน')
             return
         }
         setLoading(true)
@@ -310,7 +327,6 @@ export default function BookingPage() {
                         method: paymentMethod,
                         amount: total,
                         slipData: verifiedSlips.map(s => s.transRef).filter(Boolean).join(',') || slipPreview,
-                        manualReview: slipFallback && remaining > 1, // Flag for admin review
                     }),
                 })
                 if (!paymentRes.ok) throw new Error('Payment creation failed')
@@ -328,7 +344,7 @@ export default function BookingPage() {
             localStorage.removeItem(BOOKING_DRAFT_KEY)
             window.dispatchEvent(new Event('cart-updated'))
             setStep(3)
-            toast.success(slipFallback && remaining > 1 ? 'จองสำเร็จ! รอ admin ตรวจสอบสลิป' : 'จองสำเร็จ!')
+            toast.success('จองสำเร็จ!')
         } catch (err) {
             // Transaction safety: rollback booking if payment failed
             if (createdBookingId) {
@@ -490,6 +506,47 @@ export default function BookingPage() {
                         ชำระเงิน
                     </h2>
 
+                    {/* Payment countdown timer */}
+                    {lockSecondsLeft !== null && lockSecondsLeft > 0 && (
+                        <div style={{
+                            marginBottom: '20px', padding: '14px 18px', borderRadius: '14px',
+                            background: lockSecondsLeft < 120 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
+                            border: `1px solid ${lockSecondsLeft < 120 ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.3)'}`,
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            animation: lockSecondsLeft < 120 ? 'timerPulse 1s infinite' : 'none',
+                        }}>
+                            <Timer size={20} style={{ color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b', flexShrink: 0 }} />
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: '14px', color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b' }}>
+                                    กรุณาชำระเงินภายในเวลาที่กำหนด
+                                </div>
+                                <div style={{ fontSize: '12px', color: 'var(--c-text-secondary)', marginTop: '2px' }}>
+                                    หากเกินเวลา ระบบจะล้างตะกร้าอัตโนมัติ
+                                </div>
+                            </div>
+                            <div style={{
+                                fontFamily: "'Inter', monospace", fontSize: '22px', fontWeight: 900,
+                                color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b',
+                                letterSpacing: '1px', minWidth: '60px', textAlign: 'center',
+                            }}>
+                                {`${String(Math.floor(lockSecondsLeft / 60)).padStart(2, '0')}:${String(lockSecondsLeft % 60).padStart(2, '0')}`}
+                            </div>
+                        </div>
+                    )}
+                    {lockSecondsLeft !== null && lockSecondsLeft <= 0 && (
+                        <div style={{
+                            marginBottom: '20px', padding: '14px 18px', borderRadius: '14px',
+                            background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                        }}>
+                            <AlertTriangle size={20} style={{ color: '#ef4444' }} />
+                            <span style={{ fontWeight: 700, color: '#ef4444', fontSize: '14px' }}>
+                                หมดเวลาแล้ว — กรุณากลับไปเลือกสนามใหม่
+                            </span>
+                        </div>
+                    )}
+                    <style>{`@keyframes timerPulse { 0%,100%{opacity:1} 50%{opacity:0.55} }`}</style>
+
                     {/* Order summary */}
                     <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>สรุปการจอง</h3>
@@ -594,7 +651,7 @@ export default function BookingPage() {
                                 </label>
 
                                 {/* Verify button */}
-                                {slipPreview && remaining > 1 && !slipFallback && (
+                                {slipPreview && remaining > 1 && (
                                     <button
                                         onClick={handleVerifySlip}
                                         disabled={slipVerifying}
@@ -654,28 +711,7 @@ export default function BookingPage() {
                                     </div>
                                 )}
 
-                                {/* Fallback — manual review mode */}
-                                {slipFallback && verifiedSlips.length === 0 && (
-                                    <div style={{
-                                        marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
-                                        background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)',
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#f5a623', fontWeight: 700 }}>
-                                            <AlertTriangle size={18} /> ส่งสลิปให้ admin ตรวจสอบ
-                                        </div>
-                                        <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)' }}>
-                                            ระบบตรวจสอบอัตโนมัติไม่พร้อมใช้งานชั่วคราว สามารถยืนยันการจองได้เลย admin จะตรวจสลิปให้ภายหลัง
-                                        </div>
-                                        <button
-                                            onClick={handleVerifySlip}
-                                            className="btn btn-secondary btn-block"
-                                            style={{ marginTop: '10px', fontSize: '13px' }}
-                                            disabled={slipVerifying}
-                                        >
-                                            {slipVerifying ? 'กำลังลองใหม่...' : '🔄 ลองตรวจสอบอีกครั้ง'}
-                                        </button>
-                                    </div>
-                                )}
+
                             </div>
                         </div>
                     )}
