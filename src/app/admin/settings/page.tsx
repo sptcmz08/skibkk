@@ -1,31 +1,24 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Image as ImageIcon, GripVertical, Plus, Save, Check, CalendarOff, FileText } from 'lucide-react'
+import { Upload, Trash2, Plus, CalendarOff, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
-import Image from 'next/image'
+import { ImageIcon } from 'lucide-react'
 
 export default function AdminSettingsPage() {
     const [logo, setLogo] = useState('')
-    const [banners, setBanners] = useState<string[]>([])
-    const [gallery, setGallery] = useState<string[]>([])
-    const [saving, setSaving] = useState(false)
-    const [uploading, setUploading] = useState<string | null>(null) // 'logo' | 'banner' | 'gallery'
+    const [uploading, setUploading] = useState<string | null>(null)
     const [closedDates, setClosedDates] = useState<Array<{ id: string; date: string; reason: string | null }>>([])
     const [newClosedDate, setNewClosedDate] = useState('')
     const [newClosedReason, setNewClosedReason] = useState('')
     const [bookingTerms, setBookingTerms] = useState('')
     const logoInputRef = useRef<HTMLInputElement>(null)
-    const bannerInputRef = useRef<HTMLInputElement>(null)
-    const galleryInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         fetch('/api/settings', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.logo) setLogo(data.logo)
-                if (data.banners) setBanners(JSON.parse(data.banners))
-                if (data.gallery) setGallery(JSON.parse(data.gallery))
                 if (data.booking_terms) setBookingTerms(data.booking_terms)
             })
             .catch(() => { })
@@ -60,52 +53,6 @@ export default function AdminSettingsPage() {
         e.target.value = ''
     }
 
-    const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files
-        if (!files) return
-        setUploading('banner')
-        const newBanners = [...banners]
-        for (const file of Array.from(files)) {
-            const url = await uploadFile(file)
-            if (url) newBanners.push(url)
-        }
-        setBanners(newBanners)
-        await saveSetting('banners', JSON.stringify(newBanners))
-        toast.success('เพิ่ม Banner สำเร็จ')
-        setUploading(null)
-        e.target.value = ''
-    }
-
-    const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files
-        if (!files) return
-        setUploading('gallery')
-        const newGallery = [...gallery]
-        for (const file of Array.from(files)) {
-            const url = await uploadFile(file)
-            if (url) newGallery.push(url)
-        }
-        setGallery(newGallery)
-        await saveSetting('gallery', JSON.stringify(newGallery))
-        toast.success('เพิ่มรูปแกลเลอรีสำเร็จ')
-        setUploading(null)
-        e.target.value = ''
-    }
-
-    const removeBanner = async (index: number) => {
-        const newBanners = banners.filter((_, i) => i !== index)
-        setBanners(newBanners)
-        await saveSetting('banners', JSON.stringify(newBanners))
-        toast.success('ลบ Banner แล้ว')
-    }
-
-    const removeGallery = async (index: number) => {
-        const newGallery = gallery.filter((_, i) => i !== index)
-        setGallery(newGallery)
-        await saveSetting('gallery', JSON.stringify(newGallery))
-        toast.success('ลบรูปแกลเลอรีแล้ว')
-    }
-
     const saveSetting = async (key: string, value: string) => {
         try {
             await fetch('/api/settings', {
@@ -136,22 +83,14 @@ export default function AdminSettingsPage() {
         gap: '8px',
     }
 
-    const uploadZone: React.CSSProperties = {
-        border: '2px dashed #e0e0e0',
-        borderRadius: '12px',
-        padding: '32px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        background: '#fafafa',
-    }
+
 
     return (
         <div>
             <div style={{ marginBottom: '24px' }}>
                 <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#2d3436' }}>ตั้งค่าเว็บไซต์</h1>
                 <p style={{ color: '#636e72', fontSize: '14px', marginTop: '4px' }}>
-                    จัดการ Logo, Banner หน้าแรก, แกลเลอรีรูปภาพ
+                    จัดการ Logo, เงื่อนไขการจอง และวันหยุดพิเศษ
                 </p>
             </div>
 
@@ -198,116 +137,7 @@ export default function AdminSettingsPage() {
                 </div>
             </div>
 
-            {/* Banner Section */}
-            <div style={cardStyle}>
-                <h2 style={sectionTitle}>
-                    <ImageIcon size={20} color="#f5a623" /> Banner หน้าแรก (สไลด์โชว์)
-                </h2>
-                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>
-                    รูปภาพ Banner จะสไลด์อัตโนมัติที่หน้าแรก (แนะนำ: 1920x600px, อัปโหลดได้หลายรูป)
-                </p>
 
-                {banners.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                        {banners.map((url, i) => (
-                            <div key={i} style={{
-                                position: 'relative', borderRadius: '12px', overflow: 'hidden',
-                                border: '1px solid #e9ecef', aspectRatio: '16/6',
-                            }}>
-                                <img src={url} alt={`Banner ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                <button
-                                    onClick={() => removeBanner(i)}
-                                    style={{
-                                        position: 'absolute', top: '8px', right: '8px',
-                                        background: 'rgba(239,68,68,0.9)', color: 'white',
-                                        border: 'none', borderRadius: '8px', width: '32px', height: '32px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                                <div style={{
-                                    position: 'absolute', bottom: '8px', left: '8px',
-                                    background: 'rgba(0,0,0,0.6)', color: 'white',
-                                    padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
-                                }}>
-                                    #{i + 1}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <input ref={bannerInputRef} type="file" accept="image/*" multiple hidden onChange={handleBannerUpload} />
-                <div
-                    style={uploadZone}
-                    onClick={() => bannerInputRef.current?.click()}
-                    onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#f5a623' }}
-                    onDragLeave={e => { e.currentTarget.style.borderColor = '#e0e0e0' }}
-                >
-                    {uploading === 'banner' ? (
-                        <div style={{ color: '#f5a623', fontWeight: 600 }}>กำลังอัปโหลด...</div>
-                    ) : (
-                        <>
-                            <Plus size={32} color="#ccc" style={{ marginBottom: '8px' }} />
-                            <div style={{ color: '#636e72', fontWeight: 600 }}>คลิกเพื่อเพิ่ม Banner</div>
-                            <div style={{ color: '#b2bec3', fontSize: '13px', marginTop: '4px' }}>รองรับ PNG, JPG, WebP (สูงสุด 5MB)</div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Gallery Section */}
-            <div style={cardStyle}>
-                <h2 style={sectionTitle}>
-                    <ImageIcon size={20} color="#f5a623" /> แกลเลอรี / บรรยากาศ
-                </h2>
-                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>
-                    รูปภาพบรรยากาศภายในสนาม จะแสดงที่หน้าแรก (แนะนำ: ขนาดอย่างน้อย 600x400px)
-                </p>
-
-                {gallery.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-                        {gallery.map((url, i) => (
-                            <div key={i} style={{
-                                position: 'relative', borderRadius: '10px', overflow: 'hidden',
-                                border: '1px solid #e9ecef', aspectRatio: '1',
-                            }}>
-                                <img src={url} alt={`Gallery ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                <button
-                                    onClick={() => removeGallery(i)}
-                                    style={{
-                                        position: 'absolute', top: '6px', right: '6px',
-                                        background: 'rgba(239,68,68,0.9)', color: 'white',
-                                        border: 'none', borderRadius: '8px', width: '28px', height: '28px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <input ref={galleryInputRef} type="file" accept="image/*" multiple hidden onChange={handleGalleryUpload} />
-                <div
-                    style={uploadZone}
-                    onClick={() => galleryInputRef.current?.click()}
-                >
-                    {uploading === 'gallery' ? (
-                        <div style={{ color: '#f5a623', fontWeight: 600 }}>กำลังอัปโหลด...</div>
-                    ) : (
-                        <>
-                            <Plus size={32} color="#ccc" style={{ marginBottom: '8px' }} />
-                            <div style={{ color: '#636e72', fontWeight: 600 }}>คลิกเพื่อเพิ่มรูปแกลเลอรี</div>
-                            <div style={{ color: '#b2bec3', fontSize: '13px', marginTop: '4px' }}>รองรับ PNG, JPG, WebP (สูงสุด 5MB)</div>
-                        </>
-                    )}
-                </div>
-            </div>
 
             {/* Booking Terms */}
             <div style={cardStyle}>

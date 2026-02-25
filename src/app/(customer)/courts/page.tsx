@@ -207,7 +207,7 @@ export default function CourtsPage() {
     // Fetch calendar availability for month coloring
     useEffect(() => {
         if (step === 2 && selectedSport) {
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}&sportType=${encodeURIComponent(selectedSport)}`)
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}&sportType=${encodeURIComponent(selectedSport)}`, { cache: 'no-store' })
                 .then(r => r.json())
                 .then(data => { if (data.availability) setCalAvail(data.availability) })
                 .catch(() => { })

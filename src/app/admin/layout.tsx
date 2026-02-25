@@ -140,7 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <h1 className="admin-topbar-title">{getPageTitle()}</h1>
                     </div>
                     <div className="admin-topbar-actions">
-                        <Link href="/" style={{ fontSize: '13px', color: 'var(--a-text-secondary)', textDecoration: 'none' }}>
+                        <Link href="/courts" style={{ fontSize: '13px', color: 'var(--a-text-secondary)', textDecoration: 'none' }}>
                             🌐 ดูหน้าเว็บไซต์
                         </Link>
                     </div>

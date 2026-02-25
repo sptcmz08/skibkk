@@ -110,7 +110,12 @@ export async function GET(req: NextRequest) {
             availability[dateStr] = { totalSlots, bookedSlots: usedSlots, status }
         }
 
-        return NextResponse.json({ availability })
+        return NextResponse.json({ availability }, {
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+            },
+        })
     } catch (error) {
         console.error('Calendar availability error:', error)
         return NextResponse.json({ availability: {} })
