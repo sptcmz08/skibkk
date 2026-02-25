@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
     lineAuthUrl.searchParams.set('redirect_uri', callbackUrl)
     lineAuthUrl.searchParams.set('state', state)
     lineAuthUrl.searchParams.set('scope', 'profile openid email')
+    lineAuthUrl.searchParams.set('bot_prompt', 'aggressive')
+    lineAuthUrl.searchParams.set('prompt', 'consent')
 
     return NextResponse.redirect(lineAuthUrl.toString())
 }
