@@ -78,14 +78,53 @@ export async function POST(req: NextRequest) {
 
         // Extract slip data from response
         // EasySlip response format:
-        // { status: 200, data: { amount: { amount: 1800 }, transRef: "...", sender: { name: "..." }, receiver: { name: "..." }, date: "...", sendingBank: "..." } }
+        // { status: 200, data: { amount: { amount: 1800 }, transRef: "...", sender: { name: "..." }, receiver: { name: "..." }, date: "2026-02-25", sendingBank: "..." } }
         const slipData = result.data
         const amount = slipData?.amount?.amount || 0
         const transRef = slipData?.transRef || ''
         const sender = slipData?.sender?.name || ''
         const receiver = slipData?.receiver?.name || ''
+        const receiverAccount = slipData?.receiver?.account?.value || ''
         const date = slipData?.date || ''
         const bankCode = slipData?.sendingBank || ''
+
+        // ============ SECURITY: Verify receiver matches SKIBKK account ============
+        const expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
+        const expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+        if (expectedReceiver || expectedAccount) {
+            const receiverLower = receiver.toLowerCase()
+            const expectedLower = expectedReceiver.toLowerCase()
+            const accountMatch = expectedAccount && receiverAccount.includes(expectedAccount)
+            const nameMatch = expectedReceiver && (receiverLower.includes(expectedLower) || expectedLower.includes(receiverLower))
+
+            if (!nameMatch && !accountMatch) {
+                console.error(`Receiver mismatch: name="${receiver}" account="${receiverAccount}", expected name="${expectedReceiver}" account="${expectedAccount}"`)
+                return NextResponse.json({
+                    error: `สลิปนี้ไม่ได้โอนให้ SKIBKK (ผู้รับ: ${receiver || receiverAccount})`,
+                    verified: false,
+                }, { status: 400 })
+            }
+        }
+
+        // ============ SECURITY: Verify slip is recent (within 30 minutes) ============
+        if (date) {
+            const slipDate = new Date(date)
+            const now = new Date()
+            const diffMinutes = (now.getTime() - slipDate.getTime()) / (1000 * 60)
+            if (diffMinutes > 30) {
+                return NextResponse.json({
+                    error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนเงินใหม่ภายใน 30 นาที`,
+                    verified: false,
+                }, { status: 400 })
+            }
+            if (diffMinutes < -5) {
+                // Slip date is in the future — suspicious
+                return NextResponse.json({
+                    error: 'วันที่ในสลิปไม่ถูกต้อง',
+                    verified: false,
+                }, { status: 400 })
+            }
+        }
 
         return NextResponse.json({
             verified: true,
