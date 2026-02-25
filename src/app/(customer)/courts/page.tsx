@@ -345,11 +345,22 @@ export default function CourtsPage() {
                         <button onClick={prevMonth} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', color: 'var(--c-text)', display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={20} />
                         </button>
-                        <div style={{ textAlign: 'center' }}>
+                        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                             <div style={{ fontSize: '20px', fontWeight: 800 }}>
                                 {MONTH_TH[viewMonth]}
                             </div>
                             <div style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>{viewYear + 543}</div>
+                            {(viewMonth !== new Date().getMonth() || viewYear !== new Date().getFullYear()) && (
+                                <button
+                                    onClick={() => { setViewMonth(new Date().getMonth()); setViewYear(new Date().getFullYear()) }}
+                                    style={{
+                                        marginTop: '4px', padding: '4px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                                        background: 'var(--c-primary)', color: 'white', border: 'none', cursor: 'pointer',
+                                    }}
+                                >
+                                    วันนี้
+                                </button>
+                            )}
                         </div>
                         <button onClick={nextMonth} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', color: 'var(--c-text)', display: 'flex', alignItems: 'center' }}>
                             <ChevronRight size={20} />
