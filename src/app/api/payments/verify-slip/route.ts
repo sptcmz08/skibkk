@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest) {
     try {
@@ -85,6 +86,27 @@ export async function POST(req: NextRequest) {
         const date = slipData?.date || ''
         const bankCode = slipData?.sendingBank || ''
 
+        // ============ SECURITY: Duplicate slip detection by transRef ============
+        if (transRef) {
+            const existingPayment = await prisma.payment.findFirst({
+                where: { slipHash: transRef },
+            })
+            if (existingPayment) {
+                return NextResponse.json({
+                    error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
+                    verified: false,
+                }, { status: 400 })
+            }
+            const existingUsedSlip = await prisma.usedSlip.findFirst({
+                where: { slipHash: transRef },
+            })
+            if (existingUsedSlip) {
+                return NextResponse.json({
+                    error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
+                    verified: false,
+                }, { status: 400 })
+            }
+        }
         // ============ SECURITY: Verify receiver matches SKIBKK account ============
         const expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
         const expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
