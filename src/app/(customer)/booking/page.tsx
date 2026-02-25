@@ -35,6 +35,7 @@ export default function BookingPage() {
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
     const [slipVerified, setSlipVerified] = useState<{ verified: boolean; amount: number; transRef: string; sender: string; receiver: string } | null>(null)
+    const [slipFallback, setSlipFallback] = useState(false) // When EasySlip is down, allow manual review
 
     const total = cart.reduce((s, i) => s + i.price, 0)
 
@@ -44,6 +45,7 @@ export default function BookingPage() {
     const handleSlipSelect = (file: File) => {
         setSlipFile(file)
         setSlipVerified(null)
+        setSlipFallback(false)
         const reader = new FileReader()
         reader.onload = (e) => setSlipPreview(e.target?.result as string)
         reader.readAsDataURL(file)
@@ -53,6 +55,7 @@ export default function BookingPage() {
     const handleVerifySlip = async () => {
         if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
         setSlipVerifying(true)
+        setSlipFallback(false)
         try {
             const reader = new FileReader()
             const base64 = await new Promise<string>((resolve) => {
@@ -65,7 +68,16 @@ export default function BookingPage() {
                 body: JSON.stringify({ image: base64 }),
             })
             const data = await res.json()
-            if (!res.ok || !data.verified) {
+
+            // EasySlip is down or can't verify → offer fallback (manual review)
+            if (data.fallback) {
+                setSlipFallback(true)
+                setSlipVerified(null)
+                toast(data.error || 'ระบบตรวจอัตโนมัติไม่พร้อม สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️', duration: 5000 })
+                return
+            }
+
+            if (!data.verified) {
                 toast.error(data.error || 'สลิปไม่ถูกต้อง')
                 setSlipVerified(null)
                 return
@@ -79,7 +91,8 @@ export default function BookingPage() {
             setSlipVerified(data)
             toast.success('ตรวจสอบสลิปสำเร็จ ✅')
         } catch {
-            toast.error('เกิดข้อผิดพลาดในการตรวจสอบสลิป')
+            setSlipFallback(true)
+            toast('เกิดข้อผิดพลาด สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️' })
         } finally {
             setSlipVerifying(false)
         }
@@ -136,13 +149,12 @@ export default function BookingPage() {
                 router.push('/cart')
             })
 
-        // Restore draft from localStorage
+        // Restore draft from localStorage (don't restore step — always start at step 1)
         try {
             const draft = JSON.parse(localStorage.getItem(BOOKING_DRAFT_KEY) || 'null')
             if (draft) {
                 if (draft.participants?.length) setParticipants(draft.participants)
                 if (draft.isBookerLearner !== undefined) setIsBookerLearner(draft.isBookerLearner)
-                if (draft.step) setStep(draft.step)
             }
         } catch { /* ignore */ }
     }, [router])
@@ -204,18 +216,29 @@ export default function BookingPage() {
 
 
 
+    // Can submit if: slip verified OR fallback mode with slip uploaded OR using package
+    const canSubmit = paymentMethod === 'PACKAGE'
+        || slipVerified
+        || (slipFallback && slipPreview)
+
     const handleSubmitBooking = async () => {
         if (participants.some(p => !p.name || !p.sportType)) {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
             return
         }
-        // Require slip verification for PromptPay
-        if (paymentMethod === 'PROMPTPAY' && !slipVerified) {
+        // Require slip verification or fallback for PromptPay
+        if (paymentMethod === 'PROMPTPAY' && !slipVerified && !slipFallback) {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
             return
         }
+        if (paymentMethod === 'PROMPTPAY' && slipFallback && !slipPreview) {
+            toast.error('กรุณาอัปโหลดรูปสลิปก่อนยืนยัน')
+            return
+        }
         setLoading(true)
+        let createdBookingId: string | null = null
         try {
+            // Step 1: Create booking
             const res = await fetch('/api/bookings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -247,20 +270,21 @@ export default function BookingPage() {
                 toast.error(data.error || 'ไม่สามารถจองได้')
                 return
             }
+            createdBookingId = data.booking.id
             setBookingResult({ bookingNumber: data.booking.bookingNumber })
 
-            // Handle payment based on method
+            // Step 2: Handle payment
             if (paymentMethod === 'PACKAGE' && selectedPackageId) {
-                // Deduct from package
                 const hoursToDeduct = cart.length
-                await fetch('/api/user-packages', {
+                const pkgRes = await fetch('/api/user-packages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userPackageId: selectedPackageId, hoursToDeduct, bookingId: data.booking.id }),
                 })
+                if (!pkgRes.ok) throw new Error('Package deduction failed')
             } else {
-                // Create payment with slip verification data
-                await fetch('/api/payments', {
+                // Create payment — status depends on whether slip was auto-verified or fallback
+                const paymentRes = await fetch('/api/payments', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -268,11 +292,13 @@ export default function BookingPage() {
                         method: paymentMethod,
                         amount: total,
                         slipData: slipVerified?.transRef || slipPreview,
+                        manualReview: slipFallback && !slipVerified, // Flag for admin review
                     }),
                 })
+                if (!paymentRes.ok) throw new Error('Payment creation failed')
             }
 
-            // Release locks
+            // Step 3: Success — release locks, clear cart
             const sessionId = (await import('@/lib/session')).getSessionId()
             await fetch('/api/locks', {
                 method: 'DELETE',
@@ -280,14 +306,17 @@ export default function BookingPage() {
                 body: JSON.stringify({ sessionId }),
             }).catch(() => { })
 
-            // Clear cart and draft
             localStorage.setItem('skibkk-cart', '[]')
             localStorage.removeItem(BOOKING_DRAFT_KEY)
             window.dispatchEvent(new Event('cart-updated'))
-            setStep(3) // success
-            toast.success('จองสำเร็จ!')
-        } catch {
-            toast.error('เกิดข้อผิดพลาด')
+            setStep(3)
+            toast.success(slipFallback && !slipVerified ? 'จองสำเร็จ! รอ admin ตรวจสอบสลิป' : 'จองสำเร็จ!')
+        } catch (err) {
+            // Transaction safety: rollback booking if payment failed
+            if (createdBookingId) {
+                await fetch(`/api/bookings/${createdBookingId}`, { method: 'DELETE' }).catch(() => { })
+            }
+            toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
         } finally {
             setLoading(false)
         }
@@ -422,7 +451,13 @@ export default function BookingPage() {
                         <button onClick={() => router.push('/cart')} className="btn btn-secondary" style={{ flex: 1 }}>
                             <ArrowLeft size={18} /> กลับ
                         </button>
-                        <button onClick={() => setStep(2)} className="btn btn-primary" style={{ flex: 2 }}>
+                        <button onClick={() => {
+                            if (showTerms && !termsAccepted) {
+                                // Show terms popup first
+                                return
+                            }
+                            setStep(2)
+                        }} className="btn btn-primary" style={{ flex: 2 }}>
                             ถัดไป: ชำระเงิน <ArrowRight size={18} />
                         </button>
                     </div>
@@ -541,7 +576,7 @@ export default function BookingPage() {
                                 </label>
 
                                 {/* Verify button */}
-                                {slipPreview && !slipVerified && (
+                                {slipPreview && !slipVerified && !slipFallback && (
                                     <button
                                         onClick={handleVerifySlip}
                                         disabled={slipVerifying}
@@ -556,7 +591,7 @@ export default function BookingPage() {
                                     </button>
                                 )}
 
-                                {/* Verification result */}
+                                {/* Verification result — auto verified */}
                                 {slipVerified && (
                                     <div style={{
                                         marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
@@ -572,6 +607,29 @@ export default function BookingPage() {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Fallback — manual review mode */}
+                                {slipFallback && !slipVerified && (
+                                    <div style={{
+                                        marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
+                                        background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)',
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#f5a623', fontWeight: 700 }}>
+                                            <AlertTriangle size={18} /> ส่งสลิปให้ admin ตรวจสอบ
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)' }}>
+                                            ระบบตรวจสอบอัตโนมัติไม่พร้อมใช้งานชั่วคราว สามารถยืนยันการจองได้เลย admin จะตรวจสลิปให้ภายหลัง
+                                        </div>
+                                        <button
+                                            onClick={handleVerifySlip}
+                                            className="btn btn-secondary btn-block"
+                                            style={{ marginTop: '10px', fontSize: '13px' }}
+                                            disabled={slipVerifying}
+                                        >
+                                            {slipVerifying ? 'กำลังลองใหม่...' : '🔄 ลองตรวจสอบอีกครั้ง'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -585,8 +643,8 @@ export default function BookingPage() {
                             whileTap={{ scale: 0.98 }}
                             onClick={handleSubmitBooking}
                             className="btn btn-success"
-                            style={{ flex: 2, opacity: (paymentMethod === 'PROMPTPAY' && !slipVerified) ? 0.5 : 1 }}
-                            disabled={loading || (paymentMethod === 'PROMPTPAY' && !slipVerified)}
+                            style={{ flex: 2, opacity: !canSubmit ? 0.5 : 1 }}
+                            disabled={loading || !canSubmit}
                         >
                             {loading ? <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} /> : <>ยืนยันการจอง <CheckCircle size={18} /></>}
                         </motion.button>

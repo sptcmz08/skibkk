@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         const user = await requireAuth()
         const body = await req.json()
 
-        const { bookingId, method, amount, slipData } = body
+        const { bookingId, method, amount, slipData, manualReview } = body
 
         // Verify booking exists and belongs to user
         const booking = await prisma.booking.findUnique({
@@ -54,9 +54,9 @@ export async function POST(req: NextRequest) {
                 amount,
                 slipUrl: body.slipUrl || null,
                 slipHash,
-                status: 'VERIFIED',
-                verifiedAt: new Date(),
-                verifiedBy: 'SYSTEM',
+                status: manualReview ? 'PENDING' : 'VERIFIED',
+                verifiedAt: manualReview ? null : new Date(),
+                verifiedBy: manualReview ? null : 'SYSTEM',
             },
         })
 
@@ -70,11 +70,13 @@ export async function POST(req: NextRequest) {
             })
         }
 
-        // Auto-confirm booking
-        await prisma.booking.update({
-            where: { id: bookingId },
-            data: { status: 'CONFIRMED' },
-        })
+        // Auto-confirm booking only if payment is verified (not manual review)
+        if (!manualReview) {
+            await prisma.booking.update({
+                where: { id: bookingId },
+                data: { status: 'CONFIRMED' },
+            })
+        }
 
         return NextResponse.json({ payment }, { status: 201 })
     } catch (error) {

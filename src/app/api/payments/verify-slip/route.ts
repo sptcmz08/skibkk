@@ -12,18 +12,44 @@ export async function POST(req: NextRequest) {
 
         const EASYSLIP_API_KEY = process.env.EASYSLIP_API_KEY
         if (!EASYSLIP_API_KEY) {
-            return NextResponse.json({ error: 'ระบบยังไม่ได้ตั้งค่า EasySlip API' }, { status: 500 })
+            // No API key configured — allow manual review fallback
+            return NextResponse.json({
+                verified: false,
+                fallback: true,
+                error: 'ระบบตรวจสลิปอัตโนมัติยังไม่พร้อม กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ',
+            })
         }
 
-        // Call EasySlip API to verify the slip
-        const easyslipRes = await fetch('https://developer.easyslip.com/api/v1/verify', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${EASYSLIP_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ image }),
-        })
+        // Call EasySlip API with 15-second timeout
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 15000)
+
+        let easyslipRes: Response
+        try {
+            easyslipRes = await fetch('https://developer.easyslip.com/api/v1/verify', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${EASYSLIP_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image }),
+                signal: controller.signal,
+            })
+        } catch (fetchError) {
+            clearTimeout(timeout)
+            // Network error or timeout — allow manual review fallback
+            const isTimeout = (fetchError as Error).name === 'AbortError'
+            console.error('EasySlip fetch error:', isTimeout ? 'TIMEOUT' : fetchError)
+            return NextResponse.json({
+                verified: false,
+                fallback: true,
+                error: isTimeout
+                    ? 'ระบบตรวจสลิปตอบช้าเกินไป กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ'
+                    : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้ กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ',
+            })
+        } finally {
+            clearTimeout(timeout)
+        }
 
         const result = await easyslipRes.json()
 
@@ -33,6 +59,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 error: errorMsg,
                 verified: false,
+                fallback: true, // Allow manual review even when EasySlip rejects
             }, { status: 400 })
         }
 
@@ -59,6 +86,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         }
         console.error('Verify slip error:', error)
-        return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป' }, { status: 500 })
+        return NextResponse.json({
+            error: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป',
+            verified: false,
+            fallback: true,
+        }, { status: 500 })
     }
 }
