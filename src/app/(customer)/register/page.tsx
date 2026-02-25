@@ -62,19 +62,14 @@ export default function RegisterPage() {
             >
                 <div className="glass-card" style={{ cursor: 'default', padding: '40px' }}>
                     <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <div style={{
-                            width: '64px',
-                            height: '64px',
-                            background: 'var(--c-gradient-accent)',
-                            borderRadius: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                        <img src="/logo.png" alt="SKIBKK" style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '16px',
+                            objectFit: 'contain',
                             margin: '0 auto 16px',
-                            fontSize: '28px',
-                        }}>
-                            🏟️
-                        </div>
+                            display: 'block',
+                        }} />
                         <h1 style={{ fontSize: '28px', fontWeight: 800, fontFamily: "'Inter', sans-serif", letterSpacing: '-0.5px', marginBottom: '8px' }}>
                             สมัครสมาชิก
                         </h1>

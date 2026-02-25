@@ -12,10 +12,12 @@ const transporter = nodemailer.createTransport({
 
 // ==================== Shared HTML wrapper ====================
 function emailWrapper(title: string, subtitle: string, bodyHtml: string) {
+  const siteUrl = process.env.SITE_URL || 'https://skibkk.com'
   return `
     <div style="font-family: 'Sarabun', 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f6fa;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 26px; letter-spacing: -0.5px;">🏟️ SKIBKK</h1>
+        <img src="${siteUrl}/logo.png" alt="SKIBKK" style="width: 70px; height: 70px; border-radius: 14px; object-fit: contain; margin: 0 auto 12px; display: block;" />
+        <h1 style="color: white; margin: 0; font-size: 26px; letter-spacing: -0.5px;">SKIBKK</h1>
         <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 16px;">${subtitle}</p>
       </div>
       <div style="background: white; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 16px 16px;">
