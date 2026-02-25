@@ -14,9 +14,8 @@ export async function POST(req: NextRequest) {
         if (!EASYSLIP_API_KEY) {
             return NextResponse.json({
                 verified: false,
-                fallback: true,
-                error: 'ระบบตรวจสลิปอัตโนมัติยังไม่พร้อม กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ',
-            })
+                error: 'ระบบตรวจสลิปอัตโนมัติยังไม่พร้อม กรุณาติดต่อ admin',
+            }, { status: 500 })
         }
 
         // Convert base64 data URL to binary for multipart upload
@@ -55,11 +54,10 @@ export async function POST(req: NextRequest) {
             console.error('EasySlip fetch error:', isTimeout ? 'TIMEOUT' : fetchError)
             return NextResponse.json({
                 verified: false,
-                fallback: true,
                 error: isTimeout
-                    ? 'ระบบตรวจสลิปตอบช้าเกินไป กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ'
-                    : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้ กรุณาส่งสลิปเพื่อให้ admin ตรวจสอบ',
-            })
+                    ? 'ระบบตรวจสลิปตอบช้าเกินไป กรุณาลองใหม่อีกครั้ง'
+                    : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้ กรุณาลองใหม่อีกครั้ง',
+            }, { status: 500 })
         } finally {
             clearTimeout(timeout)
         }
@@ -70,9 +68,8 @@ export async function POST(req: NextRequest) {
             console.error('EasySlip verify error:', JSON.stringify(result))
             const errorMsg = result.data?.message || result.message || 'ไม่สามารถตรวจสอบสลิปได้'
             return NextResponse.json({
-                error: errorMsg,
+                error: `สลิปไม่ถูกต้อง: ${errorMsg}`,
                 verified: false,
-                fallback: true,
             }, { status: 400 })
         }
 
@@ -106,14 +103,14 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // ============ SECURITY: Verify slip is recent (within 30 minutes) ============
+        // ============ SECURITY: Verify slip is recent (within 20 minutes — must match slot lock timer) ============
         if (date) {
             const slipDate = new Date(date)
             const now = new Date()
             const diffMinutes = (now.getTime() - slipDate.getTime()) / (1000 * 60)
-            if (diffMinutes > 30) {
+            if (diffMinutes > 20) {
                 return NextResponse.json({
-                    error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนเงินใหม่ภายใน 30 นาที`,
+                    error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนเงินใหม่ภายใน 20 นาที`,
                     verified: false,
                 }, { status: 400 })
             }
@@ -141,9 +138,8 @@ export async function POST(req: NextRequest) {
         }
         console.error('Verify slip error:', error)
         return NextResponse.json({
-            error: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป',
+            error: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป กรุณาลองใหม่อีกครั้ง',
             verified: false,
-            fallback: true,
         }, { status: 500 })
     }
 }
