@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -14,6 +14,14 @@ export default function LoginPage() {
     const [form, setForm] = useState({ email: '', password: '' })
     const [showPw, setShowPw] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [logoUrl, setLogoUrl] = useState('/logo.png')
+
+    useEffect(() => {
+        fetch('/api/settings', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => { if (data.logo) setLogoUrl(data.logo) })
+            .catch(() => { })
+    }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -68,7 +76,7 @@ export default function LoginPage() {
             >
                 <div className="glass-card" style={{ cursor: 'default', padding: '40px' }}>
                     <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <img src="/logo.png" alt="SKIBKK" style={{
+                        <img src={logoUrl} alt="SKIBKK" style={{
                             width: '80px',
                             height: '80px',
                             borderRadius: '16px',
