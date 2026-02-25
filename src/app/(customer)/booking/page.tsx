@@ -34,24 +34,24 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [slipVerified, setSlipVerified] = useState<{ verified: boolean; amount: number; transRef: string; sender: string; receiver: string } | null>(null)
+    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string }>>([])
     const [slipFallback, setSlipFallback] = useState(false) // When EasySlip is down, allow manual review
 
     const total = cart.reduce((s, i) => s + i.price, 0)
-
+    const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
+    const remaining = total - paidTotal
 
 
     // Handle slip file selection
     const handleSlipSelect = (file: File) => {
         setSlipFile(file)
-        setSlipVerified(null)
         setSlipFallback(false)
         const reader = new FileReader()
         reader.onload = (e) => setSlipPreview(e.target?.result as string)
         reader.readAsDataURL(file)
     }
 
-    // Verify slip via EasySlip API
+    // Verify slip via EasySlip API (supports multiple slips — accumulates amounts)
     const handleVerifySlip = async () => {
         if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
         setSlipVerifying(true)
@@ -69,27 +69,45 @@ export default function BookingPage() {
             })
             const data = await res.json()
 
-            // EasySlip is down or can't verify → offer fallback (manual review)
+            // EasySlip is down or can't verify
             if (data.fallback) {
                 setSlipFallback(true)
-                setSlipVerified(null)
                 toast(data.error || 'ระบบตรวจอัตโนมัติไม่พร้อม สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️', duration: 5000 })
                 return
             }
-
             if (!data.verified) {
                 toast.error(data.error || 'สลิปไม่ถูกต้อง')
-                setSlipVerified(null)
                 return
             }
-            // Check amount match (allow small difference for rounding)
-            if (Math.abs(data.amount - total) > 1) {
-                toast.error(`จำนวนเงินไม่ตรง: สลิป ฿${data.amount.toLocaleString()} ≠ ยอดจอง ฿${total.toLocaleString()}`)
-                setSlipVerified(null)
+
+            // Check for duplicate transRef
+            if (data.transRef && verifiedSlips.some(s => s.transRef === data.transRef)) {
+                toast.error('สลิปนี้ถูกตรวจสอบแล้ว กรุณาอัปโหลดสลิปใบใหม่')
                 return
             }
-            setSlipVerified(data)
-            toast.success('ตรวจสอบสลิปสำเร็จ ✅')
+
+            // Add this slip to the list
+            const newSlip = { amount: parseFloat(data.amount), transRef: data.transRef || '', sender: data.sender || '' }
+            const updatedSlips = [...verifiedSlips, newSlip]
+            setVerifiedSlips(updatedSlips)
+
+            const newPaidTotal = updatedSlips.reduce((s, slip) => s + slip.amount, 0)
+            const newRemaining = total - newPaidTotal
+            const overpaid = newPaidTotal - total
+
+            // Clear current slip for next upload
+            setSlipFile(null)
+            setSlipPreview(null)
+
+            if (newRemaining > 1) {
+                // Still short — tell customer to transfer more
+                toast(`ตรวจสลิปสำเร็จ ✅ ยอดค้างจ่าย ฿${newPaidTotal.toLocaleString()} / ฿${total.toLocaleString()} — โอนเพิ่มอีก ฿${newRemaining.toLocaleString()}`, { icon: '💰', duration: 8000 })
+            } else if (overpaid > 1) {
+                // Overpaid
+                toast.success(`ยอดครบแล้ว! ✅ (โอนเกิน ฿${overpaid.toLocaleString()} กรุณา Add Line: @skibkk เพื่อรับเงินคืน)`, { duration: 8000 })
+            } else {
+                toast.success('ยอดครบแล้ว! ตรวจสอบสลิปสำเร็จ ✅')
+            }
         } catch {
             setSlipFallback(true)
             toast('เกิดข้อผิดพลาด สามารถส่งสลิปให้ admin ตรวจสอบได้', { icon: '⚠️' })
@@ -216,10 +234,10 @@ export default function BookingPage() {
 
 
 
-    // Can submit if: slip verified OR fallback mode with slip uploaded OR using package
+    // Can submit if: all slips cover the total OR fallback mode with slip uploaded OR using package
     const canSubmit = paymentMethod === 'PACKAGE'
-        || slipVerified
-        || (slipFallback && slipPreview)
+        || (remaining <= 1)
+        || (slipFallback && (slipPreview || verifiedSlips.length > 0))
 
     const handleSubmitBooking = async () => {
         if (participants.some(p => !p.name || !p.sportType)) {
@@ -227,7 +245,7 @@ export default function BookingPage() {
             return
         }
         // Require slip verification or fallback for PromptPay
-        if (paymentMethod === 'PROMPTPAY' && !slipVerified && !slipFallback) {
+        if (paymentMethod === 'PROMPTPAY' && remaining > 1 && !slipFallback) {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
             return
         }
@@ -291,8 +309,8 @@ export default function BookingPage() {
                         bookingId: data.booking.id,
                         method: paymentMethod,
                         amount: total,
-                        slipData: slipVerified?.transRef || slipPreview,
-                        manualReview: slipFallback && !slipVerified, // Flag for admin review
+                        slipData: verifiedSlips.map(s => s.transRef).filter(Boolean).join(',') || slipPreview,
+                        manualReview: slipFallback && remaining > 1, // Flag for admin review
                     }),
                 })
                 if (!paymentRes.ok) throw new Error('Payment creation failed')
@@ -310,7 +328,7 @@ export default function BookingPage() {
             localStorage.removeItem(BOOKING_DRAFT_KEY)
             window.dispatchEvent(new Event('cart-updated'))
             setStep(3)
-            toast.success(slipFallback && !slipVerified ? 'จองสำเร็จ! รอ admin ตรวจสอบสลิป' : 'จองสำเร็จ!')
+            toast.success(slipFallback && remaining > 1 ? 'จองสำเร็จ! รอ admin ตรวจสอบสลิป' : 'จองสำเร็จ!')
         } catch (err) {
             // Transaction safety: rollback booking if payment failed
             if (createdBookingId) {
@@ -495,7 +513,7 @@ export default function BookingPage() {
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <button
-                                    onClick={() => { setPaymentMethod('PROMPTPAY'); setSelectedPackageId(null); setSlipVerified(null) }}
+                                    onClick={() => { setPaymentMethod('PROMPTPAY'); setSelectedPackageId(null); setVerifiedSlips([]) }}
                                     style={{
                                         padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                                         border: paymentMethod !== 'PACKAGE' ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
@@ -559,8 +577,8 @@ export default function BookingPage() {
                                 <label style={{
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
                                     padding: slipPreview ? '8px' : '24px', borderRadius: '12px', cursor: 'pointer',
-                                    border: `2px dashed ${slipVerified ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
-                                    background: slipVerified ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
+                                    border: `2px dashed ${remaining <= 1 && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                                    background: remaining <= 1 && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
                                     transition: 'all 0.2s',
                                 }}>
                                     {slipPreview ? (
@@ -576,7 +594,7 @@ export default function BookingPage() {
                                 </label>
 
                                 {/* Verify button */}
-                                {slipPreview && !slipVerified && !slipFallback && (
+                                {slipPreview && remaining > 1 && !slipFallback && (
                                     <button
                                         onClick={handleVerifySlip}
                                         disabled={slipVerifying}
@@ -591,25 +609,53 @@ export default function BookingPage() {
                                     </button>
                                 )}
 
-                                {/* Verification result — auto verified */}
-                                {slipVerified && (
-                                    <div style={{
-                                        marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
-                                        background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#10b981', fontWeight: 700 }}>
-                                            <CheckCircle size={18} /> ตรวจสอบสลิปสำเร็จ
-                                        </div>
-                                        <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)', display: 'grid', gap: '4px' }}>
-                                            <div>จำนวน: <strong>฿{slipVerified.amount.toLocaleString()}</strong></div>
-                                            <div>ผู้โอน: {slipVerified.sender}</div>
-                                            {slipVerified.transRef && <div>อ้างอิง: {slipVerified.transRef}</div>}
+                                {/* Verified slips list */}
+                                {verifiedSlips.length > 0 && (
+                                    <div style={{ marginTop: '12px' }}>
+                                        {verifiedSlips.map((slip, i) => (
+                                            <div key={i} style={{
+                                                padding: '10px 14px', borderRadius: '10px', marginBottom: '6px',
+                                                background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px',
+                                            }}>
+                                                <div style={{ color: 'var(--c-text-secondary)' }}>
+                                                    <CheckCircle size={14} style={{ color: '#10b981', verticalAlign: 'middle', marginRight: '6px' }} />
+                                                    สลิป {i + 1}: {slip.sender}
+                                                </div>
+                                                <strong style={{ color: '#10b981' }}>฿{slip.amount.toLocaleString()}</strong>
+                                            </div>
+                                        ))}
+
+                                        {/* Progress bar */}
+                                        <div style={{ marginTop: '10px', padding: '12px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                                                <span style={{ color: 'var(--c-text-secondary)' }}>ชำระแล้ว</span>
+                                                <strong>฿{paidTotal.toLocaleString()} / ฿{total.toLocaleString()}</strong>
+                                            </div>
+                                            <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                                                <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 1 ? '#10b981' : '#f5a623', width: `${Math.min(100, (paidTotal / total) * 100)}%`, transition: 'width 0.5s' }} />
+                                            </div>
+                                            {remaining > 1 && (
+                                                <div style={{ marginTop: '8px', fontSize: '14px', color: '#f5a623', fontWeight: 700, textAlign: 'center' }}>
+                                                    💰 โอนเพิ่มอีก ฿{remaining.toLocaleString()} แล้วแนบสลิปใหม่
+                                                </div>
+                                            )}
+                                            {remaining <= 1 && (
+                                                <div style={{ marginTop: '8px', fontSize: '14px', color: '#10b981', fontWeight: 700, textAlign: 'center' }}>
+                                                    ✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย
+                                                </div>
+                                            )}
+                                            {paidTotal > total + 1 && (
+                                                <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245,166,35,0.1)', fontSize: '12px', color: '#f5a623' }}>
+                                                    ⚠️ โอนเกิน ฿{(paidTotal - total).toLocaleString()} กรุณา Add Line: <strong>@skibkk</strong> เพื่อรับเงินคืน
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Fallback — manual review mode */}
-                                {slipFallback && !slipVerified && (
+                                {slipFallback && verifiedSlips.length === 0 && (
                                     <div style={{
                                         marginTop: '12px', padding: '14px 16px', borderRadius: '12px',
                                         background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)',
