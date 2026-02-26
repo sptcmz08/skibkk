@@ -17,7 +17,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         fetch('/api/auth/me', { cache: 'no-store' })
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error('Not authenticated')
+                return r.json()
+            })
             .then(d => {
                 if (d.user && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(d.user.role)) {
                     setUser(d.user)

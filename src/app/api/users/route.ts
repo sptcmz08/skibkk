@@ -93,7 +93,39 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// DELETE — deactivate user
+// PATCH — edit user
+export async function PATCH(req: NextRequest) {
+    try {
+        await requireAdmin()
+        const body = await req.json()
+        const { userId, name, email, phone, role, password } = body
+
+        if (!userId) return NextResponse.json({ error: 'ระบุ user id' }, { status: 400 })
+
+        const updateData: Record<string, unknown> = {}
+        if (name) updateData.name = name
+        if (email) updateData.email = email
+        if (phone) updateData.phone = phone
+        if (role) updateData.role = role
+        if (password) updateData.password = await bcrypt.hash(password, 10)
+
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: updateData,
+            select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true },
+        })
+
+        return NextResponse.json({ user })
+    } catch (error) {
+        if ((error as Error).message === 'Forbidden') {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
+        console.error('Users PATCH error:', error)
+        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    }
+}
+
+// DELETE — actually delete user
 export async function DELETE(req: NextRequest) {
     try {
         await requireAdmin()
@@ -101,17 +133,16 @@ export async function DELETE(req: NextRequest) {
         const userId = searchParams.get('id')
         if (!userId) return NextResponse.json({ error: 'ระบุ user id' }, { status: 400 })
 
-        await prisma.user.update({
+        await prisma.user.delete({
             where: { id: userId },
-            data: { isActive: false },
         })
 
-        return NextResponse.json({ message: 'ปิดการใช้งานสำเร็จ' })
+        return NextResponse.json({ message: 'ลบผู้ใช้สำเร็จ' })
     } catch (error) {
         if ((error as Error).message === 'Forbidden') {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
         console.error('Users DELETE error:', error)
-        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+        return NextResponse.json({ error: 'ไม่สามารถลบได้ อาจมีข้อมูลที่เชื่อมโยงอยู่' }, { status: 500 })
     }
 }
