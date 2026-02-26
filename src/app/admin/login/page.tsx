@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
             if (res.ok) {
                 if (['ADMIN', 'SUPERUSER', 'STAFF'].includes(data.user?.role)) {
                     toast.success('เข้าสู่ระบบสำเร็จ')
-                    router.push('/admin')
+                    window.location.href = '/admin'
                 } else {
                     toast.error('บัญชีนี้ไม่มีสิทธิ์เข้าถึงระบบหลังบ้าน')
                 }
