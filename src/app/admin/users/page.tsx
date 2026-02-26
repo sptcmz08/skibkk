@@ -20,7 +20,7 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingUser, setEditingUser] = useState<SystemUser | null>(null)
-    const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'STAFF' })
+    const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'STAFF', isActive: true })
 
     const fetchUsers = async () => {
         setLoading(true)
@@ -36,13 +36,13 @@ export default function UsersPage() {
 
     const openAddModal = () => {
         setEditingUser(null)
-        setForm({ name: '', email: '', password: '', phone: '', role: 'STAFF' })
+        setForm({ name: '', email: '', password: '', phone: '', role: 'STAFF', isActive: true })
         setShowModal(true)
     }
 
     const openEditModal = (u: SystemUser) => {
         setEditingUser(u)
-        setForm({ name: u.name, email: u.email, password: '', phone: u.phone || '', role: u.role })
+        setForm({ name: u.name, email: u.email, password: '', phone: u.phone || '', role: u.role, isActive: u.isActive })
         setShowModal(true)
     }
 
@@ -52,12 +52,13 @@ export default function UsersPage() {
         if (editingUser) {
             // Edit mode
             try {
-                const body: Record<string, string> = {
+                const body: Record<string, unknown> = {
                     userId: editingUser.id,
                     name: form.name,
                     email: form.email,
                     phone: form.phone,
                     role: form.role,
+                    isActive: form.isActive,
                 }
                 if (form.password) body.password = form.password
 
@@ -168,9 +169,7 @@ export default function UsersPage() {
                                                 <button onClick={() => openEditModal(u)} style={{ padding: '4px 8px', background: 'var(--a-primary-light)', border: 'none', borderRadius: '6px', color: 'var(--a-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600 }}>
                                                     <Edit2 size={13} /> แก้ไข
                                                 </button>
-                                                {u.isActive && (
-                                                    <button onClick={() => deleteUser(u.id, u.name)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={14} /></button>
-                                                )}
+                                                <button onClick={() => deleteUser(u.id, u.name)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={14} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -203,6 +202,21 @@ export default function UsersPage() {
                                     {ROLES.map(r => <option key={r.key} value={r.key}>{r.label} - {r.desc}</option>)}
                                 </select>
                             </div>
+                            {editingUser && (
+                                <div className="input-group">
+                                    <label style={{ color: 'var(--a-text-secondary)' }}>สถานะ</label>
+                                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '8px 16px', borderRadius: '8px', border: form.isActive ? '2px solid #00b894' : '1px solid var(--a-border)', background: form.isActive ? '#e8f5e9' : 'transparent', fontWeight: 600, fontSize: '13px', color: form.isActive ? '#00b894' : 'var(--a-text-muted)' }}>
+                                            <input type="radio" name="isActive" checked={form.isActive} onChange={() => setForm({ ...form, isActive: true })} style={{ display: 'none' }} />
+                                            ✅ Active
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '8px 16px', borderRadius: '8px', border: !form.isActive ? '2px solid #d63031' : '1px solid var(--a-border)', background: !form.isActive ? '#fde4de' : 'transparent', fontWeight: 600, fontSize: '13px', color: !form.isActive ? '#d63031' : 'var(--a-text-muted)' }}>
+                                            <input type="radio" name="isActive" checked={!form.isActive} onChange={() => setForm({ ...form, isActive: false })} style={{ display: 'none' }} />
+                                            🚫 Disabled
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
                             <button onClick={() => setShowModal(false)} className="btn-admin-outline">ยกเลิก</button>
