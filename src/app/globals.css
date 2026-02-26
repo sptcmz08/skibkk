@@ -977,6 +977,10 @@ select.input-field option {
     display: block;
   }
 
+  .admin-mobile-overlay {
+    display: block !important;
+  }
+
   .admin-page {
     padding: 20px 16px;
   }

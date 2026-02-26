@@ -105,7 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 <Link
                                     href={item.href}
                                     className={`admin-nav-link ${pathname === item.href ? 'active' : ''}`}
-                                    onClick={() => setSidebarOpen(false)}
+                                    onClick={() => { if (window.innerWidth <= 1024) setSidebarOpen(false) }}
                                 >
                                     <item.icon size={18} className="nav-icon" />
                                     {item.label}
@@ -167,13 +167,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </main>
             </div>
 
-            {/* Mobile overlay */}
+            {/* Mobile overlay — hidden on desktop via CSS */}
             {sidebarOpen && (
                 <div
+                    className="admin-mobile-overlay"
                     onClick={() => setSidebarOpen(false)}
                     style={{
                         position: 'fixed', inset: 0,
                         background: 'rgba(0,0,0,0.5)', zIndex: 49,
+                        display: 'none',
                     }}
                 />
             )}
