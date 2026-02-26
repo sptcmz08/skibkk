@@ -182,7 +182,24 @@ export default function CalendarPage() {
                             const isSelected = dateStr === selectedDate
                             const isPast = dateStr < todayStr
                             const summary = daySummaries[dateStr]
-                            const hasBookings = summary && summary.count > 0
+                            const bookingCount = summary?.count || 0
+                            const hasBookings = bookingCount > 0
+
+                            // Color coding based on booking density
+                            // green = few bookings (1-3), yellow = moderate (4-7), red = heavy (8+)
+                            let cellBg = isPast ? '#f9f9f7' : '#fdfcfa'
+                            let countColor = 'var(--a-text-muted)'
+                            let statusLabel = 'ว่าง'
+                            if (hasBookings && !isPast) {
+                                if (bookingCount >= 8) {
+                                    cellBg = '#fde4de'; countColor = '#d63031'; statusLabel = 'เต็ม'
+                                } else if (bookingCount >= 4) {
+                                    cellBg = '#fff8e1'; countColor = '#f39c12'; statusLabel = 'ใกล้เต็ม'
+                                } else {
+                                    cellBg = '#e8f5e9'; countColor = '#00b894'; statusLabel = 'ว่าง'
+                                }
+                            }
+                            if (isSelected) cellBg = 'var(--a-primary-light)'
 
                             return (
                                 <div key={dateStr}
@@ -194,7 +211,7 @@ export default function CalendarPage() {
                                         textAlign: 'center',
                                         minHeight: '72px',
                                         border: isSelected ? '2px solid var(--a-primary)' : isToday ? '2px solid var(--a-primary)' : '1px solid var(--a-border)',
-                                        background: isSelected ? 'var(--a-primary-light)' : hasBookings ? '#e8f5e9' : isPast ? '#f9f9f7' : '#fdfcfa',
+                                        background: cellBg,
                                         opacity: isPast ? 0.6 : 1,
                                         transition: 'all 0.15s',
                                     }}>
@@ -208,11 +225,14 @@ export default function CalendarPage() {
                                     </div>
                                     {hasBookings ? (
                                         <div>
-                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#00b894' }}>
-                                                {summary.count} จอง
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: countColor }}>
+                                                {bookingCount} จอง
+                                            </div>
+                                            <div style={{ fontSize: '9px', fontWeight: 600, color: countColor, opacity: 0.8 }}>
+                                                {statusLabel}
                                             </div>
                                             <div style={{ fontSize: '10px', color: 'var(--a-text-muted)' }}>
-                                                ฿{summary.totalAmount.toLocaleString()}
+                                                ฿{summary!.totalAmount.toLocaleString()}
                                             </div>
                                         </div>
                                     ) : (

@@ -22,10 +22,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 if (d.user && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(d.user.role)) {
                     setUser(d.user)
                 } else {
-                    router.push('/courts')
+                    router.push('/admin/login')
                 }
             })
-            .catch(() => router.push('/courts'))
+            .catch(() => router.push('/admin/login'))
     }, [router])
 
     const navItems = [
@@ -46,6 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/teacher-report', icon: BookOpen, label: 'ชั่วโมงสอน', section: '' },
         { href: '/admin/availability', icon: Clock, label: 'ตรวจสอบเวลาว่าง', section: '' },
         { href: '/admin/users', icon: Shield, label: 'ผู้ใช้งาน', section: 'ระบบ' },
+        { href: '/admin/logs', icon: FileText, label: 'บันทึกการใช้งาน', section: '' },
         { href: '/admin/settings', icon: Settings, label: 'ตั้งค่าเว็บไซต์', section: '' },
     ]
 
@@ -61,6 +62,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     // Group items by section
     let currentSection = ''
+
+    // Skip layout for login page
+    if (pathname === '/admin/login') {
+        return <>{children}</>
+    }
 
     if (!user) return <div className="loading-page" style={{ background: 'var(--a-bg)' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)' }} /></div>
 
