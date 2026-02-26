@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateBookingNumber } from '@/lib/utils'
-import { sendBookingConfirmation } from '@/lib/mailer'
+import { sendLineBookingConfirmation } from '@/lib/line-messaging'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +28,15 @@ export async function GET(req: NextRequest) {
             }
             if (date) {
                 where.bookingItems = { some: { date: new Date(date) } }
+            }
+
+            // Month filter for calendar view: ?month=2026-03
+            const monthParam = searchParams.get('month')
+            if (monthParam && !date) {
+                const [y, m] = monthParam.split('-').map(Number)
+                const startDate = new Date(y, m - 1, 1)
+                const endDate = new Date(y, m, 0, 23, 59, 59)
+                where.bookingItems = { some: { date: { gte: startDate, lte: endDate } } }
             }
 
             const bookings = await prisma.booking.findMany({
@@ -157,10 +166,10 @@ export async function POST(req: NextRequest) {
             },
         })
 
-        // Send confirmation email (non-blocking)
-        const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true } })
-        if (userRecord?.email) {
-            sendBookingConfirmation(userRecord.email, {
+        // Send confirmation via LINE (non-blocking)
+        const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, lineUserId: true } })
+        if (userRecord?.lineUserId) {
+            sendLineBookingConfirmation(userRecord.lineUserId, {
                 bookingNumber,
                 customerName: userRecord.name,
                 items: booking.bookingItems.map(item => ({
@@ -171,7 +180,7 @@ export async function POST(req: NextRequest) {
                     price: item.price,
                 })),
                 totalAmount: body.totalAmount,
-            }).catch(err => console.error('Failed to send confirmation email:', err))
+            }).catch(err => console.error('Failed to send LINE confirmation:', err))
         }
 
         return NextResponse.json({ booking }, { status: 201 })
@@ -209,9 +218,26 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ message: 'ยกเลิกการจองสำเร็จ' })
         }
 
+        // Update participants if provided
+        if (updateData.participants && Array.isArray(updateData.participants)) {
+            await prisma.participant.deleteMany({ where: { bookingId } })
+            await prisma.participant.createMany({
+                data: updateData.participants.map((p: { name: string; sportType: string; phone?: string; isBooker?: boolean }) => ({
+                    bookingId,
+                    name: p.name,
+                    sportType: p.sportType || '-',
+                    phone: p.phone || '',
+                    isBooker: p.isBooker || false,
+                })),
+            })
+        }
+
         const updated = await prisma.booking.update({
             where: { id: bookingId },
-            data: { status: updateData.status || undefined, totalAmount: updateData.totalAmount || undefined },
+            data: {
+                status: updateData.status || undefined,
+                totalAmount: updateData.totalAmount !== undefined ? updateData.totalAmount : undefined,
+            },
             include: { bookingItems: { include: { court: true } }, participants: true, payments: true, user: { select: { name: true } } },
         })
 

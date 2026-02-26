@@ -13,7 +13,7 @@ const DAYS = [
 
 interface SportType { id: string; name: string; icon: string; color: string }
 interface Court {
-    id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; sortOrder: number
+    id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; status: string; sortOrder: number
     operatingHours: Array<{ id: string; dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
 }
 
@@ -23,7 +23,7 @@ export default function CourtsManagement() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
-    const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0 })
+    const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0, status: 'ACTIVE' })
     const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '08:00', closeTime: '23:00', isClosed: false })))
     const [selectedFilter, setSelectedFilter] = useState<string | null>(null) // null = all
 
@@ -35,7 +35,7 @@ export default function CourtsManagement() {
     const fetchCourts = async () => {
         setLoading(true)
         try {
-            const res = await fetch('/api/courts', { cache: 'no-store' })
+            const res = await fetch('/api/courts?admin=1', { cache: 'no-store' })
             const data = await res.json()
             if (data.courts) setCourts(data.courts)
         } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }
@@ -53,7 +53,7 @@ export default function CourtsManagement() {
     const openModal = (court?: Court) => {
         if (court) {
             setEditingCourt(court)
-            setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder })
+            setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder, status: court.status || 'ACTIVE' })
             setHours(DAYS.map(d => {
                 const existing = court.operatingHours.find(h => h.dayOfWeek === d.key)
                 return existing ? { dayOfWeek: d.key, openTime: existing.openTime, closeTime: existing.closeTime, isClosed: existing.isClosed }
@@ -61,7 +61,7 @@ export default function CourtsManagement() {
             }))
         } else {
             setEditingCourt(null)
-            setForm({ name: '', description: '', sportType: selectedFilter || '', sortOrder: 0 })
+            setForm({ name: '', description: '', sportType: selectedFilter || '', sortOrder: 0, status: 'ACTIVE' })
             setHours(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
         }
         setShowModal(true)
@@ -73,7 +73,7 @@ export default function CourtsManagement() {
             const res = await fetch('/api/courts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...form, operatingHours: hours }),
+                body: JSON.stringify({ ...(editingCourt ? { id: editingCourt.id } : {}), ...form, operatingHours: hours }),
             })
             if (res.ok) { toast.success('บันทึกสำเร็จ'); setShowModal(false); fetchCourts() }
             else toast.error('บันทึกไม่สำเร็จ')
@@ -166,8 +166,8 @@ export default function CourtsManagement() {
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        <span className={`badge ${court.isActive ? 'badge-success' : 'badge-danger'}`}>
-                                            {court.isActive ? 'เปิดใช้งาน' : 'ปิด'}
+                                        <span className={`badge ${court.status === 'ACTIVE' ? 'badge-success' : court.status === 'CLOSED' ? 'badge-warning' : 'badge-danger'}`}>
+                                            {court.status === 'ACTIVE' ? '🟢 เปิด' : court.status === 'CLOSED' ? '🟡 ปิด' : '🔴 ยกเลิก'}
                                         </span>
                                         <button onClick={() => openModal(court)} className="btn-admin-outline" style={{ padding: '6px 12px' }}>
                                             <Edit2 size={14} />
@@ -236,6 +236,30 @@ export default function CourtsManagement() {
                             <div className="input-group">
                                 <label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label>
                                 <input className="admin-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="รายละเอียดสนาม" />
+                            </div>
+                            <div className="input-group">
+                                <label style={{ color: 'var(--a-text-secondary)' }}>สถานะสนาม</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    {([
+                                        { value: 'ACTIVE', label: '🟢 เปิด', desc: 'ลูกค้าเห็นและจองได้', color: '#00b894' },
+                                        { value: 'CLOSED', label: '🟡 ปิด', desc: 'ลูกค้าเห็นแต่จองไม่ได้', color: '#fdcb6e' },
+                                        { value: 'HIDDEN', label: '🔴 ยกเลิก', desc: 'ลูกค้าไม่เห็น', color: '#e17055' },
+                                    ] as const).map(s => (
+                                        <button key={s.value}
+                                            onClick={() => setForm({ ...form, status: s.value })}
+                                            style={{
+                                                padding: '10px 16px', borderRadius: '10px', cursor: 'pointer',
+                                                fontWeight: 600, fontSize: '13px', fontFamily: 'inherit',
+                                                border: form.status === s.value ? `2px solid ${s.color}` : '2px solid #e9ecef',
+                                                background: form.status === s.value ? s.color + '15' : '#f9f9f9',
+                                                color: form.status === s.value ? s.color : '#6b7280',
+                                                transition: 'all 0.2s', flex: 1, textAlign: 'center',
+                                            }}>
+                                            <div>{s.label}</div>
+                                            <div style={{ fontSize: '11px', fontWeight: 400, marginTop: '2px', opacity: 0.8 }}>{s.desc}</div>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 

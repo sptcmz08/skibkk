@@ -133,8 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <header className="admin-topbar">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <button onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className="hamburger"
-                            style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text)' }}
+                            className="admin-hamburger"
                         >
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>

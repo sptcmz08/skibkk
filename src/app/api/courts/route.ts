@@ -4,10 +4,14 @@ import { requireAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
+        const isAdmin = req.nextUrl.searchParams.get('admin') === '1'
+
         const courts = await prisma.court.findMany({
-            where: { isActive: true },
+            where: isAdmin
+                ? {} // Admin sees all courts
+                : { status: { in: ['ACTIVE', 'CLOSED'] } }, // Customer sees ACTIVE + CLOSED
             include: {
                 operatingHours: true,
                 pricingRules: { where: { isActive: true } },
@@ -31,11 +35,38 @@ export async function POST(req: NextRequest) {
         await requireAdmin()
         const body = await req.json()
 
+        if (body.id) {
+            // Update existing court
+            const court = await prisma.court.update({
+                where: { id: body.id },
+                data: {
+                    name: body.name,
+                    description: body.description || null,
+                    sportType: body.sportType || null,
+                    status: body.status || 'ACTIVE',
+                    isActive: body.status !== 'HIDDEN',
+                    sortOrder: body.sortOrder || 0,
+                    operatingHours: {
+                        deleteMany: {},
+                        create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
+                            dayOfWeek: oh.dayOfWeek,
+                            openTime: oh.openTime,
+                            closeTime: oh.closeTime,
+                            isClosed: oh.isClosed || false,
+                        })),
+                    },
+                },
+                include: { operatingHours: true },
+            })
+            return NextResponse.json({ court })
+        }
+
         const court = await prisma.court.create({
             data: {
                 name: body.name,
                 description: body.description || null,
                 sportType: body.sportType || null,
+                status: body.status || 'ACTIVE',
                 sortOrder: body.sortOrder || 0,
                 operatingHours: {
                     create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
@@ -58,3 +89,4 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }
 }
+

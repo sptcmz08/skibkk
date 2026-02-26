@@ -946,8 +946,86 @@ select.input-field option {
   padding: 8px;
 }
 
+/* ==================== ADMIN HAMBURGER ==================== */
+.admin-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--a-text);
+  padding: 8px;
+}
+
 /* ==================== RESPONSIVE ==================== */
+
+/* ── Tablet (≤1024px) ── */
+@media (max-width: 1024px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .admin-content {
+    margin-left: 0;
+  }
+
+  .admin-hamburger {
+    display: block;
+  }
+
+  .admin-page {
+    padding: 20px 16px;
+  }
+
+  .admin-topbar {
+    padding: 0 16px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ── Mobile (≤768px) ── */
 @media (max-width: 768px) {
+
+  /* Customer nav */
+  .customer-nav {
+    padding: 0 12px;
+    height: 60px;
+  }
+
+  .customer-nav .nav-links {
+    display: none;
+  }
+
+  .customer-nav .nav-actions {
+    gap: 8px;
+  }
+
+  .hamburger {
+    display: block;
+  }
+
+  .customer-main {
+    padding-top: 60px;
+  }
+
+  .btn-sm {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* Hero */
   .hero-title {
     font-size: 40px;
     letter-spacing: -1.5px;
@@ -961,48 +1039,251 @@ select.input-field option {
     flex-direction: column;
   }
 
-  .customer-nav .nav-links {
-    display: none;
-  }
-
-  .hamburger {
-    display: block;
-  }
-
   .hero-section {
     min-height: auto;
-    padding: 60px 20px;
+    padding: 40px 16px;
   }
 
-  .admin-sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s;
-  }
-
-  .admin-sidebar.open {
-    transform: translateX(0);
-  }
-
-  .admin-content {
-    margin-left: 0;
-  }
-
+  /* Slot grid */
   .slot-grid {
     grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
   }
 
+  .slot-item {
+    padding: 10px 4px;
+    font-size: 13px;
+  }
+
+  .slot-time {
+    font-size: 13px;
+  }
+
+  .slot-price {
+    font-size: 11px;
+  }
+
+  /* Glass card */
   .glass-card {
     padding: 16px;
+    border-radius: 12px;
+  }
+
+  .glass-card:hover {
+    transform: none;
+  }
+
+  /* Admin layout */
+  .admin-page {
+    padding: 16px 12px;
+  }
+
+  .admin-topbar {
+    height: 56px;
+    padding: 0 12px;
+  }
+
+  .admin-topbar-title {
+    font-size: 16px;
+  }
+
+  /* Admin cards */
+  .admin-card {
+    border-radius: 10px;
+  }
+
+  .admin-card-header {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-card-title {
+    font-size: 14px;
+  }
+
+  .admin-card-body {
+    padding: 16px;
+  }
+
+  /* Stat cards — horizontal compact */
+  .stat-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
+  /* Tables — horizontal scroll */
+  .admin-card:has(.admin-table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-table {
+    min-width: 600px;
+  }
+
+  .admin-table th {
+    padding: 10px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .admin-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  /* Badges */
+  .badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  /* Modals */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    max-height: 85vh;
+    padding: 24px 20px;
+    border-radius: 20px 20px 12px 12px;
+  }
+
+  .admin-modal-content {
+    max-height: 85vh;
+    padding: 20px 16px;
+    border-radius: 20px 20px 12px 12px;
+    max-width: 100%;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+
+  /* Admin buttons */
+  .btn-admin {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .btn-admin-outline {
+    padding: 7px 14px;
+    font-size: 13px;
+  }
+
+  /* Admin input */
+  .admin-input {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  /* Grids */
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Countdown bar */
+  .countdown-bar {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    padding: 10px 16px;
+  }
+
+  .countdown-timer {
+    font-size: 20px;
+  }
+
+  /* Footer mobile */
+  footer {
+    padding: 24px 16px !important;
+    font-size: 13px !important;
   }
 }
 
+/* ── Small phones (≤480px) ── */
 @media (max-width: 480px) {
   .hero-title {
-    font-size: 32px;
+    font-size: 28px;
+    letter-spacing: -1px;
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
   }
 
   .slot-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .slot-item {
+    padding: 8px 4px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .stat-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .admin-page {
+    padding: 12px 8px;
+  }
+
+  .admin-topbar-title {
+    font-size: 15px;
+  }
+
+  .customer-nav {
+    padding: 0 8px;
+  }
+
+  .modal-overlay {
+    padding: 0;
+  }
+
+  .modal-content,
+  .admin-modal-content {
+    max-height: 100vh;
+    border-radius: 0;
+    height: 100vh;
+  }
+
+  /* Make buttons easier to tap */
+  .btn {
+    min-height: 44px;
   }
 }
 

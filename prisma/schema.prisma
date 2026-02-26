@@ -71,6 +71,7 @@ model Court {
   description String?
   sportType   String? // e.g. "ฟุตบอล", "แบดมินตัน", "บาสเกตบอล"
   isActive    Boolean  @default(true)
+  status      String   @default("ACTIVE") // ACTIVE, CLOSED, HIDDEN
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

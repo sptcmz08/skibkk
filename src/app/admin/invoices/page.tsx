@@ -22,6 +22,32 @@ interface EditableItem {
     unitPrice: number
 }
 
+// Stable components defined outside InvoicesPage to prevent focus loss on re-render
+function EditField({ value, onChange, style, multiline, inputStyle, editMode }: {
+    value: string; onChange: (v: string) => void; style?: React.CSSProperties; multiline?: boolean; inputStyle?: React.CSSProperties; editMode: boolean
+}) {
+    if (!editMode) return <span style={style}>{multiline ? value.split('\n').map((line, i) => <span key={i}>{line}<br /></span>) : value}</span>
+    const baseInput: React.CSSProperties = {
+        border: '1px dashed #93c5fd', background: 'rgba(59,130,246,0.04)',
+        borderRadius: '4px', padding: '2px 6px', outline: 'none',
+        fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit',
+        width: '100%', ...inputStyle,
+    }
+    if (multiline) return <textarea value={value} onChange={e => onChange(e.target.value)} style={{ ...baseInput, minHeight: '50px', resize: 'vertical' }} />
+    return <input type="text" value={value} onChange={e => onChange(e.target.value)} style={baseInput} />
+}
+
+function EditNumber({ value, onChange, style, editMode }: { value: number; onChange: (v: number) => void; style?: React.CSSProperties; editMode: boolean }) {
+    if (!editMode) return <span style={style}>{value.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+    return <input type="number" step="0.01" value={value} onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        style={{
+            border: '1px dashed #93c5fd', background: 'rgba(59,130,246,0.04)',
+            borderRadius: '4px', padding: '2px 6px', outline: 'none',
+            fontFamily: "'Inter'", fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit',
+            width: '100px', textAlign: 'right', ...style,
+        }} />
+}
+
 export default function InvoicesPage() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
@@ -149,31 +175,7 @@ export default function InvoicesPage() {
         }
     }
 
-    // Editable field helper — renders input in edit mode, text in view mode
-    const EditField = ({ value, onChange, style, multiline, inputStyle }: {
-        value: string; onChange: (v: string) => void; style?: React.CSSProperties; multiline?: boolean; inputStyle?: React.CSSProperties
-    }) => {
-        if (!editMode) return <span style={style}>{multiline ? value.split('\n').map((line, i) => <span key={i}>{line}<br /></span>) : value}</span>
-        const baseInput: React.CSSProperties = {
-            border: '1px dashed #93c5fd', background: 'rgba(59,130,246,0.04)',
-            borderRadius: '4px', padding: '2px 6px', outline: 'none',
-            fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit',
-            width: '100%', ...inputStyle,
-        }
-        if (multiline) return <textarea value={value} onChange={e => onChange(e.target.value)} style={{ ...baseInput, minHeight: '50px', resize: 'vertical' }} />
-        return <input type="text" value={value} onChange={e => onChange(e.target.value)} style={baseInput} />
-    }
-
-    const EditNumber = ({ value, onChange, style }: { value: number; onChange: (v: number) => void; style?: React.CSSProperties }) => {
-        if (!editMode) return <span style={style}>{value.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
-        return <input type="number" step="0.01" value={value} onChange={e => onChange(parseFloat(e.target.value) || 0)}
-            style={{
-                border: '1px dashed #93c5fd', background: 'rgba(59,130,246,0.04)',
-                borderRadius: '4px', padding: '2px 6px', outline: 'none',
-                fontFamily: "'Inter'", fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit',
-                width: '100px', textAlign: 'right', ...style,
-            }} />
-    }
+    // EditField and EditNumber are defined outside the component to prevent focus loss
 
     // ── Invoice/Receipt detail view ──
     if (selectedBooking) {
@@ -231,19 +233,19 @@ export default function InvoicesPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div>
                                         <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#2563eb', margin: 0 }}>
-                                            <EditField value={companyName} onChange={setCompanyName} />
+                                            <EditField editMode={editMode} value={companyName} onChange={setCompanyName} />
                                         </h1>
                                         <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                                            <EditField value={companyAddress1} onChange={setCompanyAddress1} />
+                                            <EditField editMode={editMode} value={companyAddress1} onChange={setCompanyAddress1} />
                                         </p>
                                         <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                            <EditField value={companyAddress2} onChange={setCompanyAddress2} />
+                                            <EditField editMode={editMode} value={companyAddress2} onChange={setCompanyAddress2} />
                                         </p>
                                         <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                            โทร: <EditField value={companyPhone} onChange={setCompanyPhone} />
+                                            โทร: <EditField editMode={editMode} value={companyPhone} onChange={setCompanyPhone} />
                                         </p>
                                         <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                            เลขประจำตัวผู้เสียภาษี: <EditField value={companyTaxId} onChange={setCompanyTaxId} />
+                                            เลขประจำตัวผู้เสียภาษี: <EditField editMode={editMode} value={companyTaxId} onChange={setCompanyTaxId} />
                                         </p>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
@@ -262,14 +264,14 @@ export default function InvoicesPage() {
                                 <div style={{ flex: 1 }}>
                                     <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ลูกค้า</p>
                                     <p style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>
-                                        <EditField value={customerName} onChange={setCustomerName} />
+                                        <EditField editMode={editMode} value={customerName} onChange={setCustomerName} />
                                     </p>
                                     <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                        <EditField value={customerEmail} onChange={setCustomerEmail} />
+                                        <EditField editMode={editMode} value={customerEmail} onChange={setCustomerEmail} />
                                     </p>
                                     {(customerPhone || editMode) && (
                                         <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                            โทร: <EditField value={customerPhone} onChange={setCustomerPhone} />
+                                            โทร: <EditField editMode={editMode} value={customerPhone} onChange={setCustomerPhone} />
                                         </p>
                                     )}
                                 </div>
@@ -279,19 +281,19 @@ export default function InvoicesPage() {
                                             <tr>
                                                 <td style={{ padding: '3px 16px 3px 0', color: '#6b7280', fontWeight: 600 }}>เลขที่:</td>
                                                 <td style={{ padding: '3px 0', fontWeight: 700, color: '#111', fontFamily: "'Inter'" }}>
-                                                    <EditField value={invoiceNo} onChange={setInvoiceNo} />
+                                                    <EditField editMode={editMode} value={invoiceNo} onChange={setInvoiceNo} />
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td style={{ padding: '3px 16px 3px 0', color: '#6b7280', fontWeight: 600 }}>วันที่:</td>
                                                 <td style={{ padding: '3px 0' }}>
-                                                    <EditField value={issueDate} onChange={setIssueDate} />
+                                                    <EditField editMode={editMode} value={issueDate} onChange={setIssueDate} />
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td style={{ padding: '3px 16px 3px 0', color: '#6b7280', fontWeight: 600 }}>อ้างอิง:</td>
                                                 <td style={{ padding: '3px 0', fontFamily: "'Inter'" }}>
-                                                    <EditField value={refNo} onChange={setRefNo} />
+                                                    <EditField editMode={editMode} value={refNo} onChange={setRefNo} />
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -318,16 +320,16 @@ export default function InvoicesPage() {
                                         <tr key={idx}>
                                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>{idx + 1}</td>
                                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
-                                                <strong><EditField value={item.description} onChange={v => updateItem(idx, 'description', v)} /></strong><br />
+                                                <strong><EditField editMode={editMode} value={item.description} onChange={v => updateItem(idx, 'description', v)} /></strong><br />
                                                 <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                                                    <EditField value={item.detail} onChange={v => updateItem(idx, 'detail', v)} />
+                                                    <EditField editMode={editMode} value={item.detail} onChange={v => updateItem(idx, 'detail', v)} />
                                                 </span>
                                             </td>
                                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', fontSize: '13px', textAlign: 'center' }}>
-                                                <EditNumber value={item.qty} onChange={v => updateItem(idx, 'qty', v)} style={{ width: '60px', textAlign: 'center' }} />
+                                                <EditNumber editMode={editMode} value={item.qty} onChange={v => updateItem(idx, 'qty', v)} style={{ width: '60px', textAlign: 'center' }} />
                                             </td>
                                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', fontSize: '13px', textAlign: 'right', fontFamily: "'Inter'" }}>
-                                                <EditNumber value={item.unitPrice} onChange={v => updateItem(idx, 'unitPrice', v)} />
+                                                <EditNumber editMode={editMode} value={item.unitPrice} onChange={v => updateItem(idx, 'unitPrice', v)} />
                                             </td>
                                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', fontSize: '13px', textAlign: 'right', fontWeight: 600, fontFamily: "'Inter'" }}>
                                                 {(item.qty * item.unitPrice).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
@@ -368,12 +370,12 @@ export default function InvoicesPage() {
                             <div style={{ marginTop: '28px', padding: '16px', background: '#f8fafc', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
                                 <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>การชำระเงิน</p>
                                 <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                                    <EditField value={paymentNote} onChange={setPaymentNote} />
+                                    <EditField editMode={editMode} value={paymentNote} onChange={setPaymentNote} />
                                 </p>
                             </div>
                             <div style={{ marginTop: '20px', fontSize: '12px', color: '#9ca3af' }}>
                                 <p style={{ fontWeight: 600, marginBottom: '4px' }}>หมายเหตุ</p>
-                                <EditField value={remarkNote} onChange={setRemarkNote} multiline />
+                                <EditField editMode={editMode} value={remarkNote} onChange={setRemarkNote} multiline />
                             </div>
 
                             {/* Signatures */}
@@ -424,16 +426,16 @@ export default function InvoicesPage() {
                             {/* Header */}
                             <div style={{ textAlign: 'center', marginBottom: '24px', borderBottom: '2px solid #111', paddingBottom: '16px' }}>
                                 <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px' }}>
-                                    <EditField value={companyName} onChange={setCompanyName} />
+                                    <EditField editMode={editMode} value={companyName} onChange={setCompanyName} />
                                 </h1>
                                 <p style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    <EditField value={companyAddress1} onChange={setCompanyAddress1} />
+                                    <EditField editMode={editMode} value={companyAddress1} onChange={setCompanyAddress1} />
                                 </p>
                                 <p style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    <EditField value={companyAddress2} onChange={setCompanyAddress2} />
+                                    <EditField editMode={editMode} value={companyAddress2} onChange={setCompanyAddress2} />
                                 </p>
                                 <p style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    เลขประจำตัวผู้เสียภาษี: <EditField value={companyTaxId} onChange={setCompanyTaxId} />
+                                    เลขประจำตัวผู้เสียภาษี: <EditField editMode={editMode} value={companyTaxId} onChange={setCompanyTaxId} />
                                 </p>
                                 <div style={{ marginTop: '12px', fontWeight: 700, fontSize: '15px', borderTop: '1px solid #e5e7eb', paddingTop: '10px' }}>
                                     ใบเสร็จรับเงิน/ใบกำกับภาษีแบบย่อ
@@ -442,10 +444,10 @@ export default function InvoicesPage() {
 
                             {/* Meta */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-                                <span>เลขที่เอกสาร:</span><span style={{ fontWeight: 700, fontFamily: "'Inter'" }}><EditField value={invoiceNo} onChange={setInvoiceNo} /></span>
+                                <span>เลขที่เอกสาร:</span><span style={{ fontWeight: 700, fontFamily: "'Inter'" }}><EditField editMode={editMode} value={invoiceNo} onChange={setInvoiceNo} /></span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-                                <span>วันที่ขาย:</span><span><EditField value={issueDate} onChange={setIssueDate} /></span>
+                                <span>วันที่ขาย:</span><span><EditField editMode={editMode} value={issueDate} onChange={setIssueDate} /></span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '12px' }}>
                                 <span>พนักงานขาย:</span><span>-</span>
@@ -458,9 +460,9 @@ export default function InvoicesPage() {
                                 </div>
                                 {items.map((item, idx) => (
                                     <div key={idx} style={{ marginBottom: '6px' }}>
-                                        <div style={{ fontWeight: 600 }}>{idx + 1} <EditField value={item.description} onChange={v => updateItem(idx, 'description', v)} /></div>
+                                        <div style={{ fontWeight: 600 }}>{idx + 1} <EditField editMode={editMode} value={item.description} onChange={v => updateItem(idx, 'description', v)} /></div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '16px', fontSize: '12px', color: '#555' }}>
-                                            <span><EditField value={item.detail} onChange={v => updateItem(idx, 'detail', v)} /></span>
+                                            <span><EditField editMode={editMode} value={item.detail} onChange={v => updateItem(idx, 'detail', v)} /></span>
                                             <span style={{ display: 'flex', gap: '14px' }}>
                                                 <span style={{ fontFamily: "'Inter'", fontWeight: 600 }}>{item.unitPrice.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                                                 <span style={{ fontFamily: "'Inter'", fontWeight: 600 }}>{(item.qty * item.unitPrice).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
@@ -503,7 +505,7 @@ export default function InvoicesPage() {
                             {/* Payment */}
                             <div style={{ borderTop: '1px dashed #999', marginTop: '10px', paddingTop: '8px', fontSize: '12px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                                    <span><EditField value={paymentNote} onChange={setPaymentNote} /></span>
+                                    <span><EditField editMode={editMode} value={paymentNote} onChange={setPaymentNote} /></span>
                                 </div>
                             </div>
 

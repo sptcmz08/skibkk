@@ -29,9 +29,9 @@ export async function GET(req: NextRequest) {
             })
         }
 
-        // Get all active courts
+        // Get all visible courts (ACTIVE + CLOSED, not HIDDEN)
         const courts = await prisma.court.findMany({
-            where: { isActive: true },
+            where: { status: { in: ['ACTIVE', 'CLOSED'] } },
             include: {
                 operatingHours: { where: { dayOfWeek: dayOfWeek as any } },
                 pricingRules: {
@@ -62,9 +62,14 @@ export async function GET(req: NextRequest) {
 
         // Build availability data
         const availability = courts.map((court) => {
+            // CLOSED courts: show but all slots unavailable
+            if (court.status === 'CLOSED') {
+                return { courtId: court.id, courtName: court.name, sportType: court.sportType ?? null, status: 'CLOSED', closed: true, closedReason: 'สนามปิดปรับปรุง', slots: [] }
+            }
+
             const hours = court.operatingHours[0]
             if (!hours || hours.isClosed) {
-                return { courtId: court.id, courtName: court.name, sportType: court.sportType ?? null, closed: true, slots: [] }
+                return { courtId: court.id, courtName: court.name, sportType: court.sportType ?? null, status: court.status, closed: true, slots: [] }
             }
 
             const timeSlots = generateTimeSlots(hours.openTime, hours.closeTime)
@@ -119,6 +124,7 @@ export async function GET(req: NextRequest) {
                 courtId: court.id,
                 courtName: court.name,
                 sportType: court.sportType ?? null,
+                status: court.status,
                 closed: false,
                 slots,
             }

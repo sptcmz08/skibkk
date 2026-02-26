@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { sendBookingReminder } from '@/lib/mailer'
+import { sendLineBookingReminder } from '@/lib/line-messaging'
 
 // This endpoint should be called daily by a cron job (e.g., Vercel Cron)
-// It sends reminder emails for bookings that are scheduled for TOMORROW
-// Bookings made for the same day do NOT receive a reminder
+// It sends LINE push reminders for bookings that are scheduled for TOMORROW
 
 export async function GET(req: NextRequest) {
-    // Simple auth via secret header to prevent unauthorized access
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET || 'skibkk-cron-2026'
     if (authHeader !== `Bearer ${cronSecret}`) {
@@ -21,20 +19,18 @@ export async function GET(req: NextRequest) {
         const bangkokNow = new Date(now.getTime() + bangkokOffset)
         const tomorrow = new Date(bangkokNow)
         tomorrow.setDate(tomorrow.getDate() + 1)
-        const tomorrowDate = new Date(tomorrow.toISOString().split('T')[0]) // midnight UTC of tomorrow
+        const tomorrowDate = new Date(tomorrow.toISOString().split('T')[0])
 
         // Find all CONFIRMED or PENDING bookings that have items scheduled for tomorrow
         const bookings = await prisma.booking.findMany({
             where: {
                 status: { in: ['CONFIRMED', 'PENDING'] },
                 bookingItems: {
-                    some: {
-                        date: tomorrowDate,
-                    },
+                    some: { date: tomorrowDate },
                 },
             },
             include: {
-                user: { select: { email: true, name: true } },
+                user: { select: { name: true, email: true, lineUserId: true } },
                 bookingItems: {
                     where: { date: tomorrowDate },
                     include: { court: true },
@@ -44,11 +40,16 @@ export async function GET(req: NextRequest) {
 
         let sentCount = 0
         let failCount = 0
+        let skippedCount = 0
 
         for (const booking of bookings) {
-            if (!booking.user?.email) continue
+            // Skip if user has no LINE ID
+            if (!booking.user?.lineUserId) {
+                skippedCount++
+                continue
+            }
 
-            const result = await sendBookingReminder(booking.user.email, {
+            const result = await sendLineBookingReminder(booking.user.lineUserId, {
                 bookingNumber: booking.bookingNumber,
                 customerName: booking.user.name,
                 items: booking.bookingItems.map(item => ({
@@ -67,18 +68,19 @@ export async function GET(req: NextRequest) {
                 failCount++
             }
 
-            // Small delay between emails to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500))
+            // Small delay between messages to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 300))
         }
 
-        console.log(`📧 Reminder cron: ${sentCount} sent, ${failCount} failed, ${bookings.length} total bookings for tomorrow`)
+        console.log(`📱 LINE Reminder cron: ${sentCount} sent, ${failCount} failed, ${skippedCount} skipped (no LINE), ${bookings.length} total bookings for tomorrow`)
 
         return NextResponse.json({
             success: true,
             date: tomorrowDate.toISOString().split('T')[0],
             totalBookings: bookings.length,
-            emailsSent: sentCount,
-            emailsFailed: failCount,
+            lineMessagesSent: sentCount,
+            lineMessagesFailed: failCount,
+            skippedNoLine: skippedCount,
         })
     } catch (error) {
         console.error('Reminder cron error:', error)
