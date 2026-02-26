@@ -1160,17 +1160,28 @@ select.input-field option {
     align-items: flex-end;
   }
 
+  /* Admin layout — force margin override */
+  .admin-content {
+    margin-left: 0 !important;
+  }
+
   .modal-content {
-    max-height: 85vh;
+    max-height: 90vh;
     padding: 24px 20px;
     border-radius: 20px 20px 12px 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow-y: auto;
   }
 
   .admin-modal-content {
-    max-height: 85vh;
+    max-height: 90vh;
     padding: 20px 16px;
     border-radius: 20px 20px 12px 12px;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-y: auto;
+    box-sizing: border-box;
   }
 
   .modal-title {
@@ -1192,6 +1203,9 @@ select.input-field option {
   .admin-input {
     padding: 10px 12px;
     font-size: 14px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   /* Grids */

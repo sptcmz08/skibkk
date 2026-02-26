@@ -14,13 +14,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const router = useRouter()
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [user, setUser] = useState<{ name: string; role: string } | null>(null)
-    const [isMobile, setIsMobile] = useState(false)
 
+    // Open sidebar by default on desktop
     useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth <= 1024)
-        checkMobile()
-        window.addEventListener('resize', checkMobile)
-        return () => window.removeEventListener('resize', checkMobile)
+        if (window.innerWidth > 1024) setSidebarOpen(true)
     }, [])
 
     useEffect(() => {
@@ -84,8 +81,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
         <div className="admin-layout">
             {/* Sidebar */}
-            <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}
-                style={isMobile ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.3s ease' } : undefined}
+            <aside className="admin-sidebar"
+                style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.3s ease' }}
             >
                 <div className="admin-sidebar-header">
                     <div className="admin-sidebar-logo">S</div>
@@ -148,12 +145,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </aside>
 
             {/* Main content */}
-            <div className="admin-content" style={isMobile ? { marginLeft: 0 } : undefined}>
+            <div className="admin-content" style={{ marginLeft: sidebarOpen ? '260px' : '0', transition: 'margin-left 0.3s ease' }}>
                 <header className="admin-topbar">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <button onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className="admin-hamburger"
-                            style={{ display: isMobile ? 'block' : 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text)', padding: '8px' }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text)', padding: '8px', display: 'flex', alignItems: 'center' }}
                         >
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
@@ -172,7 +168,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
 
             {/* Mobile overlay */}
-            {isMobile && sidebarOpen && (
+            {sidebarOpen && (
                 <div
                     onClick={() => setSidebarOpen(false)}
                     style={{
