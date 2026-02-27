@@ -90,6 +90,53 @@ export default function CourtsManagement() {
         ? courts.filter(c => c.sportType === selectedFilter)
         : courts
 
+    const renderCourtCard = (court: Court) => {
+        const stObj = sportTypes.find(s => s.name === court.sportType)
+        return (
+            <div key={court.id} className="admin-card" style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, flexShrink: 0 }}>
+                            {court.sortOrder + 1}
+                        </div>
+                        <div>
+                            <h3 style={{ fontWeight: 700, fontSize: '15px', color: 'var(--a-text)', marginBottom: '2px' }}>{court.name}</h3>
+                            <p style={{ fontSize: '12px', color: 'var(--a-text-muted)', margin: 0 }}>{court.description || ''}</p>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+                        <span style={{
+                            fontSize: '11px', padding: '2px 8px', borderRadius: '6px', fontWeight: 600,
+                            background: court.status === 'ACTIVE' ? '#d4edda' : court.status === 'CLOSED' ? '#fef3cd' : '#fde8e8',
+                            color: court.status === 'ACTIVE' ? '#27ae60' : court.status === 'CLOSED' ? '#e67e22' : '#e74c3c',
+                        }}>
+                            {court.status === 'ACTIVE' ? '🟢 เปิด' : court.status === 'CLOSED' ? '🟡 ปิด' : '🔴 ยกเลิก'}
+                        </span>
+                        <button onClick={() => openModal(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text-secondary)' }}>
+                            <Edit2 size={14} />
+                        </button>
+                    </div>
+                </div>
+                {/* Operating hours — compact */}
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {DAYS.map(d => {
+                        const h = court.operatingHours.find(oh => oh.dayOfWeek === d.key)
+                        const open = h && !h.isClosed
+                        return (
+                            <div key={d.key} style={{
+                                padding: '3px 8px', borderRadius: '4px', fontSize: '11px',
+                                background: open ? '#e8f5e9' : '#fde4de',
+                                color: open ? '#2e7d32' : '#c62828',
+                            }}>
+                                <strong>{d.label}</strong> {open ? `${h.openTime}-${h.closeTime}` : 'ปิด'}
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -146,58 +193,49 @@ export default function CourtsManagement() {
                     <button onClick={() => openModal()} className="btn-admin">เพิ่มสนาม</button>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gap: '16px' }}>
-                    {filteredCourts.map(court => {
-                        const stObj = sportTypes.find(s => s.name === court.sportType)
-                        return (
-                            <div key={court.id} className="admin-card">
-                                <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 800 }}>
-                                            {court.sortOrder + 1}
+                <div>
+                    {/* Group by sport type when showing all */}
+                    {!selectedFilter ? (
+                        <>
+                            {sportTypes.map(st => {
+                                const group = courts.filter(c => c.sportType === st.name)
+                                if (group.length === 0) return null
+                                return (
+                                    <div key={st.id} style={{ marginBottom: '28px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                            <span style={{ fontSize: '18px' }}>{st.icon}</span>
+                                            <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{st.name}</h3>
+                                            <span style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>({group.length} สนาม)</span>
                                         </div>
-                                        <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{court.name}</h3>
-                                                {stObj && (
-                                                    <span style={{
-                                                        padding: '2px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
-                                                        background: stObj.color + '20', color: stObj.color,
-                                                    }}>
-                                                        {stObj.icon} {stObj.name}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{court.description || 'ไม่มีคำอธิบาย'}</p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}>
+                                            {group.map(court => renderCourtCard(court))}
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <span className={`badge ${court.status === 'ACTIVE' ? 'badge-success' : court.status === 'CLOSED' ? 'badge-warning' : 'badge-danger'}`}>
-                                            {court.status === 'ACTIVE' ? '🟢 เปิด' : court.status === 'CLOSED' ? '🟡 ปิด' : '🔴 ยกเลิก'}
-                                        </span>
-                                        <button onClick={() => openModal(court)} className="btn-admin-outline" style={{ padding: '6px 12px' }}>
-                                            <Edit2 size={14} />
-                                        </button>
+                                )
+                            })}
+                            {/* Courts without sport type */}
+                            {(() => {
+                                const noType = courts.filter(c => !c.sportType || !sportTypes.find(s => s.name === c.sportType))
+                                if (noType.length === 0) return null
+                                return (
+                                    <div style={{ marginBottom: '28px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                            <span style={{ fontSize: '18px' }}>🏟️</span>
+                                            <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>อื่นๆ</h3>
+                                            <span style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>({noType.length} สนาม)</span>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}>
+                                            {noType.map(court => renderCourtCard(court))}
+                                        </div>
                                     </div>
-                                </div>
-                                {/* Operating hours */}
-                                <div style={{ padding: '12px 24px 16px', borderTop: '1px solid var(--a-border)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                    {DAYS.map(d => {
-                                        const h = court.operatingHours.find(oh => oh.dayOfWeek === d.key)
-                                        return (
-                                            <div key={d.key} style={{
-                                                padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
-                                                background: h && !h.isClosed ? '#e8f5e9' : '#fde4de',
-                                                color: h && !h.isClosed ? '#2e7d32' : '#c62828',
-                                            }}>
-                                                <strong>{d.label}</strong> {h && !h.isClosed ? `${h.openTime}-${h.closeTime}` : 'ปิด'}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )
-                    })}
+                                )
+                            })()}
+                        </>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}>
+                            {filteredCourts.map(court => renderCourtCard(court))}
+                        </div>
+                    )}
                 </div>
             )}
 
