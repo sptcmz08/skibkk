@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DollarSign, Plus, Edit2, Trash2, Save, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -16,11 +16,27 @@ interface PricingRule {
 }
 
 export default function PricingPage() {
-    const [rules, setRules] = useState<PricingRule[]>([
-        { id: '1', daysOfWeek: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'], startTime: '09:00', endTime: '15:00', price: 1800, includesVat: false },
-        { id: '2', daysOfWeek: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'], startTime: '15:00', endTime: '00:00', price: 2200, includesVat: false },
-        { id: '3', daysOfWeek: ['SATURDAY', 'SUNDAY'], startTime: '09:00', endTime: '00:00', price: 2500, includesVat: false },
-    ])
+    const [rules, setRules] = useState<PricingRule[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchPricingRules()
+    }, [])
+
+    const fetchPricingRules = async () => {
+        try {
+            setLoading(true)
+            const res = await fetch('/api/pricing-rules', { cache: 'no-store' })
+            if (res.ok) {
+                const data = await res.json()
+                setRules(data.rules || [])
+            }
+        } catch (error) {
+            toast.error('โหลดข้อมูลผิดพลาด')
+        } finally {
+            setLoading(false)
+        }
+    }
     const [showModal, setShowModal] = useState(false)
     const [editRule, setEditRule] = useState<PricingRule | null>(null)
     const [form, setForm] = useState({ daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
@@ -45,20 +61,61 @@ export default function PricingPage() {
         }))
     }
 
-    const saveRule = () => {
+    const saveRule = async () => {
         if (form.daysOfWeek.length === 0 || !form.price) { toast.error('กรุณากรอกข้อมูลให้ครบ'); return }
-        if (editRule) {
-            setRules(rules.map(r => r.id === editRule.id ? { ...r, ...form, price: parseFloat(form.price) } : r))
-        } else {
-            setRules([...rules, { id: Date.now().toString(), ...form, price: parseFloat(form.price) }])
+
+        try {
+            if (editRule) {
+                const res = await fetch('/api/pricing-rules', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: editRule.id, ...form, price: parseFloat(form.price) })
+                })
+                if (res.ok) {
+                    const data = await res.json()
+                    setRules(rules.map(r => r.id === editRule.id ? data.rule : r))
+                    toast.success('บันทึกราคาสำเร็จ')
+                } else {
+                    toast.error('ไม่สามารถบันทึกได้')
+                }
+            } else {
+                const res = await fetch('/api/pricing-rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...form, price: parseFloat(form.price) })
+                })
+                if (res.ok) {
+                    const data = await res.json()
+                    setRules([...rules, data.rule])
+                    toast.success('บันทึกราคาสำเร็จ')
+                } else {
+                    toast.error('ไม่สามารถบันทึกได้')
+                }
+            }
+            setShowModal(false)
+        } catch (error) {
+            toast.error('เกิดข้อผิดพลาด')
         }
-        setShowModal(false)
-        toast.success('บันทึกราคาสำเร็จ')
     }
 
-    const deleteRule = (id: string) => {
-        setRules(rules.filter(r => r.id !== id))
-        toast.success('ลบราคาแล้ว')
+    const deleteRule = async (id: string) => {
+        if (!confirm('ยืนยันการลบราคา?')) return
+
+        try {
+            const res = await fetch('/api/pricing-rules', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            })
+            if (res.ok) {
+                setRules(rules.filter(r => r.id !== id))
+                toast.success('ลบราคาแล้ว')
+            } else {
+                toast.error('ไม่สามารถลบได้')
+            }
+        } catch (error) {
+            toast.error('เกิดข้อผิดพลาด')
+        }
     }
 
     const getDayLabels = (days: string[]) => days.map(d => DAYS.find(dd => dd.key === d)?.label).join(', ')
@@ -87,31 +144,37 @@ export default function PricingPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {rules.map(rule => (
-                            <tr key={rule.id}>
-                                <td>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        {rule.daysOfWeek.map(d => (
-                                            <span key={d} style={{
-                                                padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600,
-                                                background: 'var(--a-primary-light)', color: 'var(--a-primary)',
-                                            }}>
-                                                {DAYS.find(dd => dd.key === d)?.label}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </td>
-                                <td style={{ fontWeight: 600 }}>{rule.startTime} - {rule.endTime}</td>
-                                <td style={{ fontWeight: 800, fontSize: '16px', color: 'var(--a-primary)' }}>฿{rule.price.toLocaleString()}</td>
-                                <td>{rule.includesVat ? <span className="badge badge-success">รวม VAT</span> : <span className="badge badge-warning">ไม่รวม</span>}</td>
-                                <td>
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                        <button onClick={() => openModal(rule)} className="btn-admin-outline" style={{ padding: '4px 10px' }}><Edit2 size={14} /></button>
-                                        <button onClick={() => deleteRule(rule.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-danger)', color: 'var(--a-danger)', background: 'white', cursor: 'pointer' }}><Trash2 size={14} /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                        {loading && rules.length === 0 ? (
+                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>กำลังโหลดข้อมูล...</td></tr>
+                        ) : rules.length === 0 ? (
+                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>ยังไม่มีการกำหนดราคา</td></tr>
+                        ) : (
+                            rules.map(rule => (
+                                <tr key={rule.id}>
+                                    <td>
+                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                            {rule.daysOfWeek.map(d => (
+                                                <span key={d} style={{
+                                                    padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600,
+                                                    background: 'var(--a-primary-light)', color: 'var(--a-primary)',
+                                                }}>
+                                                    {DAYS.find(dd => dd.key === d)?.label}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td style={{ fontWeight: 600 }}>{rule.startTime} - {rule.endTime}</td>
+                                    <td style={{ fontWeight: 800, fontSize: '16px', color: 'var(--a-primary)' }}>฿{rule.price.toLocaleString()}</td>
+                                    <td>{rule.includesVat ? <span className="badge badge-success">รวม VAT</span> : <span className="badge badge-warning">ไม่รวม</span>}</td>
+                                    <td>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                            <button onClick={() => openModal(rule)} className="btn-admin-outline" style={{ padding: '4px 10px' }}><Edit2 size={14} /></button>
+                                            <button onClick={() => deleteRule(rule.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-danger)', color: 'var(--a-danger)', background: 'white', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
