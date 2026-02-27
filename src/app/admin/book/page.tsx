@@ -271,7 +271,14 @@ function AdminBookInner() {
             const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
             const body: any = {
                 items: cart, totalAmount, isBookerLearner,
-                participants: validParts.map((p, i) => ({ ...p, isBooker: i === 0 })),
+                participants: validParts.map((p, i) => ({
+                    name: p.name,
+                    sportType: p.sportType,
+                    height: p.height ? parseFloat(p.height) : null,
+                    weight: p.weight ? parseFloat(p.weight) : null,
+                    phone: p.phone || null,
+                    isBooker: i === 0,
+                })),
                 createdByAdmin: true,
             }
             if (bookCustomer) body.userId = bookCustomer.id
@@ -287,9 +294,10 @@ function AdminBookInner() {
                 setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED'); setIsBookerLearner(false)
             } else {
                 const err = await res.json().catch(() => ({}))
+                console.error('Booking error:', err)
                 toast.error(err.error || 'จองไม่สำเร็จ')
             }
-        } catch { toast.error('เกิดข้อผิดพลาด') }
+        } catch (e) { console.error('Submit error:', e); toast.error('เกิดข้อผิดพลาด') }
         finally { setSubmitting(false) }
     }
 
