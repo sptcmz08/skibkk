@@ -379,12 +379,22 @@ export default function BookingsManagement() {
 
                         {/* Actions */}
                         <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
-                            {viewBooking.status !== 'CANCELLED' && (
-                                <button onClick={() => handleCancel(viewBooking.id)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e17055', background: 'white', color: '#e17055', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    <XCircle size={16} /> ยกเลิกการจอง
-                                </button>
-                            )}
+                            {viewBooking.status !== 'CANCELLED' && (() => {
+                                // Web bookings with verified payment cannot be cancelled
+                                const hasVerifiedPayment = viewBooking.payments.some(p => p.status === 'VERIFIED')
+                                const canCancel = viewBooking.createdByAdmin || !hasVerifiedPayment
+                                if (!canCancel) return (
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', padding: '8px 16px' }}>
+                                        🔒 ชำระเงินแล้ว ไม่สามารถยกเลิกได้
+                                    </span>
+                                )
+                                return (
+                                    <button onClick={() => handleCancel(viewBooking.id)}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e17055', background: 'white', color: '#e17055', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        <XCircle size={16} /> ยกเลิกการจอง
+                                    </button>
+                                )
+                            })()}
                             {viewBooking.status === 'PENDING' && (
                                 <button onClick={() => handleConfirm(viewBooking.id)} className="btn-admin"
                                     style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '14px' }}>
