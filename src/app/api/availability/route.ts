@@ -42,6 +42,12 @@ export async function GET(req: NextRequest) {
             orderBy: { sortOrder: 'asc' },
         })
 
+        // Get global pricing rules (courtId is null = applies to ALL courts)
+        const globalPricingRules = await prisma.pricingRule.findMany({
+            where: { isActive: true, courtId: null, daysOfWeek: { has: dayOfWeek as any } },
+            orderBy: { priority: 'desc' },
+        })
+
         // Get existing bookings
         const existingBookings = await prisma.bookingItem.findMany({
             where: {
@@ -81,6 +87,10 @@ export async function GET(req: NextRequest) {
             const currentHour = nowBkk.getHours()
             const currentMinute = nowBkk.getMinutes()
 
+            // Merge court-specific rules (higher priority) with global rules
+            const allRules = [...court.pricingRules, ...globalPricingRules]
+                .sort((a, b) => b.priority - a.priority)
+
             const slots = timeSlots.map((time) => {
                 const isBooked = bookedSlots.has(`${court.id}:${time}`)
                 const lock = lockMap.get(`${court.id}:${time}`)
@@ -92,7 +102,7 @@ export async function GET(req: NextRequest) {
                 const isPast = isToday && (slotH < currentHour || (slotH === currentHour && slotM <= currentMinute))
 
                 let price = 0
-                for (const rule of court.pricingRules) {
+                for (const rule of allRules) {
                     const timeNum = parseInt(time.replace(':', ''))
                     const startNum = parseInt(rule.startTime.replace(':', ''))
                     let endNum = parseInt(rule.endTime.replace(':', ''))
