@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Booking {
@@ -18,6 +18,9 @@ interface DaySummary {
     totalAmount: number
 }
 
+interface Court { id: string; name: string; sportType: string }
+interface Customer { id: string; name: string; email: string; phone: string }
+
 export default function CalendarPage() {
     const now = new Date()
     const [viewYear, setViewYear] = useState(now.getFullYear())
@@ -32,6 +35,17 @@ export default function CalendarPage() {
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
+
+    // === New Booking Modal State ===
+    const [showBookModal, setShowBookModal] = useState(false)
+    const [courts, setCourts] = useState<Court[]>([])
+    const [customers, setCustomers] = useState<Customer[]>([])
+    const [bookSearch, setBookSearch] = useState('')
+    const [bookCustomer, setBookCustomer] = useState<Customer | null>(null)
+    const [bookCourt, setBookCourt] = useState('')
+    const [bookDates, setBookDates] = useState<string[]>([])
+    const [bookTimes, setBookTimes] = useState<string[]>([])
+    const [bookSubmitting, setBookSubmitting] = useState(false)
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -112,6 +126,22 @@ export default function CalendarPage() {
         fetchBookings()
     }, [selectedDate])
 
+    // Fetch courts for booking modal
+    useEffect(() => {
+        fetch('/api/courts').then(r => r.json()).then(d => setCourts(d.courts || [])).catch(() => { })
+    }, [])
+
+    // Search customers for booking modal
+    useEffect(() => {
+        if (bookSearch.length < 2) { setCustomers([]); return }
+        const t = setTimeout(() => {
+            fetch(`/api/users?search=${encodeURIComponent(bookSearch)}`).then(r => r.json())
+                .then(d => setCustomers(d.users || []))
+                .catch(() => { })
+        }, 300)
+        return () => clearTimeout(t)
+    }, [bookSearch])
+
     const changeMonth = (delta: number) => {
         let m = viewMonth + delta
         let y = viewYear
@@ -138,13 +168,134 @@ export default function CalendarPage() {
     const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     const dayHeaders = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 
+    const timeSlots = Array.from({ length: 15 }, (_, i) => {
+        const h = (i + 8).toString().padStart(2, '0')
+        return `${h}:00`
+    })
+
+    // Toggle date for multi-date booking
+    const toggleBookDate = (dateStr: string) => {
+        setBookDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort())
+    }
+
+    // Toggle time for multi-time booking
+    const toggleBookTime = (time: string) => {
+        setBookTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time].sort())
+    }
+
+    // Open new booking modal
+    const openNewBooking = () => {
+        setBookCustomer(null)
+        setBookSearch('')
+        setBookCourt('')
+        setBookDates(selectedDate ? [selectedDate] : [])
+        setBookTimes([])
+        setCustomers([])
+        setShowBookModal(true)
+    }
+
+    // Submit new booking
+    const submitBooking = async () => {
+        if (!bookCustomer) { toast.error('กรุณาเลือกลูกค้า'); return }
+        if (!bookCourt) { toast.error('กรุณาเลือกสนาม'); return }
+        if (bookDates.length === 0) { toast.error('กรุณาเลือกวันที่'); return }
+        if (bookTimes.length === 0) { toast.error('กรุณาเลือกเวลา'); return }
+
+        setBookSubmitting(true)
+        try {
+            const court = courts.find(c => c.id === bookCourt)
+            const items = bookDates.flatMap(date =>
+                bookTimes.map(time => {
+                    const endHour = (parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')
+                    return {
+                        courtId: bookCourt,
+                        courtName: court?.name,
+                        date,
+                        startTime: time,
+                        endTime: `${endHour}:00`,
+                        price: 0,
+                    }
+                })
+            )
+
+            const res = await fetch('/api/bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items,
+                    totalAmount: 0,
+                    isBookerLearner: false,
+                    participants: [{ name: bookCustomer.name, sportType: court?.sportType || '-', isBooker: true }],
+                    createdByAdmin: true,
+                    userId: bookCustomer.id,
+                }),
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                // Auto-confirm
+                await fetch('/api/bookings', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bookingId: data.booking.id, status: 'CONFIRMED' }),
+                })
+                toast.success(`จองสำเร็จ! (${items.length} รายการ)`)
+                setShowBookModal(false)
+                // Refresh
+                await refetchBookings()
+                // Refresh monthly summary
+                const summaryRes = await fetch(`/api/bookings?month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
+                const summaryData = await summaryRes.json()
+                if (summaryData.bookings) {
+                    const summaries: Record<string, DaySummary> = {}
+                    summaryData.bookings.forEach((b: Booking) => {
+                        if (b.status === 'CANCELLED') return
+                        b.bookingItems.forEach(item => {
+                            const d = item.date.split('T')[0]
+                            if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
+                            summaries[d].count++
+                            summaries[d].totalAmount += item.price
+                        })
+                    })
+                    setDaySummaries(summaries)
+                }
+            } else {
+                const err = await res.json().catch(() => ({}))
+                toast.error(err.error || 'จองไม่สำเร็จ')
+            }
+        } catch { toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ') }
+        finally { setBookSubmitting(false) }
+    }
+
+    // Mini calendar for booking modal
+    const bookCalMonth = bookDates.length > 0 ? new Date(bookDates[0]) : new Date()
+    const [bookCalYear, setBookCalYear] = useState(now.getFullYear())
+    const [bookCalMo, setBookCalMo] = useState(now.getMonth())
+    const bookCalFirst = new Date(bookCalYear, bookCalMo, 1).getDay()
+    const bookCalDays = new Date(bookCalYear, bookCalMo + 1, 0).getDate()
+    const bookCalCells: (number | null)[] = []
+    for (let i = 0; i < bookCalFirst; i++) bookCalCells.push(null)
+    for (let i = 1; i <= bookCalDays; i++) bookCalCells.push(i)
+
+    const changeBookMonth = (delta: number) => {
+        let m = bookCalMo + delta
+        let y = bookCalYear
+        if (m < 0) { m = 11; y-- }
+        if (m > 11) { m = 0; y++ }
+        setBookCalMo(m)
+        setBookCalYear(y)
+    }
+
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ปฏิทินการจอง</h2>
                     <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ดูภาพรวมการจองรายเดือน</p>
                 </div>
+                <button onClick={openNewBooking} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Plus size={18} /> จองให้ลูกค้า
+                </button>
             </div>
 
             {/* Monthly Calendar Grid */}
@@ -185,8 +336,6 @@ export default function CalendarPage() {
                             const bookingCount = summary?.count || 0
                             const hasBookings = bookingCount > 0
 
-                            // Color coding based on booking density
-                            // green = few bookings (1-3), yellow = moderate (4-7), red = heavy (8+)
                             let cellBg = isPast ? '#f9f9f7' : '#fdfcfa'
                             let countColor = 'var(--a-text-muted)'
                             let statusLabel = 'ว่าง'
@@ -250,12 +399,17 @@ export default function CalendarPage() {
             {/* Bookings for selected date */}
             {selectedDate && (
                 <div className="admin-card">
-                    <div className="admin-card-header">
+                    <div className="admin-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                         <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Calendar size={18} style={{ color: 'var(--a-primary)' }} />
                             {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </h3>
-                        <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
+                            <button onClick={() => { setBookDates([selectedDate]); openNewBooking() }} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Plus size={14} /> จอง
+                            </button>
+                        </div>
                     </div>
                     <div style={{ padding: '16px' }}>
                         {loading ? (
@@ -295,7 +449,7 @@ export default function CalendarPage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)', display: 'flex', gap: '12px', marginTop: '2px' }}>
+                                                <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)', display: 'flex', gap: '12px', marginTop: '2px', flexWrap: 'wrap' }}>
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         <MapPin size={12} /> {booking.bookingItems[0]?.court?.name}
                                                     </span>
@@ -322,7 +476,6 @@ export default function CalendarPage() {
 
             {/* Booking detail modal with edit */}
             {viewBooking && (
-
                 <div className="modal-overlay" onClick={() => setViewBooking(null)}>
                     <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -446,6 +599,139 @@ export default function CalendarPage() {
                                 </>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ===== NEW BOOKING MODAL ===== */}
+            {showBookModal && (
+                <div className="modal-overlay" onClick={() => setShowBookModal(false)}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <UserPlus size={22} style={{ color: 'var(--a-primary)' }} /> จองให้ลูกค้า
+                            </h2>
+                            <button onClick={() => setShowBookModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                        </div>
+
+                        {/* Customer search */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'block' }}>ค้นหาลูกค้า</label>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--a-text-muted)' }} />
+                                <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="พิมพ์ชื่อ / เบอร์โทร / อีเมล" value={bookSearch} onChange={e => { setBookSearch(e.target.value); if (bookCustomer) setBookCustomer(null) }} />
+                            </div>
+                            {customers.length > 0 && !bookCustomer && (
+                                <div style={{ border: '1px solid var(--a-border)', borderRadius: '8px', marginTop: '4px', maxHeight: '150px', overflow: 'auto' }}>
+                                    {customers.map(c => (
+                                        <button key={c.id} onClick={() => { setBookCustomer(c); setBookSearch(c.name); setCustomers([]) }}
+                                            style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', borderBottom: '1px solid var(--a-border)', fontSize: '14px' }}>
+                                            <strong>{c.name}</strong> <span style={{ color: 'var(--a-text-muted)' }}>{c.phone}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {bookCustomer && (
+                                <div style={{ marginTop: '6px', padding: '8px 14px', background: '#e8f5e9', borderRadius: '8px', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>✅ <strong>{bookCustomer.name}</strong> ({bookCustomer.phone})</span>
+                                    <button onClick={() => { setBookCustomer(null); setBookSearch('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontWeight: 600, fontSize: '13px' }}>เปลี่ยน</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Court selection */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={14} /> สนาม</label>
+                            <select className="admin-input" value={bookCourt} onChange={e => setBookCourt(e.target.value)}>
+                                <option value="">เลือกสนาม</option>
+                                {courts.map(c => <option key={c.id} value={c.id}>{c.name} {c.sportType ? `(${c.sportType})` : ''}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Date selection — mini calendar */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Calendar size={14} /> เลือกวันที่ <span style={{ fontWeight: 400, color: 'var(--a-text-muted)', fontSize: '12px' }}>(คลิกเลือกได้หลายวัน)</span>
+                            </label>
+                            {bookDates.length > 0 && (
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                    {bookDates.map(d => (
+                                        <span key={d} style={{ padding: '4px 10px', borderRadius: '6px', background: 'var(--a-primary)', color: 'white', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            {new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                                            <button onClick={() => toggleBookDate(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', padding: 0, fontSize: '14px', lineHeight: 1 }}>×</button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            <div style={{ border: '1px solid var(--a-border)', borderRadius: '10px', padding: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <button onClick={() => changeBookMonth(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}><ChevronLeft size={16} /></button>
+                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>{monthNames[bookCalMo]} {bookCalYear + 543}</span>
+                                    <button onClick={() => changeBookMonth(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}><ChevronRight size={16} /></button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                                    {dayHeaders.map(d => (
+                                        <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--a-text-muted)', padding: '4px 0' }}>{d}</div>
+                                    ))}
+                                    {bookCalCells.map((day, idx) => {
+                                        if (day === null) return <div key={`be-${idx}`} />
+                                        const dateStr = `${bookCalYear}-${String(bookCalMo + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                                        const isChosen = bookDates.includes(dateStr)
+                                        const isPast = dateStr < todayStr
+                                        return (
+                                            <div key={dateStr}
+                                                onClick={() => !isPast && toggleBookDate(dateStr)}
+                                                style={{
+                                                    textAlign: 'center', padding: '6px 2px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                                                    cursor: isPast ? 'default' : 'pointer',
+                                                    background: isChosen ? 'var(--a-primary)' : 'transparent',
+                                                    color: isChosen ? 'white' : isPast ? '#ccc' : 'var(--a-text)',
+                                                    transition: 'all 0.15s',
+                                                }}>
+                                                {day}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Time selection — multi-select */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Clock size={14} /> เลือกเวลา <span style={{ fontWeight: 400, color: 'var(--a-text-muted)', fontSize: '12px' }}>(เลือกได้หลายชั่วโมง)</span>
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                                {timeSlots.map(t => {
+                                    const chosen = bookTimes.includes(t)
+                                    return (
+                                        <button key={t} onClick={() => toggleBookTime(t)}
+                                            style={{
+                                                padding: '8px 4px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
+                                                border: chosen ? '2px solid var(--a-primary)' : '1px solid var(--a-border)',
+                                                background: chosen ? 'var(--a-primary)' : 'white',
+                                                color: chosen ? 'white' : 'var(--a-text)',
+                                                fontFamily: 'inherit', transition: 'all 0.15s',
+                                            }}>
+                                            {t}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Summary */}
+                        {bookDates.length > 0 && bookTimes.length > 0 && (
+                            <div style={{ padding: '12px 16px', background: '#f0fff4', borderRadius: '10px', border: '1px solid #c6f6d5', marginBottom: '16px', fontSize: '14px' }}>
+                                <strong>📋 สรุป:</strong> {bookDates.length} วัน × {bookTimes.length} ชม. = <strong>{bookDates.length * bookTimes.length} รายการจอง</strong>
+                            </div>
+                        )}
+
+                        {/* Submit */}
+                        <button onClick={submitBooking} className="btn-admin" disabled={bookSubmitting || !bookCustomer || !bookCourt || bookDates.length === 0 || bookTimes.length === 0}
+                            style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}>
+                            {bookSubmitting ? 'กำลังจอง...' : `ยืนยันการจอง${bookDates.length > 0 && bookTimes.length > 0 ? ` (${bookDates.length * bookTimes.length} รายการ)` : ''}`}
+                        </button>
                     </div>
                 </div>
             )}
