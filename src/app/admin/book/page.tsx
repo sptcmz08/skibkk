@@ -299,7 +299,7 @@ function AdminBookInner() {
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
                 setStep(1); setBookCustomer(null); setBookSearch(''); setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('')
                 setSelectedSport(null); setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
-                setParticipants([{ name: '', sportType: '', phone: '' }]); setBookStatus('CONFIRMED')
+                setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED')
             } else {
                 const err = await res.json().catch(() => ({}))
                 toast.error(err.error || 'จองไม่สำเร็จ')
