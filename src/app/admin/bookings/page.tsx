@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Calendar, Filter, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, UserPlus, Globe } from 'lucide-react'
+import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Booking {
@@ -25,12 +25,21 @@ const paymentStatusMap: Record<string, { label: string; color: string }> = {
     REJECTED: { label: 'ถูกปฏิเสธ', color: '#e74c3c' },
 }
 
+const paymentMethodMap: Record<string, string> = {
+    PROMPTPAY: '📱 PromptPay',
+    QR_PROMPTPAY: '📱 QR PromptPay',
+    BANK_TRANSFER: '🏦 โอนเงิน',
+    CASH: '💵 เงินสด',
+    PACKAGE: '📦 แพ็คเกจ',
+    CREDIT_CARD: '💳 บัตรเครดิต',
+}
+
 export default function BookingsManagement() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [sourceFilter, setSourceFilter] = useState<string>('') // '' | 'admin' | 'web'
+    const [sourceFilter, setSourceFilter] = useState<string>('')
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [viewSlip, setViewSlip] = useState<string | null>(null)
     const [page, setPage] = useState(0)
@@ -45,7 +54,6 @@ export default function BookingsManagement() {
             const res = await fetch(`/api/bookings?${params.toString()}`, { cache: 'no-store' })
             const data = await res.json()
             let list: Booking[] = data.bookings || []
-            // Client-side source filter
             if (sourceFilter === 'admin') list = list.filter(b => b.createdByAdmin)
             if (sourceFilter === 'web') list = list.filter(b => !b.createdByAdmin)
             setBookings(list)
@@ -59,10 +67,41 @@ export default function BookingsManagement() {
         return () => clearTimeout(t)
     }, [fetchBookings])
 
+    const handleConfirm = async (bookingId: string) => {
+        try {
+            const res = await fetch('/api/bookings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId, status: 'CONFIRMED' }),
+            })
+            if (res.ok) {
+                toast.success('ยืนยันการจองสำเร็จ')
+                setViewBooking(null)
+                fetchBookings()
+            } else { toast.error('ไม่สามารถยืนยันได้') }
+        } catch { toast.error('เกิดข้อผิดพลาด') }
+    }
+
+    const handleCancel = async (bookingId: string) => {
+        const reason = prompt('ระบุเหตุผลในการยกเลิก:')
+        if (reason === null) return
+        try {
+            const res = await fetch('/api/bookings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId, action: 'cancel', reason }),
+            })
+            if (res.ok) {
+                toast.success('ยกเลิกการจองสำเร็จ')
+                setViewBooking(null)
+                fetchBookings()
+            } else { toast.error('ไม่สามารถยกเลิกได้') }
+        } catch { toast.error('เกิดข้อผิดพลาด') }
+    }
+
     const paged = bookings.slice(page * pageSize, (page + 1) * pageSize)
     const totalPages = Math.ceil(bookings.length / pageSize)
 
-    // Stats
     const totalConfirmed = bookings.filter(b => b.status === 'CONFIRMED').length
     const totalPending = bookings.filter(b => b.status === 'PENDING').length
     const totalRevenue = bookings.filter(b => b.status !== 'CANCELLED').reduce((sum, b) => sum + b.totalAmount, 0)
@@ -74,7 +113,7 @@ export default function BookingsManagement() {
             {/* Header */}
             <div style={{ marginBottom: '24px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>รายการจองทั้งหมด</h2>
-                <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ดูข้อมูลการจองจากหน้าเว็บและ Admin รวมถึงสลิปการชำระเงิน</p>
+                <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ข้อมูลการจองจากหน้าเว็บและ Admin รวมถึงสลิปการชำระเงิน</p>
             </div>
 
             {/* Stats Row */}
@@ -116,7 +155,6 @@ export default function BookingsManagement() {
                         <option value="admin">👤 จาก Admin</option>
                     </select>
                 </div>
-                {/* Source/channel pills */}
                 <div style={{ display: 'flex', gap: '6px', marginTop: '10px', fontSize: '12px' }}>
                     <span style={{ padding: '4px 10px', borderRadius: '6px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>🌐 เว็บ: {fromWeb}</span>
                     <span style={{ padding: '4px 10px', borderRadius: '6px', background: '#fce4ec', color: '#c62828', fontWeight: 600 }}>👤 Admin: {fromAdmin}</span>
@@ -129,7 +167,7 @@ export default function BookingsManagement() {
                     <div style={{ padding: '60px', textAlign: 'center' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                 ) : bookings.length === 0 ? (
                     <div style={{ padding: '60px', textAlign: 'center', color: 'var(--a-text-muted)' }}>
-                        <Calendar size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                        <ClipboardList size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
                         <p>ไม่พบรายการจอง</p>
                     </div>
                 ) : (
@@ -210,7 +248,6 @@ export default function BookingsManagement() {
                             </table>
                         </div>
 
-                        {/* Pagination */}
                         {totalPages > 1 && (
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '16px', borderTop: '1px solid var(--a-border)' }}>
                                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-admin-outline" style={{ padding: '6px 12px' }}>
@@ -255,7 +292,7 @@ export default function BookingsManagement() {
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.name}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone || '-'}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email || '-'}</div>
-                                <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                                <div><strong>วันที่สร้าง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                             </div>
                         </div>
 
@@ -304,9 +341,9 @@ export default function BookingsManagement() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                                 {viewBooking.payments.map((pay) => (
                                     <div key={pay.id} style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                             <div>
-                                                <span style={{ fontWeight: 600 }}>{pay.method === 'BANK_TRANSFER' ? '🏦 โอนเงิน' : pay.method === 'QR_PROMPTPAY' ? '📱 QR PromptPay' : pay.method === 'PACKAGE' ? '📦 แพ็คเกจ' : pay.method}</span>
+                                                <span style={{ fontWeight: 600 }}>{paymentMethodMap[pay.method] || pay.method}</span>
                                                 <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginLeft: '8px' }}>
                                                     {new Date(pay.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                                 </span>
@@ -319,10 +356,15 @@ export default function BookingsManagement() {
                                             </div>
                                         </div>
                                         {pay.slipUrl && (
-                                            <button onClick={(e) => { e.stopPropagation(); setViewSlip(pay.slipUrl) }}
-                                                style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                                <Image size={14} /> ดูสลิป
-                                            </button>
+                                            <div style={{ marginTop: '10px' }}>
+                                                <button onClick={(e) => { e.stopPropagation(); setViewSlip(pay.slipUrl) }}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                                    <Image size={14} /> ดูสลิป
+                                                </button>
+                                                {/* Slip preview thumbnail */}
+                                                <img src={pay.slipUrl} alt="slip" style={{ marginTop: '8px', maxWidth: '180px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--a-border)', cursor: 'pointer', objectFit: 'cover' }}
+                                                    onClick={(e) => { e.stopPropagation(); setViewSlip(pay.slipUrl) }} />
+                                            </div>
                                         )}
                                     </div>
                                 ))}
@@ -335,8 +377,21 @@ export default function BookingsManagement() {
                             <span style={{ fontFamily: "'Inter', sans-serif", color: 'var(--a-primary)' }}>฿{viewBooking.totalAmount.toLocaleString()}</span>
                         </div>
 
-                        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setViewBooking(null)} className="btn-admin-outline">ปิด</button>
+                        {/* Actions */}
+                        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                            {viewBooking.status !== 'CANCELLED' && (
+                                <button onClick={() => handleCancel(viewBooking.id)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e17055', background: 'white', color: '#e17055', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    <XCircle size={16} /> ยกเลิกการจอง
+                                </button>
+                            )}
+                            {viewBooking.status === 'PENDING' && (
+                                <button onClick={() => handleConfirm(viewBooking.id)} className="btn-admin"
+                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '14px' }}>
+                                    <CheckCircle size={16} /> ยืนยันการจอง
+                                </button>
+                            )}
+                            <button onClick={() => setViewBooking(null)} className="btn-admin-outline" style={{ padding: '8px 16px' }}>ปิด</button>
                         </div>
                     </div>
                 </div>
