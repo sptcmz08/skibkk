@@ -183,14 +183,15 @@ model Booking {
 }
 
 model BookingItem {
-  id        String   @id @default(uuid())
-  bookingId String
-  courtId   String
-  date      DateTime @db.Date
-  startTime String // "09:00"
-  endTime   String // "10:00"
-  price     Float
-  teacherId String?
+  id             String   @id @default(uuid())
+  bookingId      String
+  courtId        String
+  date           DateTime @db.Date
+  startTime      String // "09:00"
+  endTime        String // "10:00"
+  price          Float
+  teacherId      String?
+  evaluationSent Boolean  @default(false)
 
   booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   court   Court    @relation(fields: [courtId], references: [id])

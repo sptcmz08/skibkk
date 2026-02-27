@@ -82,3 +82,20 @@ export async function sendLineBookingReminder(lineUserId: string, data: {
 
     return sendLinePush(lineUserId, [{ type: 'text', text: message }])
 }
+
+/**
+ * Send evaluation request via LINE after lesson ends
+ */
+export async function sendLineEvaluationRequest(lineUserId: string, data: {
+    customerName: string
+    teacherName: string
+    evaluationUrl: string
+    courtName: string
+    date: string
+    startTime: string
+    endTime: string
+}) {
+    const message = `⭐ แบบประเมินการสอน\n\nสวัสดีคุณ ${data.customerName}\nขอบคุณที่ใช้บริการ SKI BKK!\n\n🏟 ${data.courtName}\n📅 ${data.date}\n⏰ ${data.startTime} - ${data.endTime}\n👨‍🏫 ครูผู้สอน: ${data.teacherName}\n\nกรุณาช่วยประเมินครูผู้สอนเพื่อพัฒนาคุณภาพการบริการ:\n👉 ${data.evaluationUrl}\n\nขอบคุณครับ/ค่ะ 🙏`
+
+    return sendLinePush(lineUserId, [{ type: 'text', text: message }])
+}
