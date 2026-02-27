@@ -163,48 +163,53 @@ export default function PackagesPage() {
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginBottom: '36px' }}>
                     {packages.map(pkg => (
-                        <div key={pkg.id} className="admin-card" style={{ padding: '24px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Package size={22} />
+                        <div key={pkg.id} className="admin-card" style={{ padding: '0', overflow: 'hidden' }}>
+                            {/* Header */}
+                            <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--a-border)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flex: 1 }}>
+                                        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Package size={20} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <h3 style={{ fontWeight: 700, fontSize: '17px', color: 'var(--a-text)', lineHeight: 1.3, marginBottom: '4px' }}>{pkg.name}</h3>
+                                            {pkg.description && (
+                                                <p style={{ fontSize: '13px', color: 'var(--a-text-muted)', lineHeight: 1.4, margin: 0 }}>{pkg.description}</p>
+                                            )}
+                                            {(pkg.validFrom || pkg.validTo) && (
+                                                <div style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    📅 {pkg.validFrom ? new Date(pkg.validFrom).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                                    {' — '}
+                                                    {pkg.validTo ? new Date(pkg.validTo).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 style={{ fontWeight: 700, color: 'var(--a-text)' }}>{pkg.name}</h3>
-                                        <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{pkg.description || '-'}</p>
-                                        {(pkg.validFrom || pkg.validTo) && (
-                                            <p style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600, marginTop: '2px' }}>
-                                                📅 {pkg.validFrom ? new Date(pkg.validFrom).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
-                                                {' - '}
-                                                {pkg.validTo ? new Date(pkg.validTo).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
-                                            </p>
-                                        )}
+                                    <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                                        <button onClick={() => openEdit(pkg)} style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--a-text-secondary)', cursor: 'pointer', borderRadius: '6px' }}><Edit2 size={15} /></button>
+                                        <button onClick={() => handleDelete(pkg.id)} style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer', borderRadius: '6px' }}><Trash2 size={15} /></button>
                                     </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                    <button onClick={() => openEdit(pkg)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-text-secondary)', cursor: 'pointer' }}><Edit2 size={16} /></button>
-                                    <button onClick={() => handleDelete(pkg.id)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={16} /></button>
                                 </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
-                                    <Clock size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
-                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg.totalHours}</div>
-                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ชั่วโมง</div>
+                            {/* Stats */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '16px 20px' }}>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '22px', color: 'var(--a-text)', fontFamily: "'Inter', sans-serif" }}>{pkg.totalHours}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', fontWeight: 500 }}>ชั่วโมง</div>
                                 </div>
-                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#f8f9fa' }}>
-                                    <Users size={16} style={{ color: 'var(--a-primary)', margin: '0 auto 4px' }} />
-                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-text)' }}>{pkg._count?.userPackages || 0}</div>
-                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ใช้อยู่</div>
+                                <div style={{ textAlign: 'center', borderLeft: '1px solid var(--a-border)', borderRight: '1px solid var(--a-border)' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '22px', color: 'var(--a-text)', fontFamily: "'Inter', sans-serif" }}>{pkg._count?.userPackages || 0}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', fontWeight: 500 }}>ผู้ใช้งาน</div>
                                 </div>
-                                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '8px', background: '#fef9e7' }}>
-                                    <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--a-primary)' }}>฿{pkg.price.toLocaleString()}</div>
-                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>ราคา</div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '22px', color: 'var(--a-primary)', fontFamily: "'Inter', sans-serif" }}>฿{pkg.price.toLocaleString()}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', fontWeight: 500 }}>ราคา</div>
                                 </div>
                             </div>
-                            <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--a-text-muted)', textAlign: 'center' }}>
-                                อายุแพ็คเกจ {pkg.validDays} วัน
-                                {!pkg.isActive && <span style={{ color: 'var(--a-danger)', fontWeight: 700, marginLeft: '8px' }}>⛔ ปิดใช้งาน</span>}
+                            {/* Footer */}
+                            <div style={{ padding: '10px 20px', background: '#fafafa', borderTop: '1px solid var(--a-border)', fontSize: '12px', color: 'var(--a-text-muted)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                                <Clock size={12} /> อายุแพ็คเกจ {pkg.validDays} วัน
+                                {!pkg.isActive && <span style={{ color: 'var(--a-danger)', fontWeight: 700 }}>⛔ ปิดใช้งาน</span>}
                             </div>
                         </div>
                     ))}
