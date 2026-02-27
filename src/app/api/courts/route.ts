@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
                     sportType: body.sportType || null,
                     status: body.status || 'ACTIVE',
                     isActive: body.status !== 'HIDDEN',
-                    sortOrder: body.sortOrder || 0,
+                    sortOrder: parseInt(body.sortOrder) || 0,
                     operatingHours: {
                         deleteMany: {},
                         create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
                 description: body.description || null,
                 sportType: body.sportType || null,
                 status: body.status || 'ACTIVE',
-                sortOrder: body.sortOrder || 0,
+                sortOrder: parseInt(body.sortOrder) || 0,
                 operatingHours: {
                     create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
                         dayOfWeek: oh.dayOfWeek,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
         console.error('Courts POST error:', error)
-        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+        return NextResponse.json({ error: (error as Error).message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' }, { status: 500 })
     }
 }
 

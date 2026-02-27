@@ -75,9 +75,15 @@ export default function CourtsManagement() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...(editingCourt ? { id: editingCourt.id } : {}), ...form, operatingHours: hours }),
             })
-            if (res.ok) { toast.success('บันทึกสำเร็จ'); setShowModal(false); fetchCourts() }
-            else toast.error('บันทึกไม่สำเร็จ')
-        } catch { toast.error('เกิดข้อผิดพลาด') }
+            if (res.ok) {
+                toast.success('บันทึกสำเร็จ')
+                setShowModal(false)
+                fetchCourts()
+            } else {
+                const data = await res.json().catch(() => ({}))
+                toast.error(data.error || 'บันทึกไม่สำเร็จ')
+            }
+        } catch { toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ') }
     }
 
     const filteredCourts = selectedFilter
