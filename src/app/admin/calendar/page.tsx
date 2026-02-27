@@ -46,9 +46,13 @@ export default function CalendarPage() {
     const [bookDates, setBookDates] = useState<string[]>([])
     const [bookTimes, setBookTimes] = useState<string[]>([])
     const [bookSubmitting, setBookSubmitting] = useState(false)
-    // bookedSlots: Map of "date|time" => court name (for showing what's booked)
-    const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set())
-    const [loadingSlots, setLoadingSlots] = useState(false)
+    // Availability-based slot data (same API as customer page)
+    const [availSlots, setAvailSlots] = useState<Array<{ startTime: string; endTime: string; price: number; available: boolean; status: string }>>([])
+    const [loadingAvail, setLoadingAvail] = useState(false)
+    // Participants (unlimited for admin)
+    const [bookParticipants, setBookParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([{ name: '', sportType: '', phone: '' }])
+    // Booking status: CONFIRMED=paid, PENDING=unpaid
+    const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -176,24 +180,20 @@ export default function CalendarPage() {
         return `${h}:00`
     })
 
-    // Fetch booked slots when court or dates change
+    // Fetch availability when court + dates selected (uses SAME API as customer page)
     useEffect(() => {
-        if (!bookCourt || bookDates.length === 0) { setBookedSlots(new Set()); return }
-        setLoadingSlots(true)
-        const params = new URLSearchParams()
-        params.set('courtId', bookCourt)
-        bookDates.forEach(d => params.append('dates', d))
-        fetch(`/api/bookings/booked-slots?${params.toString()}`)
+        if (!bookCourt || bookDates.length === 0) { setAvailSlots([]); return }
+        // Fetch for the last selected date to show availability
+        const date = bookDates[bookDates.length - 1]
+        setLoadingAvail(true)
+        fetch(`/api/availability?date=${date}`, { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
-                const set = new Set<string>()
-                    ; (data.bookedSlots || []).forEach((s: { date: string; startTime: string }) => {
-                        set.add(`${s.date}|${s.startTime}`)
-                    })
-                setBookedSlots(set)
+                const courtAvail = (data.availability || []).find((a: any) => a.courtId === bookCourt)
+                setAvailSlots(courtAvail?.slots || [])
             })
-            .catch(() => { })
-            .finally(() => setLoadingSlots(false))
+            .catch(() => setAvailSlots([]))
+            .finally(() => setLoadingAvail(false))
     }, [bookCourt, bookDates])
 
     // Toggle date for multi-date booking
@@ -201,12 +201,18 @@ export default function CalendarPage() {
         setBookDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort())
     }
 
-    // Toggle time for multi-time booking — prevent selecting fully booked times
+    // Toggle time for multi-time booking — prevent selecting booked times
     const toggleBookTime = (time: string) => {
-        // Check if this time is booked on ALL selected dates
-        const allBooked = bookDates.length > 0 && bookDates.every(d => bookedSlots.has(`${d}|${time}`))
-        if (allBooked) { toast.error('เวลานี้ถูกจองหมดแล้วทุกวันที่เลือก'); return }
+        const slot = availSlots.find(s => s.startTime === time)
+        if (slot && !slot.available) { toast.error('เวลานี้ถูกจองแล้ว'); return }
         setBookTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time].sort())
+    }
+
+    // Participant management
+    const addParticipant = () => setBookParticipants(prev => [...prev, { name: '', sportType: '', phone: '' }])
+    const removeParticipant = (idx: number) => setBookParticipants(prev => prev.filter((_, i) => i !== idx))
+    const updateParticipant = (idx: number, field: string, value: string) => {
+        setBookParticipants(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
     }
 
     // Open new booking modal
@@ -216,7 +222,10 @@ export default function CalendarPage() {
         setBookCourt('')
         setBookDates(selectedDate ? [selectedDate] : [])
         setBookTimes([])
+        setAvailSlots([])
         setCustomers([])
+        setBookParticipants([{ name: '', sportType: '', phone: '' }])
+        setBookStatus('CONFIRMED')
         setShowBookModal(true)
     }
 
@@ -249,9 +258,9 @@ export default function CalendarPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     items,
-                    totalAmount: 0,
+                    totalAmount: items.reduce((sum: number, it: any) => sum + it.price, 0),
                     isBookerLearner: false,
-                    participants: [{ name: bookCustomer.name, sportType: court?.sportType || '-', isBooker: true }],
+                    participants: bookParticipants.filter(p => p.name.trim()).map((p, i) => ({ ...p, isBooker: i === 0 })),
                     createdByAdmin: true,
                     userId: bookCustomer.id,
                 }),
@@ -259,13 +268,13 @@ export default function CalendarPage() {
 
             if (res.ok) {
                 const data = await res.json()
-                // Auto-confirm
+                // Set status based on admin selection
                 await fetch('/api/bookings', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bookingId: data.booking.id, status: 'CONFIRMED' }),
+                    body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }),
                 })
-                toast.success(`จองสำเร็จ! (${items.length} รายการ)`)
+                toast.success(`จองสำเร็จ! (${items.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
                 setShowBookModal(false)
                 // Refresh
                 await refetchBookings()
@@ -632,7 +641,7 @@ export default function CalendarPage() {
             {/* ===== NEW BOOKING MODAL ===== */}
             {showBookModal && (
                 <div className="modal-overlay" onClick={() => setShowBookModal(false)}>
-                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '90vh', overflow: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h2 style={{ fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <UserPlus size={22} style={{ color: 'var(--a-primary)' }} /> จองให้ลูกค้า
@@ -668,7 +677,7 @@ export default function CalendarPage() {
                         {/* Court selection */}
                         <div style={{ marginBottom: '16px' }}>
                             <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={14} /> สนาม</label>
-                            <select className="admin-input" value={bookCourt} onChange={e => setBookCourt(e.target.value)}>
+                            <select className="admin-input" value={bookCourt} onChange={e => { setBookCourt(e.target.value); setBookTimes([]); setAvailSlots([]) }}>
                                 <option value="">เลือกสนาม</option>
                                 {courts.map(c => <option key={c.id} value={c.id}>{c.name} {c.sportType ? `(${c.sportType})` : ''}</option>)}
                             </select>
@@ -722,38 +731,92 @@ export default function CalendarPage() {
                             </div>
                         </div>
 
-                        {/* Time selection — multi-select */}
+                        {/* Time selection — color-coded like customer page */}
                         <div style={{ marginBottom: '16px' }}>
                             <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Clock size={14} /> เลือกเวลา <span style={{ fontWeight: 400, color: 'var(--a-text-muted)', fontSize: '12px' }}>(เลือกได้หลายชั่วโมง)</span>
                             </label>
-                            {loadingSlots && <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginBottom: '6px' }}>⏳ กำลังตรวจสอบเวลาที่ว่าง...</div>}
+                            {!bookCourt && <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', padding: '8px 0' }}>⬆️ กรุณาเลือกสนามและวันที่ก่อน</div>}
+                            {loadingAvail && <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginBottom: '6px' }}>⏳ กำลังตรวจสอบเวลาที่ว่าง...</div>}
+                            {/* Legend */}
+                            {bookCourt && bookDates.length > 0 && (
+                                <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '11px', color: 'var(--a-text-muted)' }}>
+                                    <span>🟢 ว่าง</span>
+                                    <span>🔴 เต็ม</span>
+                                    <span>⬛ ผ่านแล้ว</span>
+                                    <span>🟠 เลือกแล้ว</span>
+                                </div>
+                            )}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                                {timeSlots.map(t => {
-                                    const chosen = bookTimes.includes(t)
-                                    // Check how many selected dates have this slot booked
-                                    const bookedCount = bookDates.filter(d => bookedSlots.has(`${d}|${t}`)).length
-                                    const allBooked = bookDates.length > 0 && bookedCount === bookDates.length
-                                    const someBooked = bookedCount > 0 && !allBooked
+                                {availSlots.map(slot => {
+                                    const chosen = bookTimes.includes(slot.startTime)
+                                    const isBooked = slot.status === 'booked' || slot.status === 'locked'
+                                    const isPast = slot.status === 'past'
+                                    const disabled = isBooked || isPast
                                     return (
-                                        <button key={t} onClick={() => toggleBookTime(t)}
-                                            disabled={allBooked}
-                                            title={allBooked ? 'ถูกจองแล้วทุกวันที่เลือก' : someBooked ? `จองแล้ว ${bookedCount}/${bookDates.length} วัน` : ''}
+                                        <button key={slot.startTime} onClick={() => !disabled && toggleBookTime(slot.startTime)}
+                                            disabled={disabled}
+                                            title={isBooked ? 'ถูกจองแล้ว' : isPast ? 'เวลาผ่านแล้ว' : `฿${slot.price.toLocaleString()}`}
                                             style={{
                                                 padding: '8px 4px', fontSize: '13px', fontWeight: 600, borderRadius: '8px',
-                                                cursor: allBooked ? 'not-allowed' : 'pointer',
-                                                border: allBooked ? '1px solid #e0e0e0' : chosen ? '2px solid var(--a-primary)' : someBooked ? '1px solid #f5a623' : '1px solid var(--a-border)',
-                                                background: allBooked ? '#f3f3f3' : chosen ? 'var(--a-primary)' : someBooked ? '#fff8e1' : 'white',
-                                                color: allBooked ? '#bbb' : chosen ? 'white' : 'var(--a-text)',
+                                                cursor: disabled ? 'not-allowed' : 'pointer',
+                                                border: chosen ? '2px solid var(--a-primary)' : disabled ? '1px solid #e0e0e0' : '1px solid #c6f6d5',
+                                                background: chosen ? 'var(--a-primary)' : isBooked ? '#fde8e8' : isPast ? '#f3f3f3' : '#f0fff4',
+                                                color: chosen ? 'white' : disabled ? '#bbb' : '#27ae60',
                                                 fontFamily: 'inherit', transition: 'all 0.15s',
-                                                textDecoration: allBooked ? 'line-through' : 'none',
-                                                position: 'relative',
+                                                textDecoration: isBooked ? 'line-through' : 'none',
                                             }}>
-                                            {t}
-                                            {someBooked && <span style={{ display: 'block', fontSize: '9px', color: '#f5a623', fontWeight: 700 }}>⚠️ {bookedCount}วันจองแล้ว</span>}
+                                            {slot.startTime}
+                                            <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: chosen ? 'rgba(255,255,255,0.8)' : disabled ? '#ccc' : '#999' }}>
+                                                {isBooked ? 'เต็ม' : isPast ? 'ผ่าน' : `฿${slot.price.toLocaleString()}`}
+                                            </span>
                                         </button>
                                     )
                                 })}
+                            </div>
+                            {availSlots.length === 0 && bookCourt && bookDates.length > 0 && !loadingAvail && (
+                                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--a-text-muted)', fontSize: '13px' }}>ไม่มีเวลาให้จองสำหรับสนามนี้</div>
+                            )}
+                        </div>
+
+                        {/* Participants — unlimited for admin */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>👥 ผู้เรียน ({bookParticipants.length} คน)</span>
+                                <button onClick={addParticipant} type="button" style={{ fontSize: '13px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ เพิ่มผู้เรียน</button>
+                            </label>
+                            {bookParticipants.map((p, i) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 30px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                                    <input className="admin-input" placeholder="ชื่อ" value={p.name} onChange={e => updateParticipant(i, 'name', e.target.value)} style={{ fontSize: '13px' }} />
+                                    <select className="admin-input" value={p.sportType} onChange={e => updateParticipant(i, 'sportType', e.target.value)} style={{ fontSize: '13px' }}>
+                                        <option value="">ประเภท</option>
+                                        <option value="สกี้">⛷️ สกี้</option>
+                                        <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                                    </select>
+                                    <input className="admin-input" placeholder="เบอร์" value={p.phone} onChange={e => updateParticipant(i, 'phone', e.target.value)} style={{ fontSize: '13px' }} />
+                                    {bookParticipants.length > 1 && (
+                                        <button onClick={() => removeParticipant(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '16px', padding: 0 }}>✕</button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Booking Status */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'block' }}>สถานะการชำระ</label>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => setBookStatus('CONFIRMED')} style={{
+                                    flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                    border: bookStatus === 'CONFIRMED' ? '2px solid #27ae60' : '1px solid var(--a-border)',
+                                    background: bookStatus === 'CONFIRMED' ? '#e8f5e9' : 'white',
+                                    color: bookStatus === 'CONFIRMED' ? '#27ae60' : 'var(--a-text)',
+                                }}>✅ จ่ายแล้ว</button>
+                                <button onClick={() => setBookStatus('PENDING')} style={{
+                                    flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                    border: bookStatus === 'PENDING' ? '2px solid #f5a623' : '1px solid var(--a-border)',
+                                    background: bookStatus === 'PENDING' ? '#fff8e1' : 'white',
+                                    color: bookStatus === 'PENDING' ? '#f5a623' : 'var(--a-text)',
+                                }}>🟡 ยังไม่จ่าย</button>
                             </div>
                         </div>
 
@@ -761,6 +824,7 @@ export default function CalendarPage() {
                         {bookDates.length > 0 && bookTimes.length > 0 && (
                             <div style={{ padding: '12px 16px', background: '#f0fff4', borderRadius: '10px', border: '1px solid #c6f6d5', marginBottom: '16px', fontSize: '14px' }}>
                                 <strong>📋 สรุป:</strong> {bookDates.length} วัน × {bookTimes.length} ชม. = <strong>{bookDates.length * bookTimes.length} รายการจอง</strong>
+                                {(() => { const total = bookTimes.reduce((sum, t) => { const s = availSlots.find(sl => sl.startTime === t); return sum + (s?.price || 0) }, 0) * bookDates.length; return total > 0 ? <span style={{ marginLeft: '8px', fontWeight: 700, color: 'var(--a-primary)' }}>฿{total.toLocaleString()}</span> : null })()}
                             </div>
                         )}
 
