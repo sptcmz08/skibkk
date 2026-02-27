@@ -140,13 +140,13 @@ function AdminBookInner() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    // Customer search
+    // Customer search — load all immediately, filter as user types
     useEffect(() => {
-        if (bookSearch.length < 2 || isNewCustomer) { setCustomers([]); return }
+        if (isNewCustomer) { setCustomers([]); return }
         const t = setTimeout(() => {
-            fetch(`/api/users?search=${encodeURIComponent(bookSearch)}&role=USER`)
+            fetch(`/api/users?search=${encodeURIComponent(bookSearch)}&role=CUSTOMER`)
                 .then(r => r.json()).then(d => setCustomers(d.users || [])).catch(() => { })
-        }, 300)
+        }, bookSearch ? 200 : 0)
         return () => clearTimeout(t)
     }, [bookSearch, isNewCustomer])
 
