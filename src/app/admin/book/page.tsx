@@ -1,93 +1,63 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Check, Search, UserPlus, ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Search, UserPlus, Plus, Trash2, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-interface Slot { startTime: string; endTime: string; available: boolean; price: number; status: string; isPast?: boolean }
+interface Slot { startTime: string; endTime: string; available: boolean; price: number; status: string }
 interface CourtData { courtId: string; courtName: string; sportType: string | null; closed: boolean; slots: Slot[] }
 interface Customer { id: string; name: string; email: string; phone: string }
 
 const MONTH_TH = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
 const DAY_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
-const SPORT_ICONS: Record<string, string> = { 'สกี้': '⛷️', 'สโนบอร์ด': '🏂', 'ฟุตบอล': '⚽', 'แบดมินตัน': '🏸', 'บาสเกตบอล': '🏀' }
-
-// Step wizard (admin theme)
-function StepWizard({ step }: { step: number }) {
-    const steps = [
-        { num: 1, label: 'เลือกลูกค้า' },
-        { num: 2, label: 'เลือกประเภทกีฬา' },
-        { num: 3, label: 'เลือกวันที่' },
-        { num: 4, label: 'เลือกเวลา' },
-        { num: 5, label: 'ข้อมูลผู้เรียน' },
-    ]
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0', marginBottom: '28px', flexWrap: 'wrap' }}>
-            {steps.map((s, i) => {
-                const done = s.num < step
-                const active = s.num === step
-                return (
-                    <div key={s.num} style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '6px 12px', borderRadius: '8px',
-                            background: done ? 'rgba(39,174,96,0.08)' : active ? 'rgba(245,166,35,0.12)' : 'transparent',
-                        }}>
-                            <div style={{
-                                width: '24px', height: '24px', borderRadius: '50%',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '11px', fontWeight: 700, flexShrink: 0,
-                                background: done ? '#27ae60' : active ? 'var(--a-primary)' : '#e0e0e0',
-                                color: (done || active) ? 'white' : '#999',
-                            }}>
-                                {done ? <Check size={12} /> : s.num}
-                            </div>
-                            <span style={{
-                                fontSize: '12px', fontWeight: active ? 700 : 500,
-                                color: done ? '#27ae60' : active ? 'var(--a-text)' : 'var(--a-text-muted)',
-                            }}>{s.label}</span>
-                        </div>
-                        {i < 4 && <div style={{ width: '12px', height: '1px', background: '#e0e0e0' }} />}
-                    </div>
-                )
-            })}
-        </div>
-    )
-}
+const SPORT_ICONS: Record<string, string> = { 'สกี้': '⛷️', 'สโนว์บอร์ด': '🏂', 'ฟุตบอล': '⚽', 'แบดมินตัน': '🏸', 'บาสเกตบอล': '🏀' }
 
 export default function AdminBookPage() {
-    const [step, setStep] = useState(1)
+    // Refs for scrolling
+    const sportRef = useRef<HTMLDivElement>(null)
+    const calRef = useRef<HTMLDivElement>(null)
+    const timeRef = useRef<HTMLDivElement>(null)
+    const participantRef = useRef<HTMLDivElement>(null)
+    const confirmRef = useRef<HTMLDivElement>(null)
 
-    // Step 1: Customer
+    const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
+        setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+    }
+
+    // Customer
     const [customers, setCustomers] = useState<Customer[]>([])
     const [bookSearch, setBookSearch] = useState('')
     const [bookCustomer, setBookCustomer] = useState<Customer | null>(null)
+    const [isNewCustomer, setIsNewCustomer] = useState(false)
+    const [newBookerName, setNewBookerName] = useState('')
+    const [newBookerPhone, setNewBookerPhone] = useState('')
 
-    // Step 2: Sport Type
+    // Sport Type
     const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string; color: string }>>([])
     const [selectedSport, setSelectedSport] = useState<string | null>(null)
 
-    // Step 3: Calendar
+    // Calendar
     const today = new Date(); today.setHours(0, 0, 0, 0)
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const [viewYear, setViewYear] = useState(today.getFullYear())
     const [viewMonth, setViewMonth] = useState(today.getMonth())
     const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
 
-    // Step 4: Time slots
+    // Time slots
     const [availability, setAvailability] = useState<CourtData[]>([])
     const [selectedCourt, setSelectedCourt] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
     const [cart, setCart] = useState<Array<{ courtId: string; courtName: string; date: string; startTime: string; endTime: string; price: number }>>([])
 
-    // Step 5: Participants & Submit
+    // Participants & Submit
     const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([{ name: '', sportType: '', phone: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [submitting, setSubmitting] = useState(false)
 
     // Customer search
     useEffect(() => {
-        if (bookSearch.length < 2) { setCustomers([]); return }
+        if (bookSearch.length < 2 || isNewCustomer) { setCustomers([]); return }
         const t = setTimeout(() => {
             fetch(`/api/users?search=${encodeURIComponent(bookSearch)}&role=USER`)
                 .then(r => r.json())
@@ -95,7 +65,7 @@ export default function AdminBookPage() {
                 .catch(() => { })
         }, 300)
         return () => clearTimeout(t)
-    }, [bookSearch])
+    }, [bookSearch, isNewCustomer])
 
     // Load sport types
     useEffect(() => {
@@ -104,21 +74,19 @@ export default function AdminBookPage() {
             .then(d => {
                 const active = (d.sportTypes || []).filter((s: any) => s.isActive)
                 setSportTypes(active)
-                if (active.length === 0) {
-                    // Skip sport type selection
-                    setStep(s => s === 2 ? 3 : s)
-                }
+                // If only 1 sport type, auto-select
+                if (active.length === 1) setSelectedSport(active[0].name)
             })
             .catch(() => { })
     }, [])
 
-    // Fetch monthly availability for calendar
+    // Fetch monthly availability
     useEffect(() => {
-        if (step !== 3 || !selectedSport) return
+        if (!selectedSport) return
         const startDate = new Date(viewYear, viewMonth, 1)
         const endDate = new Date(viewYear, viewMonth + 1, 0)
         const promises: Promise<void>[] = []
-        const avail: Record<string, { totalSlots: number; bookedSlots: number; status: string }> = {}
+        const avail: typeof calAvail = {}
 
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
             const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -128,20 +96,15 @@ export default function AdminBookPage() {
                     .then(data => {
                         const courts = (data.availability || []).filter((c: any) => c.sportType === selectedSport && !c.closed)
                         let total = 0, booked = 0
-                        courts.forEach((c: any) => {
-                            c.slots?.forEach((s: Slot) => { total++; if (!s.available) booked++ })
-                        })
+                        courts.forEach((c: any) => { c.slots?.forEach((s: Slot) => { total++; if (!s.available) booked++ }) })
                         const pct = total > 0 ? booked / total : 0
-                        avail[dateStr] = {
-                            totalSlots: total, bookedSlots: booked,
-                            status: total === 0 ? 'closed' : pct >= 1 ? 'full' : pct >= 0.7 ? 'almost_full' : 'available',
-                        }
+                        avail[dateStr] = { totalSlots: total, bookedSlots: booked, status: total === 0 ? 'closed' : pct >= 1 ? 'full' : pct >= 0.7 ? 'almost_full' : 'available' }
                     })
                     .catch(() => { })
             )
         }
         Promise.all(promises).then(() => setCalAvail(avail))
-    }, [step, viewYear, viewMonth, selectedSport])
+    }, [viewYear, viewMonth, selectedSport])
 
     // Fetch availability for selected date
     const fetchAvailability = useCallback(async (date: string) => {
@@ -149,17 +112,18 @@ export default function AdminBookPage() {
         try {
             const res = await fetch(`/api/availability?date=${date}`, { cache: 'no-store' })
             const data = await res.json()
-            const courts = (data.availability || []).filter((c: CourtData) => c.sportType === selectedSport && !c.closed)
+            const courts = (data.availability || []).filter((c: CourtData) => (!selectedSport || c.sportType === selectedSport) && !c.closed)
             setAvailability(courts)
-            if (courts.length > 0 && !selectedCourt) setSelectedCourt(courts[0].courtId)
+            if (courts.length > 0) setSelectedCourt(courts[0].courtId)
         } catch { setAvailability([]) }
         finally { setLoading(false) }
-    }, [selectedSport, selectedCourt])
+    }, [selectedSport])
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)
+        setCart([])
         fetchAvailability(dateStr)
-        setStep(4)
+        scrollTo(timeRef)
     }
 
     const isInCart = (courtId: string, date: string, startTime: string) =>
@@ -169,13 +133,11 @@ export default function AdminBookPage() {
         if (!selectedDate) return
         if (isInCart(court.courtId, selectedDate, slot.startTime)) {
             setCart(cart.filter(i => !(i.courtId === court.courtId && i.date === selectedDate && i.startTime === slot.startTime)))
-            toast.success('ลบออกจากรายการแล้ว')
         } else {
             setCart([...cart, {
                 courtId: court.courtId, courtName: court.courtName,
                 date: selectedDate, startTime: slot.startTime, endTime: slot.endTime, price: slot.price,
             }])
-            toast.success(`เพิ่ม ${slot.startTime} ลงรายการแล้ว`)
         }
     }
 
@@ -199,27 +161,34 @@ export default function AdminBookPage() {
         return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`
     }
 
+    const hasCustomer = bookCustomer || (isNewCustomer && newBookerName.trim())
+
     // Submit booking
     const submitBooking = async () => {
-        if (!bookCustomer) { toast.error('กรุณาเลือกลูกค้า'); return }
+        if (!hasCustomer) { toast.error('กรุณาเลือกหรือกรอกชื่อผู้จอง'); return }
         if (cart.length === 0) { toast.error('กรุณาเลือกเวลา'); return }
-        const validParticipants = participants.filter(p => p.name.trim())
-        if (validParticipants.length === 0) { toast.error('กรุณากรอกชื่อผู้เรียนอย่างน้อย 1 คน'); return }
+        const validParts = participants.filter(p => p.name.trim())
+        if (validParts.length === 0) { toast.error('กรุณากรอกชื่อผู้เรียนอย่างน้อย 1 คน'); return }
 
         setSubmitting(true)
         try {
             const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
+            const body: any = {
+                items: cart, totalAmount, isBookerLearner: false,
+                participants: validParts.map((p, i) => ({ ...p, isBooker: i === 0 })),
+                createdByAdmin: true,
+            }
+            if (bookCustomer) {
+                body.userId = bookCustomer.id
+            } else if (isNewCustomer) {
+                body.guestName = newBookerName.trim()
+                body.guestPhone = newBookerPhone.trim()
+            }
+
             const res = await fetch('/api/bookings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    items: cart,
-                    totalAmount,
-                    isBookerLearner: false,
-                    participants: validParticipants.map((p, i) => ({ ...p, isBooker: i === 0 })),
-                    createdByAdmin: true,
-                    userId: bookCustomer.id,
-                }),
+                body: JSON.stringify(body),
             })
 
             if (res.ok) {
@@ -230,10 +199,11 @@ export default function AdminBookPage() {
                     body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }),
                 })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
-                // Reset
-                setStep(1); setBookCustomer(null); setBookSearch(''); setSelectedSport(null)
+                // Reset all
+                setBookCustomer(null); setBookSearch(''); setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('')
                 setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
                 setParticipants([{ name: '', sportType: '', phone: '' }]); setBookStatus('CONFIRMED')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
             } else {
                 const err = await res.json().catch(() => ({}))
                 toast.error(err.error || 'จองไม่สำเร็จ')
@@ -242,111 +212,131 @@ export default function AdminBookPage() {
         finally { setSubmitting(false) }
     }
 
-    // ── STEP 1: เลือกลูกค้า ──
-    if (step === 1) {
-        return (
-            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                <StepWizard step={1} />
-                <h2 style={{ fontSize: '20px', fontWeight: 800, textAlign: 'center', marginBottom: '8px' }}>เลือกลูกค้า</h2>
-                <p style={{ textAlign: 'center', color: 'var(--a-text-muted)', marginBottom: '28px', fontSize: '14px' }}>ค้นหาลูกค้าที่ต้องการจองให้</p>
+    const calDays = getDaysInMonth()
 
-                <div className="admin-card" style={{ padding: '20px' }}>
-                    <div style={{ position: 'relative', marginBottom: '12px' }}>
-                        <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--a-text-muted)' }} />
-                        <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="พิมพ์ชื่อ / เบอร์โทร / อีเมล" value={bookSearch} onChange={e => { setBookSearch(e.target.value); if (bookCustomer) setBookCustomer(null) }} />
+    // ── SINGLE PAGE FLOW ──
+    return (
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <UserPlus size={24} style={{ color: 'var(--a-primary)' }} /> จองให้ลูกค้า
+            </h1>
+            <p style={{ color: 'var(--a-text-muted)', fontSize: '14px', marginBottom: '24px' }}>กรอกข้อมูลเรียงตามลำดับ ระบบจะเลื่อนไปส่วนถัดไปอัตโนมัติ</p>
+
+            {/* ════════ SECTION 1: ผู้จอง ════════ */}
+            <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: hasCustomer ? '#27ae60' : 'var(--a-primary)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+                        {hasCustomer ? <Check size={14} /> : '1'}
+                    </span>
+                    ผู้จอง
+                </h3>
+
+                {/* Toggle: existing vs new */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <button onClick={() => { setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('') }}
+                        style={{ flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s', border: !isNewCustomer ? '2px solid var(--a-primary)' : '1px solid var(--a-border)', background: !isNewCustomer ? 'var(--a-primary-light)' : 'white', color: !isNewCustomer ? 'var(--a-primary)' : 'var(--a-text)' }}>
+                        🔍 ค้นหาลูกค้าเดิม
+                    </button>
+                    <button onClick={() => { setIsNewCustomer(true); setBookCustomer(null); setBookSearch(''); setCustomers([]) }}
+                        style={{ flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s', border: isNewCustomer ? '2px solid var(--a-primary)' : '1px solid var(--a-border)', background: isNewCustomer ? 'var(--a-primary-light)' : 'white', color: isNewCustomer ? 'var(--a-primary)' : 'var(--a-text)' }}>
+                        ✏️ ลูกค้าใหม่ / จองให้คนอื่น
+                    </button>
+                </div>
+
+                {!isNewCustomer ? (
+                    <>
+                        <div style={{ position: 'relative', marginBottom: '8px' }}>
+                            <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--a-text-muted)' }} />
+                            <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="พิมพ์ชื่อ / เบอร์โทร / อีเมล" value={bookSearch}
+                                onChange={e => { setBookSearch(e.target.value); if (bookCustomer) setBookCustomer(null) }} />
+                        </div>
+                        {customers.length > 0 && !bookCustomer && (
+                            <div style={{ border: '1px solid var(--a-border)', borderRadius: '8px', maxHeight: '180px', overflow: 'auto', marginBottom: '8px' }}>
+                                {customers.map(c => (
+                                    <button key={c.id} onClick={() => { setBookCustomer(c); setBookSearch(c.name); setCustomers([]); scrollTo(sportRef) }}
+                                        style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', borderBottom: '1px solid var(--a-border)', fontSize: '14px', fontFamily: 'inherit' }}>
+                                        <strong>{c.name}</strong> <span style={{ color: 'var(--a-text-muted)' }}>{c.phone}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {bookCustomer && (
+                            <div style={{ padding: '10px 14px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>✅ <strong>{bookCustomer.name}</strong> ({bookCustomer.phone})</span>
+                                <button onClick={() => { setBookCustomer(null); setBookSearch('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontWeight: 600, fontFamily: 'inherit', fontSize: '13px' }}>เปลี่ยน</button>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <input className="admin-input" placeholder="ชื่อผู้จอง *" value={newBookerName}
+                            onChange={e => setNewBookerName(e.target.value)} />
+                        <input className="admin-input" placeholder="เบอร์โทร" value={newBookerPhone}
+                            onChange={e => setNewBookerPhone(e.target.value)} />
+                        {newBookerName.trim() && (
+                            <div style={{ gridColumn: '1 / -1', padding: '8px 14px', background: '#e8f5e9', borderRadius: '8px', fontSize: '13px' }}>
+                                ✅ ผู้จอง: <strong>{newBookerName.trim()}</strong> {newBookerPhone && `(${newBookerPhone})`}
+                            </div>
+                        )}
                     </div>
+                )}
+            </div>
 
-                    {customers.length > 0 && !bookCustomer && (
-                        <div style={{ border: '1px solid var(--a-border)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
-                            {customers.map(c => (
-                                <button key={c.id} onClick={() => { setBookCustomer(c); setBookSearch(c.name); setCustomers([]) }}
-                                    style={{ display: 'block', width: '100%', padding: '12px 16px', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', borderBottom: '1px solid var(--a-border)', fontSize: '14px', fontFamily: 'inherit' }}>
-                                    <strong>{c.name}</strong> <span style={{ color: 'var(--a-text-muted)' }}>{c.phone} · {c.email}</span>
+            {/* ════════ SECTION 2: ประเภทกีฬา ════════ */}
+            {hasCustomer && (
+                <div ref={sportRef} className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: selectedSport ? '#27ae60' : 'var(--a-primary)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+                            {selectedSport ? <Check size={14} /> : '2'}
+                        </span>
+                        เลือกประเภทกีฬา
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
+                        {sportTypes.map(st => {
+                            const active = selectedSport === st.name
+                            return (
+                                <button key={st.name} onClick={() => { setSelectedSport(st.name); scrollTo(calRef) }}
+                                    style={{
+                                        padding: '20px 12px', borderRadius: '12px', cursor: 'pointer',
+                                        border: active ? `2px solid ${st.color}` : `1px solid ${st.color}33`,
+                                        background: active ? `${st.color}15` : `${st.color}05`,
+                                        color: 'var(--a-text)', fontFamily: 'inherit', textAlign: 'center',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                                        transition: 'all 0.15s',
+                                    }}>
+                                    <span style={{ fontSize: '32px', lineHeight: 1 }}>{st.icon || SPORT_ICONS[st.name] || '🏟️'}</span>
+                                    <span style={{ fontSize: '14px', fontWeight: 700 }}>{st.name}</span>
                                 </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {bookCustomer && (
-                        <div style={{ padding: '12px 16px', background: '#e8f5e9', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <span>✅ <strong>{bookCustomer.name}</strong> ({bookCustomer.phone})</span>
-                            <button onClick={() => { setBookCustomer(null); setBookSearch('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontWeight: 600, fontFamily: 'inherit' }}>เปลี่ยน</button>
-                        </div>
-                    )}
-
-                    {bookCustomer && (
-                        <button onClick={() => setStep(2)} className="btn-admin" style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}>
-                            ถัดไป →
-                        </button>
-                    )}
+                            )
+                        })}
+                    </div>
                 </div>
-            </div>
-        )
-    }
+            )}
 
-    // ── STEP 2: เลือกประเภทกีฬา ──
-    if (step === 2) {
-        return (
-            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                <StepWizard step={2} />
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                    <button onClick={() => setStep(1)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '13px', fontFamily: 'inherit' }}>
-                        <ArrowLeft size={14} /> {bookCustomer?.name}
-                    </button>
-                </div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, textAlign: 'center', marginBottom: '8px' }}>เลือกประเภทกีฬา</h2>
-                <p style={{ textAlign: 'center', color: 'var(--a-text-muted)', marginBottom: '28px', fontSize: '14px' }}>เลือกกิจกรรมที่ต้องการจอง</p>
+            {/* ════════ SECTION 3: ปฏิทิน ════════ */}
+            {hasCustomer && selectedSport && (
+                <div ref={calRef} className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: selectedDate ? '#27ae60' : 'var(--a-primary)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+                            {selectedDate ? <Check size={14} /> : '3'}
+                        </span>
+                        เลือกวันที่
+                        {selectedDate && <span style={{ fontSize: '13px', fontWeight: 500, color: '#27ae60' }}>— {formatDateTH(selectedDate)}</span>}
+                    </h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px' }}>
-                    {sportTypes.map(st => (
-                        <button key={st.name} onClick={() => { setSelectedSport(st.name); setStep(3) }}
-                            style={{
-                                padding: '32px 16px', borderRadius: '16px', cursor: 'pointer',
-                                border: `2px solid ${st.color}33`, background: `${st.color}08`,
-                                color: 'var(--a-text)', fontFamily: 'inherit', textAlign: 'center',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px',
-                                transition: 'transform 0.15s',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
-                            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
-                            <span style={{ fontSize: '46px', lineHeight: 1 }}>{st.icon || SPORT_ICONS[st.name] || '🏟️'}</span>
-                            <span style={{ fontSize: '18px', fontWeight: 800 }}>{st.name}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )
-    }
-
-    // ── STEP 3: เลือกวันที่ ──
-    if (step === 3) {
-        const calDays = getDaysInMonth()
-        return (
-            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                <StepWizard step={3} />
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                    <button onClick={() => setStep(1)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>
-                        👤 {bookCustomer?.name}
-                    </button>
-                    <button onClick={() => setStep(2)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>
-                        {SPORT_ICONS[selectedSport || ''] || '🏟️'} {selectedSport}
-                    </button>
-                </div>
-
-                <div className="admin-card" style={{ padding: '20px' }}>
                     {/* Month nav */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                        <button onClick={prevMonth} className="btn-admin-outline" style={{ padding: '6px 12px' }}><ChevronLeft size={18} /></button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <button onClick={prevMonth} className="btn-admin-outline" style={{ padding: '6px 10px' }}><ChevronLeft size={16} /></button>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '18px', fontWeight: 800 }}>{MONTH_TH[viewMonth]}</div>
-                            <div style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{viewYear + 543}</div>
+                            <span style={{ fontSize: '16px', fontWeight: 800 }}>{MONTH_TH[viewMonth]}</span>
+                            <span style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginLeft: '6px' }}>{viewYear + 543}</span>
                         </div>
-                        <button onClick={nextMonth} className="btn-admin-outline" style={{ padding: '6px 12px' }}><ChevronRight size={18} /></button>
+                        <button onClick={nextMonth} className="btn-admin-outline" style={{ padding: '6px 10px' }}><ChevronRight size={16} /></button>
                     </div>
 
                     {/* Day headers */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '4px' }}>
-                        {DAY_TH.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--a-text-muted)', padding: '6px 0' }}>{d}</div>)}
+                        {DAY_TH.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)', padding: '4px 0' }}>{d}</div>)}
                     </div>
 
                     {/* Calendar grid */}
@@ -354,8 +344,9 @@ export default function AdminBookPage() {
                         {calDays.map((date, idx) => {
                             if (!date) return <div key={`e-${idx}`} />
                             const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-                            const isPast = date < today
-                            const isToday = date.getTime() === today.getTime()
+                            const isPast = dateStr < todayStr
+                            const isToday = dateStr === todayStr
+                            const isSelected = dateStr === selectedDate
                             const dayInfo = calAvail[dateStr]
                             const dayStatus = dayInfo?.status || (isPast ? 'past' : 'available')
                             const freeSlots = dayInfo ? dayInfo.totalSlots - dayInfo.bookedSlots : 0
@@ -363,31 +354,27 @@ export default function AdminBookPage() {
                             const isSun = date.getDay() === 0
                             const isSat = date.getDay() === 6
 
-                            const statusConfig = dayStatus === 'full'
-                                ? { bg: '#fde8e8', border: 'rgba(225,112,85,0.4)', text: 'เต็ม', color: '#e17055' }
+                            const sc = dayStatus === 'full'
+                                ? { bg: '#fde8e8', border: '#e1705540', text: 'เต็ม', color: '#e17055' }
                                 : dayStatus === 'almost_full'
-                                    ? { bg: '#fff8e1', border: 'rgba(245,166,35,0.4)', text: `เหลือ ${freeSlots}`, color: '#f5a623' }
-                                    : { bg: '#e8f5e9', border: 'rgba(39,174,96,0.3)', text: 'ว่าง', color: '#27ae60' }
+                                    ? { bg: '#fff8e1', border: '#f5a62340', text: `เหลือ ${freeSlots}`, color: '#f5a623' }
+                                    : { bg: '#e8f5e9', border: '#27ae6030', text: 'ว่าง', color: '#27ae60' }
 
                             return (
                                 <button key={dateStr} onClick={() => !isPast && !isClosed && handleSelectDate(dateStr)}
                                     disabled={isPast || isClosed}
                                     style={{
-                                        borderRadius: '10px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
-                                        border: isToday ? '2px solid var(--a-primary)' : `1px solid ${!isPast && dayInfo ? statusConfig.border : 'var(--a-border)'}`,
-                                        background: isPast ? '#f8f8f8' : isClosed ? '#fafafa' : dayInfo ? statusConfig.bg : 'white',
+                                        borderRadius: '8px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
+                                        border: isSelected ? '2px solid var(--a-primary)' : isToday ? '2px solid var(--a-primary)' : `1px solid ${!isPast && dayInfo ? sc.border : '#eee'}`,
+                                        background: isSelected ? 'var(--a-primary-light)' : isPast ? '#fafafa' : isClosed ? '#fafafa' : dayInfo ? sc.bg : 'white',
                                         color: isPast ? '#bbb' : isSun ? '#e17055' : isSat ? '#6c5ce7' : 'var(--a-text)',
-                                        fontWeight: isToday ? 800 : 600, fontSize: '14px', fontFamily: "'Inter', sans-serif",
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
-                                        opacity: isPast ? 0.5 : isClosed ? 0.4 : 1, minHeight: '56px', padding: '4px 2px',
-                                        textDecoration: isPast ? 'line-through' : 'none', transition: 'transform 0.1s',
-                                    }}
-                                    onMouseEnter={e => !isPast && !isClosed && (e.currentTarget.style.transform = 'scale(1.06)')}
-                                    onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
+                                        fontWeight: isSelected || isToday ? 800 : 600, fontSize: '13px', fontFamily: 'inherit',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1px',
+                                        opacity: isPast ? 0.5 : isClosed ? 0.4 : 1, minHeight: '50px', padding: '4px 2px',
+                                        textDecoration: isPast ? 'line-through' : 'none', transition: 'all 0.1s',
+                                    }}>
                                     {date.getDate()}
-                                    {!isPast && !isClosed && dayInfo && (
-                                        <span style={{ fontSize: '9px', fontWeight: 700, color: statusConfig.color, lineHeight: 1, whiteSpace: 'nowrap' }}>{statusConfig.text}</span>
-                                    )}
+                                    {!isPast && !isClosed && dayInfo && <span style={{ fontSize: '8px', fontWeight: 700, color: sc.color, lineHeight: 1 }}>{sc.text}</span>}
                                     {isClosed && <span style={{ fontSize: '8px', color: '#e17055', fontWeight: 700 }}>ปิด</span>}
                                 </button>
                             )
@@ -395,70 +382,55 @@ export default function AdminBookPage() {
                     </div>
 
                     {/* Legend */}
-                    <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '14px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
                         {[{ color: '#27ae60', label: 'ว่าง' }, { color: '#f5a623', label: 'ใกล้เต็ม' }, { color: '#e17055', label: 'เต็ม' }, { color: '#bbb', label: 'ผ่านแล้ว' }].map(s => (
-                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--a-text-muted)' }}>
+                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'var(--a-text-muted)' }}>
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color }} />{s.label}
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
-        )
-    }
+            )}
 
-    // ── STEP 4: เลือกเวลา ──
-    if (step === 4) {
-        return (
-            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-                <StepWizard step={4} />
-                {/* Breadcrumbs */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                    <button onClick={() => setStep(1)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>👤 {bookCustomer?.name}</button>
-                    <button onClick={() => setStep(2)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>{SPORT_ICONS[selectedSport || ''] || '🏟️'} {selectedSport}</button>
-                    <button onClick={() => setStep(3)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid #27ae60', background: '#e8f5e9', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit', color: '#27ae60', fontWeight: 600 }}>
-                        <Calendar size={13} /> {selectedDate ? formatDateTH(selectedDate) : ''}
-                    </button>
-                </div>
-
-                {/* Court tabs */}
-                {availability.length > 1 && (
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> เลือกสนาม
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {availability.map(court => {
-                                const active = selectedCourt === court.courtId
-                                return (
-                                    <button key={court.courtId} onClick={() => setSelectedCourt(court.courtId)} style={{
-                                        padding: '10px 22px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit',
-                                        border: active ? '2px solid var(--a-primary)' : '1px solid var(--a-border)',
-                                        background: active ? 'var(--a-primary-light)' : 'white', color: active ? 'var(--a-primary)' : 'var(--a-text)',
-                                        fontWeight: 700, fontSize: '14px', transition: 'all 0.15s',
-                                    }}>{court.courtName}</button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* Time slots grid */}
-                <div className="admin-card" style={{ padding: '20px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Clock size={18} style={{ color: 'var(--a-primary)' }} /> เลือกช่วงเวลา
-                        {currentCourt && availability.length === 1 && <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--a-text-muted)' }}>— {currentCourt.courtName}</span>}
+            {/* ════════ SECTION 4: เลือกเวลา ════════ */}
+            {selectedDate && (
+                <div ref={timeRef} className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: cart.length > 0 ? '#27ae60' : 'var(--a-primary)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>
+                            {cart.length > 0 ? <Check size={14} /> : '4'}
+                        </span>
+                        เลือกเวลา — {formatDateTH(selectedDate)}
+                        {cart.length > 0 && <span style={{ fontSize: '13px', fontWeight: 600, color: '#27ae60' }}>({cart.length} รายการ)</span>}
                     </h3>
 
-                    {loading ? (
-                        <div style={{ textAlign: 'center', padding: '60px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
-                    ) : !currentCourt || currentCourt.slots.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
-                            <p style={{ fontWeight: 600, marginBottom: '8px' }}>ไม่มีเวลาว่างในวันนี้</p>
-                            <button onClick={() => setStep(3)} className="btn-admin-outline" style={{ padding: '8px 20px' }}>เลือกวันอื่น</button>
+                    {/* Court tabs */}
+                    {availability.length > 1 && (
+                        <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--a-text-muted)', marginBottom: '6px' }}>เลือกสนาม:</div>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {availability.map(court => {
+                                    const active = selectedCourt === court.courtId
+                                    return (
+                                        <button key={court.courtId} onClick={() => setSelectedCourt(court.courtId)} style={{
+                                            padding: '8px 18px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit',
+                                            border: active ? '2px solid var(--a-primary)' : '1px solid var(--a-border)',
+                                            background: active ? 'var(--a-primary-light)' : 'white',
+                                            color: active ? 'var(--a-primary)' : 'var(--a-text)',
+                                            fontWeight: 700, fontSize: '13px', transition: 'all 0.15s',
+                                        }}>{court.courtName}</button>
+                                    )
+                                })}
+                            </div>
                         </div>
+                    )}
+
+                    {/* Time slots */}
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: '40px' }}>⏳ กำลังโหลด...</div>
+                    ) : !currentCourt || currentCourt.slots.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '30px', color: 'var(--a-text-muted)' }}>ไม่มีเวลาว่างในวันนี้</div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px' }}>
                             {currentCourt.slots.map(slot => {
                                 const inCart = selectedDate ? isInCart(currentCourt.courtId, selectedDate, slot.startTime) : false
                                 const isBooked = !slot.available && !inCart
@@ -466,121 +438,105 @@ export default function AdminBookPage() {
                                 const isDisabled = isBooked || isPast
 
                                 return (
-                                    <button key={slot.startTime}
-                                        onClick={() => !isDisabled && toggleSlot(currentCourt, slot)}
+                                    <button key={slot.startTime} onClick={() => !isDisabled && toggleSlot(currentCourt, slot)}
                                         disabled={isDisabled}
                                         style={{
-                                            padding: '14px 8px', borderRadius: '10px',
+                                            padding: '12px 6px', borderRadius: '10px',
                                             cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                            border: inCart ? '2px solid var(--a-primary)' : isPast ? '1px solid #eee' : isBooked ? '1px solid #eee' : '1px solid #c6f6d5',
+                                            border: inCart ? '2px solid var(--a-primary)' : isBooked ? '1px solid #eee' : '1px solid #c6f6d5',
                                             background: inCart ? 'var(--a-primary-light)' : isPast ? '#f8f8f8' : isBooked ? '#fde8e8' : '#f0fff4',
                                             color: isPast ? '#bbb' : isBooked ? '#ccc' : inCart ? 'var(--a-primary)' : '#27ae60',
                                             fontFamily: "'Inter', sans-serif", textAlign: 'center',
                                             opacity: isBooked ? 0.4 : isPast ? 0.5 : 1, transition: 'all 0.15s',
                                             textDecoration: isPast ? 'line-through' : 'none',
                                         }}>
-                                        <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>{slot.startTime}–{slot.endTime}</div>
-                                        {isPast && <div style={{ fontSize: '10px', marginTop: '4px', color: '#e17055', fontWeight: 700 }}>⛔ เลยเวลา</div>}
-                                        {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '4px' }}>จองแล้ว</div>}
-                                        {inCart && <div style={{ fontSize: '10px', marginTop: '4px', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
-                                        {!isBooked && !inCart && !isPast && <div style={{ fontSize: '11px', marginTop: '4px', color: '#999' }}>฿{slot.price.toLocaleString()}</div>}
+                                        <div style={{ fontSize: '14px', fontWeight: 700 }}>{slot.startTime}–{slot.endTime}</div>
+                                        {isPast && <div style={{ fontSize: '9px', marginTop: '3px', color: '#e17055', fontWeight: 700 }}>เลยเวลา</div>}
+                                        {isBooked && !isPast && <div style={{ fontSize: '9px', marginTop: '3px' }}>จองแล้ว</div>}
+                                        {inCart && <div style={{ fontSize: '9px', marginTop: '3px', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
+                                        {!isBooked && !inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '3px', color: '#999' }}>฿{slot.price.toLocaleString()}</div>}
                                     </button>
                                 )
                             })}
                         </div>
                     )}
-                </div>
 
-                {/* Cart summary bar */}
-                {cart.length > 0 && (
-                    <div style={{ marginTop: '16px', padding: '14px 20px', background: 'var(--a-primary-light)', borderRadius: '12px', border: '1px solid var(--a-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ fontSize: '14px' }}>
-                            <strong>{cart.length} รายการ</strong> · <strong style={{ fontFamily: "'Inter'", color: 'var(--a-primary)' }}>฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}</strong>
+                    {/* Next button */}
+                    {cart.length > 0 && (
+                        <div style={{ marginTop: '14px', padding: '12px 16px', background: '#f0fff4', borderRadius: '10px', border: '1px solid #c6f6d5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                            <span style={{ fontSize: '14px' }}><strong>{cart.length} รายการ</strong> · <strong style={{ color: 'var(--a-primary)' }}>฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}</strong></span>
+                            <button onClick={() => scrollTo(participantRef)} className="btn-admin" style={{ padding: '8px 20px', fontWeight: 700, fontSize: '14px' }}>ถัดไป ↓</button>
                         </div>
-                        <button onClick={() => setStep(5)} className="btn-admin" style={{ padding: '10px 24px', fontWeight: 700, fontSize: '15px' }}>
-                            ถัดไป → ข้อมูลผู้เรียน
+                    )}
+                </div>
+            )}
+
+            {/* ════════ SECTION 5: ผู้เรียน ════════ */}
+            {cart.length > 0 && (
+                <div ref={participantRef} className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <h3 style={{ fontWeight: 700, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--a-primary)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700 }}>5</span>
+                            ผู้เรียน ({participants.length} คน)
+                        </h3>
+                        <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', phone: '' }])}
+                            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Plus size={13} /> เพิ่ม
                         </button>
                     </div>
-                )}
-            </div>
-        )
-    }
-
-    // ── STEP 5: ข้อมูลผู้เรียน & ยืนยัน ──
-    return (
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-            <StepWizard step={5} />
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                <button onClick={() => setStep(4)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '999px', border: '1px solid var(--a-border)', background: 'white', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>
-                    <ArrowLeft size={14} /> กลับไปเลือกเวลา
-                </button>
-            </div>
-
-            {/* Cart items */}
-            <div className="admin-card" style={{ padding: '16px', marginBottom: '16px' }}>
-                <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '10px' }}>📋 รายการจอง ({cart.length})</h3>
-                {cart.map((item, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < cart.length - 1 ? '1px solid var(--a-border)' : 'none', fontSize: '14px' }}>
-                        <div>
-                            <strong>{item.courtName}</strong>
-                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{formatDateTH(item.date)} · {item.startTime}–{item.endTime}</div>
+                    {participants.map((p, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 28px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                            <input className="admin-input" placeholder="ชื่อ" value={p.name} onChange={e => { const np = [...participants]; np[i].name = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                            <select className="admin-input" value={p.sportType} onChange={e => { const np = [...participants]; np[i].sportType = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }}>
+                                <option value="">ประเภท</option>
+                                <option value="สกี้">⛷️ สกี้</option>
+                                <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                            </select>
+                            <input className="admin-input" placeholder="เบอร์" value={p.phone} onChange={e => { const np = [...participants]; np[i].phone = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                            {participants.length > 1 && <button onClick={() => setParticipants(participants.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '14px', padding: 0 }}>✕</button>}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontWeight: 700, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
-                            <button onClick={() => setCart(cart.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', padding: '4px' }}><Trash2 size={14} /></button>
+                    ))}
+                </div>
+            )}
+
+            {/* ════════ SECTION 6: สถานะ + ยืนยัน ════════ */}
+            {cart.length > 0 && (
+                <div ref={confirmRef} className="admin-card" style={{ padding: '20px', marginBottom: '24px' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px' }}>สถานะการชำระ</h3>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        <button onClick={() => setBookStatus('CONFIRMED')} style={{
+                            flex: 1, padding: '12px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                            border: bookStatus === 'CONFIRMED' ? '2px solid #27ae60' : '1px solid var(--a-border)',
+                            background: bookStatus === 'CONFIRMED' ? '#e8f5e9' : 'white', color: bookStatus === 'CONFIRMED' ? '#27ae60' : 'var(--a-text)',
+                        }}>✅ จ่ายแล้ว</button>
+                        <button onClick={() => setBookStatus('PENDING')} style={{
+                            flex: 1, padding: '12px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                            border: bookStatus === 'PENDING' ? '2px solid #f5a623' : '1px solid var(--a-border)',
+                            background: bookStatus === 'PENDING' ? '#fff8e1' : 'white', color: bookStatus === 'PENDING' ? '#f5a623' : 'var(--a-text)',
+                        }}>🟡 ยังไม่จ่าย</button>
+                    </div>
+
+                    {/* Summary */}
+                    <div style={{ padding: '14px 16px', background: '#f7f9fc', borderRadius: '10px', marginBottom: '16px', fontSize: '14px' }}>
+                        <div style={{ marginBottom: '6px' }}><strong>ผู้จอง:</strong> {bookCustomer?.name || newBookerName}</div>
+                        <div style={{ marginBottom: '6px' }}><strong>ประเภท:</strong> {selectedSport}</div>
+                        <div style={{ marginBottom: '6px' }}><strong>วันที่:</strong> {selectedDate ? formatDateTH(selectedDate) : ''}</div>
+                        <div style={{ marginBottom: '6px' }}><strong>รายการ:</strong> {cart.length} ชั่วโมง</div>
+                        {cart.map((item, i) => (
+                            <div key={i} style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginLeft: '12px' }}>• {item.courtName} {item.startTime}–{item.endTime} (฿{item.price.toLocaleString()})</div>
+                        ))}
+                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--a-border)', fontWeight: 700, fontSize: '16px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>ยอดรวม</span>
+                            <span style={{ color: 'var(--a-primary)' }}>฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}</span>
                         </div>
                     </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', paddingTop: '10px', borderTop: '2px solid var(--a-border)', fontWeight: 700, fontSize: '16px' }}>
-                    <span>ยอดรวม</span>
-                    <span style={{ fontFamily: "'Inter'", color: 'var(--a-primary)' }}>฿{cart.reduce((s, i) => s + i.price, 0).toLocaleString()}</span>
-                </div>
-            </div>
 
-            {/* Participants */}
-            <div className="admin-card" style={{ padding: '16px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ fontWeight: 700, fontSize: '15px' }}>👥 ผู้เรียน ({participants.length} คน)</h3>
-                    <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', phone: '' }])} style={{ fontSize: '13px', padding: '4px 14px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Plus size={14} /> เพิ่มผู้เรียน
+                    <button onClick={submitBooking} className="btn-admin" disabled={submitting}
+                        style={{ width: '100%', padding: '16px', fontSize: '17px', fontWeight: 700 }}>
+                        {submitting ? 'กำลังจอง...' : `ยืนยันการจอง (${cart.length} รายการ)`}
                     </button>
                 </div>
-                {participants.map((p, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 30px', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
-                        <input className="admin-input" placeholder="ชื่อ" value={p.name} onChange={e => { const np = [...participants]; np[i].name = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
-                        <select className="admin-input" value={p.sportType} onChange={e => { const np = [...participants]; np[i].sportType = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }}>
-                            <option value="">ประเภท</option>
-                            <option value="สกี้">⛷️ สกี้</option>
-                            <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
-                        </select>
-                        <input className="admin-input" placeholder="เบอร์โทร" value={p.phone} onChange={e => { const np = [...participants]; np[i].phone = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
-                        {participants.length > 1 && <button onClick={() => setParticipants(participants.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '16px', padding: 0 }}>✕</button>}
-                    </div>
-                ))}
-            </div>
-
-            {/* Payment Status */}
-            <div className="admin-card" style={{ padding: '16px', marginBottom: '16px' }}>
-                <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '10px' }}>สถานะการชำระ</h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setBookStatus('CONFIRMED')} style={{
-                        flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                        border: bookStatus === 'CONFIRMED' ? '2px solid #27ae60' : '1px solid var(--a-border)',
-                        background: bookStatus === 'CONFIRMED' ? '#e8f5e9' : 'white', color: bookStatus === 'CONFIRMED' ? '#27ae60' : 'var(--a-text)',
-                    }}>✅ จ่ายแล้ว</button>
-                    <button onClick={() => setBookStatus('PENDING')} style={{
-                        flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                        border: bookStatus === 'PENDING' ? '2px solid #f5a623' : '1px solid var(--a-border)',
-                        background: bookStatus === 'PENDING' ? '#fff8e1' : 'white', color: bookStatus === 'PENDING' ? '#f5a623' : 'var(--a-text)',
-                    }}>🟡 ยังไม่จ่าย</button>
-                </div>
-            </div>
-
-            {/* Submit */}
-            <button onClick={submitBooking} className="btn-admin" disabled={submitting}
-                style={{ width: '100%', padding: '16px', fontSize: '17px', fontWeight: 700 }}>
-                {submitting ? 'กำลังจอง...' : `ยืนยันการจอง (${cart.length} รายการ)`}
-            </button>
+            )}
         </div>
     )
 }
