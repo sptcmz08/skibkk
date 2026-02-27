@@ -1179,8 +1179,8 @@ select.input-field option {
   }
 
   .admin-modal-content {
-    max-height: 90vh;
-    padding: 20px 16px;
+    max-height: 85dvh;
+    padding: 20px 16px 40px 16px;
     border-radius: 20px 20px 12px 12px;
     width: 100% !important;
     max-width: 100% !important;
