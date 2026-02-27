@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Booking {
@@ -22,6 +23,7 @@ interface Court { id: string; name: string; sportType: string }
 interface Customer { id: string; name: string; email: string; phone: string }
 
 export default function CalendarPage() {
+    const router = useRouter()
     const now = new Date()
     const [viewYear, setViewYear] = useState(now.getFullYear())
     const [viewMonth, setViewMonth] = useState(now.getMonth())
@@ -328,7 +330,7 @@ export default function CalendarPage() {
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ปฏิทินการจอง</h2>
                     <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ดูภาพรวมการจองรายเดือน</p>
                 </div>
-                <button onClick={openNewBooking} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={() => router.push('/admin/book')} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Plus size={18} /> จองให้ลูกค้า
                 </button>
             </div>
@@ -441,7 +443,7 @@ export default function CalendarPage() {
                         </h3>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
-                            <button onClick={() => { setBookDates([selectedDate]); openNewBooking() }} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button onClick={() => router.push(`/admin/book?date=${selectedDate}`)} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Plus size={14} /> จอง
                             </button>
                         </div>

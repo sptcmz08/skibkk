@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, MapPin, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight, Search, Plus, UserPlus } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Slot {
@@ -106,7 +107,10 @@ function SportBadge({ sport, onClick }: { sport: string; onClick: () => void }) 
 
 interface Customer { id: string; name: string; email: string; phone: string }
 
-export default function AdminBookPage() {
+function AdminBookInner() {
+    const searchParams = useSearchParams()
+    const dateParam = searchParams.get('date')
+
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
     const [sportTypes, setSportTypes] = useState<string[]>([])
     const [sportTypesData, setSportTypesData] = useState<Array<{ name: string; icon: string; color: string }>>([])
@@ -120,6 +124,7 @@ export default function AdminBookPage() {
     const [loading, setLoading] = useState(false)
     const [loadingCourts, setLoadingCourts] = useState(true)
     const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
+    const [dateInitialized, setDateInitialized] = useState(false)
 
     // Admin-specific states
     const [customers, setCustomers] = useState<Customer[]>([])
@@ -128,7 +133,7 @@ export default function AdminBookPage() {
     const [isNewCustomer, setIsNewCustomer] = useState(false)
     const [newBookerName, setNewBookerName] = useState('')
     const [newBookerPhone, setNewBookerPhone] = useState('')
-    const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([{ name: '', sportType: '', phone: '' }])
+    const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [submitting, setSubmitting] = useState(false)
 
@@ -194,6 +199,17 @@ export default function AdminBookPage() {
         } catch { if (!silent) toast.error('ไม่สามารถโหลดข้อมูลได้') }
         finally { if (!silent) setLoading(false) }
     }, [selectedSport])
+
+    // Auto-initialize from URL date param (from calendar page)
+    useEffect(() => {
+        if (dateParam && !dateInitialized && sportTypes.length > 0) {
+            setDateInitialized(true)
+            setSelectedDate(dateParam)
+            if (sportTypes.length === 1) setSelectedSport(sportTypes[0])
+            fetchAvailability(dateParam)
+            setStep(3)
+        }
+    }, [dateParam, dateInitialized, sportTypes, fetchAvailability])
 
     // Fetch calendar availability for month coloring — same API as customer page
     useEffect(() => {
@@ -671,21 +687,30 @@ export default function AdminBookPage() {
                 <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                         <h3 style={{ fontWeight: 700, fontSize: '15px' }}>👥 ผู้เรียน ({participants.length} คน)</h3>
-                        <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', phone: '' }])}
+                        <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', height: '', weight: '', phone: '' }])}
                             style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '6px', border: '1px solid #f5a623', background: 'rgba(245,166,35,0.08)', color: '#f5a623', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Plus size={13} /> เพิ่ม
                         </button>
                     </div>
                     {participants.map((p, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 28px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-                            <input className="admin-input" placeholder="ชื่อ" value={p.name} onChange={e => { const np = [...participants]; np[i].name = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
-                            <select className="admin-input" value={p.sportType} onChange={e => { const np = [...participants]; np[i].sportType = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }}>
-                                <option value="">ประเภท</option>
-                                <option value="สกี้">⛷️ สกี้</option>
-                                <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
-                            </select>
-                            <input className="admin-input" placeholder="เบอร์" value={p.phone} onChange={e => { const np = [...participants]; np[i].phone = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
-                            {participants.length > 1 && <button onClick={() => setParticipants(participants.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '14px', padding: 0 }}>✕</button>}
+                        <div key={i} style={{ border: '1px solid var(--a-border)', borderRadius: '10px', padding: '12px', marginBottom: '10px', position: 'relative' }}>
+                            {participants.length > 1 && (
+                                <button onClick={() => setParticipants(participants.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '8px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '13px', fontWeight: 600 }}>✕</button>
+                            )}
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--a-text-muted)', marginBottom: '8px' }}>ผู้เรียนคนที่ {i + 1}</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                                <input className="admin-input" placeholder="ชื่อ-นามสกุล *" value={p.name} onChange={e => { const np = [...participants]; np[i].name = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                                <select className="admin-input" value={p.sportType} onChange={e => { const np = [...participants]; np[i].sportType = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }}>
+                                    <option value="">ประเภทกีฬา</option>
+                                    <option value="สกี้">⛷️ สกี้</option>
+                                    <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                                </select>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                                <input className="admin-input" placeholder="ส่วนสูง (ซม.)" value={p.height} onChange={e => { const np = [...participants]; np[i].height = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                                <input className="admin-input" placeholder="น้ำหนัก (กก.)" value={p.weight} onChange={e => { const np = [...participants]; np[i].weight = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                                <input className="admin-input" placeholder="เบอร์โทร" value={p.phone} onChange={e => { const np = [...participants]; np[i].phone = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -716,5 +741,13 @@ export default function AdminBookPage() {
                 </motion.button>
             </motion.div>
         </div>
+    )
+}
+
+export default function AdminBookPage() {
+    return (
+        <Suspense fallback={<div style={{ textAlign: 'center', padding: '60px' }}>กำลังโหลด...</div>}>
+            <AdminBookInner />
+        </Suspense>
     )
 }
