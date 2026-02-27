@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
                 for (const rule of court.pricingRules) {
                     const timeNum = parseInt(time.replace(':', ''))
                     const startNum = parseInt(rule.startTime.replace(':', ''))
-                    const endNum = parseInt(rule.endTime.replace(':', ''))
+                    let endNum = parseInt(rule.endTime.replace(':', ''))
+                    if (endNum === 0) endNum = 2400 // Treat midnight (00:00) as end of day
                     if (timeNum >= startNum && timeNum < endNum) { price = rule.price; break }
                 }
 

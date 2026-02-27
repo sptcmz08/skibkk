@@ -259,7 +259,7 @@ export default function BookingPage() {
 
     // Can submit if: all slips cover the total OR using package
     const canSubmit = paymentMethod === 'PACKAGE'
-        || (remaining <= 1)
+        || (remaining <= 1 && verifiedSlips.length > 0)
 
     const handleSubmitBooking = async () => {
         if (participants.some(p => !p.name || !p.sportType)) {
@@ -267,8 +267,12 @@ export default function BookingPage() {
             return
         }
         // Require slip verification for PromptPay
-        if (paymentMethod === 'PROMPTPAY' && remaining > 1) {
+        if (paymentMethod === 'PROMPTPAY' && verifiedSlips.length === 0) {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
+            return
+        }
+        if (paymentMethod === 'PROMPTPAY' && remaining > 1) {
+            toast.error('ยอดโอนยังไม่ครบ กรุณาโอนเพิ่มและแนบสลิป')
             return
         }
         setLoading(true)
