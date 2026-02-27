@@ -136,6 +136,7 @@ function AdminBookInner() {
     const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [submitting, setSubmitting] = useState(false)
+    const [isBookerLearner, setIsBookerLearner] = useState(false)
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -285,7 +286,7 @@ function AdminBookInner() {
         try {
             const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
             const body: any = {
-                items: cart, totalAmount, isBookerLearner: false,
+                items: cart, totalAmount, isBookerLearner,
                 participants: validParts.map((p, i) => ({ ...p, isBooker: i === 0 })),
                 createdByAdmin: true,
             }
@@ -299,7 +300,7 @@ function AdminBookInner() {
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
                 setStep(1); setBookCustomer(null); setBookSearch(''); setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('')
                 setSelectedSport(null); setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
-                setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED')
+                setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED'); setIsBookerLearner(false)
             } else {
                 const err = await res.json().catch(() => ({}))
                 toast.error(err.error || 'จองไม่สำเร็จ')
@@ -661,7 +662,12 @@ function AdminBookInner() {
                             {customers.length > 0 && !bookCustomer && (
                                 <div style={{ border: '1px solid var(--a-border)', borderRadius: '8px', maxHeight: '150px', overflow: 'auto' }}>
                                     {customers.map(c => (
-                                        <button key={c.id} onClick={() => { setBookCustomer(c); setBookSearch(c.name); setCustomers([]) }}
+                                        <button key={c.id} onClick={() => {
+                                            setBookCustomer(c); setBookSearch(c.name); setCustomers([])
+                                            if (isBookerLearner) {
+                                                setParticipants(prev => { const np = [...prev]; np[0] = { ...np[0], name: c.name, phone: c.phone || '' }; return np })
+                                            }
+                                        }}
                                             style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', borderBottom: '1px solid var(--a-border)', fontSize: '14px', fontFamily: 'inherit' }}>
                                             <strong>{c.name}</strong> <span style={{ color: 'var(--a-text-muted)' }}>{c.phone}</span>
                                         </button>
@@ -681,6 +687,26 @@ function AdminBookInner() {
                             <input className="admin-input" placeholder="เบอร์โทร" value={newBookerPhone} onChange={e => setNewBookerPhone(e.target.value)} />
                         </div>
                     )}
+                </div>
+
+                {/* Booker is also learner checkbox */}
+                <div className="admin-card" style={{ padding: '14px 20px', marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
+                        <input type="checkbox" checked={isBookerLearner} onChange={e => {
+                            const checked = e.target.checked
+                            setIsBookerLearner(checked)
+                            if (checked) {
+                                const name = bookCustomer?.name || newBookerName.trim()
+                                const phone = bookCustomer?.phone || newBookerPhone.trim()
+                                if (name) {
+                                    setParticipants(prev => { const np = [...prev]; np[0] = { ...np[0], name, phone: phone || '' }; return np })
+                                }
+                            } else {
+                                setParticipants(prev => { const np = [...prev]; np[0] = { ...np[0], name: '', phone: '' }; return np })
+                            }
+                        }} style={{ width: '18px', height: '18px', accentColor: '#f5a623', cursor: 'pointer' }} />
+                        ผู้จองเป็นผู้เรียนด้วย
+                    </label>
                 </div>
 
                 {/* Participants */}
