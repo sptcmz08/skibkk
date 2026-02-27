@@ -222,11 +222,13 @@ export async function PATCH(req: NextRequest) {
         if (updateData.participants && Array.isArray(updateData.participants)) {
             await prisma.participant.deleteMany({ where: { bookingId } })
             await prisma.participant.createMany({
-                data: updateData.participants.map((p: { name: string; sportType: string; phone?: string; isBooker?: boolean }) => ({
+                data: updateData.participants.map((p: { name: string; sportType: string; phone?: string; height?: number; weight?: number; isBooker?: boolean }) => ({
                     bookingId,
                     name: p.name,
                     sportType: p.sportType || '-',
                     phone: p.phone || '',
+                    height: p.height ? parseFloat(String(p.height)) : null,
+                    weight: p.weight ? parseFloat(String(p.weight)) : null,
                     isBooker: p.isBooker || false,
                 })),
             })

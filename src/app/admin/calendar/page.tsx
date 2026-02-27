@@ -9,7 +9,7 @@ interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean
     user: { name: string; email: string; phone: string }
     bookingItems: Array<{ court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
-    participants: Array<{ name: string; sportType: string; phone: string }>
+    participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
     payments: Array<{ method: string; status: string; amount: number }>
 }
 
@@ -33,7 +33,7 @@ export default function CalendarPage() {
     const [loading, setLoading] = useState(false)
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
-    const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([])
+    const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string }>>([])
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
@@ -59,7 +59,7 @@ export default function CalendarPage() {
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
         setEditMode(false)
-        setEditParticipants(booking.participants.map(p => ({ ...p })))
+        setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
         setEditStatus(booking.status)
         setEditAmount(booking.totalAmount)
     }
@@ -82,7 +82,13 @@ export default function CalendarPage() {
                     bookingId: viewBooking.id,
                     status: editStatus,
                     totalAmount: editAmount,
-                    participants: editParticipants,
+                    participants: editParticipants.map(p => ({
+                        name: p.name,
+                        sportType: p.sportType,
+                        phone: p.phone || '',
+                        height: p.height ? parseFloat(p.height) : null,
+                        weight: p.weight ? parseFloat(p.weight) : null,
+                    })),
                 }),
             })
             if (res.ok) {
@@ -566,24 +572,54 @@ export default function CalendarPage() {
                             </div>
                         ))}
 
-                        <h3 style={{ fontWeight: 700, marginBottom: '8px', marginTop: '16px', fontSize: '15px' }}>ผู้เรียน</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', marginTop: '16px' }}>
+                            <h3 style={{ fontWeight: 700, fontSize: '15px' }}>ผู้เรียน</h3>
+                            {editMode && (
+                                <button onClick={() => setEditParticipants(prev => [...prev, { name: '', sportType: '', phone: '', height: '', weight: '' }])}
+                                    style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    + เพิ่มผู้เรียน
+                                </button>
+                            )}
+                        </div>
                         {(editMode ? editParticipants : viewBooking.participants).map((p, i) => (
-                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
+                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px', position: 'relative' }}>
                                 {editMode ? (
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <input value={p.name} onChange={e => {
-                                            const updated = [...editParticipants]
-                                            updated[i] = { ...updated[i], name: e.target.value }
-                                            setEditParticipants(updated)
-                                        }} placeholder="ชื่อ" style={{ flex: 1, padding: '4px 8px', border: '1px dashed #93c5fd', borderRadius: '4px' }} />
-                                        <input value={p.sportType} onChange={e => {
-                                            const updated = [...editParticipants]
-                                            updated[i] = { ...updated[i], sportType: e.target.value }
-                                            setEditParticipants(updated)
-                                        }} placeholder="ประเภทกีฬา" style={{ width: '120px', padding: '4px 8px', border: '1px dashed #93c5fd', borderRadius: '4px' }} />
-                                    </div>
+                                    <>
+                                        {editParticipants.length > 1 && (
+                                            <button onClick={() => setEditParticipants(editParticipants.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '6px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '13px', fontWeight: 600 }}>✕</button>
+                                        )}
+                                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)', marginBottom: '6px' }}>ผู้เรียนคนที่ {i + 1}</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                                            <input value={p.name} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], name: e.target.value }; setEditParticipants(u)
+                                            }} placeholder="ชื่อ-นามสกุล" className="admin-input" style={{ fontSize: '13px' }} />
+                                            <select value={p.sportType} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], sportType: e.target.value }; setEditParticipants(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }}>
+                                                <option value="">ประเภทกีฬา</option>
+                                                <option value="สกี้">⛷️ สกี้</option>
+                                                <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                                            <input value={(p as any).height || ''} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], height: e.target.value }; setEditParticipants(u)
+                                            }} placeholder="ส่วนสูง (ซม.)" className="admin-input" style={{ fontSize: '13px' }} />
+                                            <input value={(p as any).weight || ''} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], weight: e.target.value }; setEditParticipants(u)
+                                            }} placeholder="น้ำหนัก (กก.)" className="admin-input" style={{ fontSize: '13px' }} />
+                                            <input value={p.phone} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], phone: e.target.value }; setEditParticipants(u)
+                                            }} placeholder="เบอร์โทร" className="admin-input" style={{ fontSize: '13px' }} />
+                                        </div>
+                                    </>
                                 ) : (
-                                    <span><strong>{p.name}</strong> - {p.sportType} {p.phone && `| ${p.phone}`}</span>
+                                    <>
+                                        <strong>{p.name}</strong> - {p.sportType}
+                                        {(p as any).height && ` | ${(p as any).height} ซม.`}
+                                        {(p as any).weight && ` | ${(p as any).weight} กก.`}
+                                        {p.phone && ` | ${p.phone}`}
+                                    </>
                                 )}
                             </div>
                         ))}
