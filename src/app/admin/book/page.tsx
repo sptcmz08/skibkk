@@ -50,7 +50,7 @@ const DAY_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 // Step wizard — identical to customer page
 function StepWizard({ step }: { step: number }) {
     const steps = [
-        { num: 1, label: 'เลือกประเภทกีฬา' },
+        { num: 1, label: 'เลือกสถานที่' },
         { num: 2, label: 'เลือกวันที่' },
         { num: 3, label: 'เลือกเวลา' },
         { num: 4, label: 'กรอกข้อมูล' },
@@ -89,16 +89,16 @@ function StepWizard({ step }: { step: number }) {
     )
 }
 
-// Sport type badge (clickable, for breadcrumb)
-function SportBadge({ sport, onClick }: { sport: string; onClick: () => void }) {
+// Venue badge (clickable, for breadcrumb)
+function VenueBadge({ name, image, onClick }: { name: string; image?: string | null; onClick: () => void }) {
     return (
         <div onClick={onClick} style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
             padding: '8px 18px', borderRadius: '999px', cursor: 'pointer',
             background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.25)',
         }}>
-            <span>{SPORT_ICONS[sport] || '🏟️'}</span>
-            <span style={{ fontWeight: 700, color: '#f5a623', fontSize: '14px' }}>{sport}</span>
+            {image ? <img src={image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} /> : <MapPin size={16} />}
+            <span style={{ fontWeight: 700, color: '#f5a623', fontSize: '14px' }}>{name}</span>
             <ArrowLeft size={13} style={{ color: 'var(--a-text-muted)' }} />
             <span style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>เปลี่ยน</span>
         </div>
@@ -112,9 +112,8 @@ function AdminBookInner() {
     const dateParam = searchParams.get('date')
 
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
-    const [sportTypes, setSportTypes] = useState<string[]>([])
-    const [sportTypesData, setSportTypesData] = useState<Array<{ name: string; icon: string; color: string }>>([])
-    const [selectedSport, setSelectedSport] = useState<string | null>(null)
+    const [venues, setVenues] = useState<Array<{ id: string; name: string; image: string | null; description: string | null }>>([])
+    const [selectedVenue, setSelectedVenue] = useState<{ id: string; name: string; image: string | null } | null>(null)
     const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
     const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
@@ -122,7 +121,7 @@ function AdminBookInner() {
     const [selectedCourt, setSelectedCourt] = useState<string | null>(null)
     const [cart, setCart] = useState<CartItem[]>([])
     const [loading, setLoading] = useState(false)
-    const [loadingCourts, setLoadingCourts] = useState(true)
+    const [loadingVenues, setLoadingVenues] = useState(true)
     const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
     const [dateInitialized, setDateInitialized] = useState(false)
 
@@ -151,32 +150,21 @@ function AdminBookInner() {
         return () => clearTimeout(t)
     }, [bookSearch, isNewCustomer])
 
-    // Load courts and sport types
+    // Load venues
     useEffect(() => {
-        const fetchCourts = async () => {
-            setLoadingCourts(true)
+        const fetchVenues = async () => {
+            setLoadingVenues(true)
             try {
-                const [courtsRes, stRes] = await Promise.all([
-                    fetch('/api/courts', { cache: 'no-store' }),
-                    fetch('/api/sport-types', { cache: 'no-store' }),
-                ])
-                const courtsData = await courtsRes.json()
-                const stData = await stRes.json()
-                if (stData.sportTypes && stData.sportTypes.length > 0) {
-                    const activeTypes = stData.sportTypes.filter((s: any) => s.isActive)
-                    setSportTypesData(activeTypes)
-                    setSportTypes(activeTypes.map((s: any) => s.name))
-                    if (activeTypes.length === 0) setStep(2)
-                } else if (courtsData.courts) {
-                    const types = [...new Set<string>(
-                        courtsData.courts.map((c: { sportType?: string }) => c.sportType).filter(Boolean)
-                    )]
-                    setSportTypes(types)
-                    if (types.length === 0) setStep(2)
+                const res = await fetch('/api/venues', { cache: 'no-store' })
+                const data = await res.json()
+                if (data.venues) {
+                    const active = data.venues.filter((v: any) => v.isActive)
+                    setVenues(active)
+                    if (active.length === 0) setStep(2)
                 }
-            } catch { /* ignore */ } finally { setLoadingCourts(false) }
+            } catch { /* ignore */ } finally { setLoadingVenues(false) }
         }
-        fetchCourts()
+        fetchVenues()
     }, [])
 
     // Fetch availability when date selected (no session lock for admin)
@@ -186,41 +174,37 @@ function AdminBookInner() {
             const res = await fetch(`/api/availability?date=${dateStr}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) {
-                const filtered = selectedSport
-                    ? data.availability.filter((c: CourtData) => c.sportType === selectedSport)
-                    : data.availability
-                setAvailability(filtered)
-                if (filtered.length > 0) {
+                setAvailability(data.availability)
+                if (data.availability.length > 0) {
                     setSelectedCourt(c => {
-                        const exists = filtered.find((f: CourtData) => f.courtId === c)
-                        return exists ? c : filtered[0].courtId
+                        const exists = data.availability.find((f: CourtData) => f.courtId === c)
+                        return exists ? c : data.availability[0].courtId
                     })
                 }
             }
         } catch { if (!silent) toast.error('ไม่สามารถโหลดข้อมูลได้') }
         finally { if (!silent) setLoading(false) }
-    }, [selectedSport])
+    }, [])
 
     // Auto-initialize from URL date param (from calendar page)
     useEffect(() => {
-        if (dateParam && !dateInitialized && sportTypes.length > 0) {
+        if (dateParam && !dateInitialized && venues.length > 0) {
             setDateInitialized(true)
             setSelectedDate(dateParam)
-            if (sportTypes.length === 1) setSelectedSport(sportTypes[0])
             fetchAvailability(dateParam)
             setStep(3)
         }
-    }, [dateParam, dateInitialized, sportTypes, fetchAvailability])
+    }, [dateParam, dateInitialized, venues, fetchAvailability])
 
     // Fetch calendar availability for month coloring — same API as customer page
     useEffect(() => {
-        if (step === 2 && selectedSport) {
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}&sportType=${encodeURIComponent(selectedSport)}`, { cache: 'no-store' })
+        if (step === 2) {
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}`, { cache: 'no-store' })
                 .then(r => r.json())
                 .then(data => { if (data.availability) setCalAvail(data.availability) })
                 .catch(() => { })
         }
-    }, [step, viewYear, viewMonth, selectedSport])
+    }, [step, viewYear, viewMonth])
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)
@@ -299,7 +283,7 @@ function AdminBookInner() {
                 await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
                 setStep(1); setBookCustomer(null); setBookSearch(''); setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('')
-                setSelectedSport(null); setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
+                setSelectedVenue(null); setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
                 setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED'); setIsBookerLearner(false)
             } else {
                 const err = await res.json().catch(() => ({}))
@@ -309,41 +293,44 @@ function AdminBookInner() {
         finally { setSubmitting(false) }
     }
 
-    // ── STEP 1: เลือกประเภทกีฬา ─────────────────────────────────
+    // ── STEP 1: เลือกสถานที่เรียน ───────────────────────────────────
     if (step === 1) {
         return (
             <div style={{ maxWidth: '700px', margin: '0 auto' }}>
                 <StepWizard step={1} />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <h2 style={{ fontSize: '22px', fontWeight: 800, textAlign: 'center', marginBottom: '8px' }}>เลือกประเภทกีฬา</h2>
-                    <p style={{ textAlign: 'center', color: 'var(--a-text-muted)', marginBottom: '40px', fontSize: '14px' }}>เลือกกิจกรรมที่ต้องการจอง</p>
+                    <h2 style={{ fontSize: '22px', fontWeight: 800, textAlign: 'center', marginBottom: '8px' }}>เลือกสถานที่เรียน</h2>
+                    <p style={{ textAlign: 'center', color: 'var(--a-text-muted)', marginBottom: '40px', fontSize: '14px' }}>เลือกสถานที่ที่ต้องการจอง</p>
 
-                    {loadingCourts ? (
+                    {loadingVenues ? (
                         <div style={{ textAlign: 'center', padding: '60px' }}><div className="spinner" /></div>
-                    ) : sportTypes.length === 0 ? (
+                    ) : venues.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
-                            <p style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>ยังไม่มีสนามในระบบ</p>
+                            <p style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>ยังไม่มีสถานที่เรียน</p>
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-                            {sportTypes.map(type => {
-                                const stData = sportTypesData.find(s => s.name === type)
-                                const icon = stData?.icon || SPORT_ICONS[type] || '🏟️'
-                                const color = stData?.color || '#f59e0b'
-                                return (
-                                    <motion.button key={type} whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}
-                                        onClick={() => { setSelectedSport(type); setStep(2) }}
-                                        style={{
-                                            padding: '36px 20px', borderRadius: '20px', cursor: 'pointer',
-                                            border: `2px solid ${color}33`, background: `${color}08`,
-                                            color: 'var(--a-text)', fontFamily: 'inherit',
-                                            textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
-                                        }}>
-                                        <span style={{ fontSize: '52px', lineHeight: 1 }}>{icon}</span>
-                                        <span style={{ fontSize: '20px', fontWeight: 800 }}>{type}</span>
-                                    </motion.button>
-                                )
-                            })}
+                            {venues.map(venue => (
+                                <motion.button key={venue.id} whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}
+                                    onClick={() => { setSelectedVenue({ id: venue.id, name: venue.name, image: venue.image }); setStep(2) }}
+                                    style={{
+                                        padding: '0', borderRadius: '20px', cursor: 'pointer', overflow: 'hidden',
+                                        border: '2px solid rgba(245,166,35,0.2)', background: '#fff',
+                                        color: 'var(--a-text)', fontFamily: 'inherit',
+                                        textAlign: 'center', display: 'flex', flexDirection: 'column',
+                                    }}>
+                                    <div style={{
+                                        height: '120px', width: '100%',
+                                        background: venue.image ? `url(${venue.image}) center/cover` : 'linear-gradient(135deg, #f5a623 0%, #e8912d 100%)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        {!venue.image && <MapPin size={32} style={{ color: 'rgba(255,255,255,0.5)' }} />}
+                                    </div>
+                                    <div style={{ padding: '12px' }}>
+                                        <span style={{ fontSize: '17px', fontWeight: 800 }}>{venue.name}</span>
+                                    </div>
+                                </motion.button>
+                            ))}
                         </div>
                     )}
                 </motion.div>
@@ -358,7 +345,7 @@ function AdminBookInner() {
             <div style={{ maxWidth: '700px', margin: '0 auto' }}>
                 <StepWizard step={2} />
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                    {selectedSport && <SportBadge sport={selectedSport} onClick={() => setStep(1)} />}
+                    {selectedVenue && <VenueBadge name={selectedVenue.name} image={selectedVenue.image} onClick={() => setStep(1)} />}
                 </div>
 
                 <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
@@ -473,7 +460,7 @@ function AdminBookInner() {
 
                 {/* Breadcrumb badges */}
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
-                    {selectedSport && <SportBadge sport={selectedSport} onClick={() => setStep(1)} />}
+                    {selectedVenue && <VenueBadge name={selectedVenue.name} image={selectedVenue.image} onClick={() => setStep(1)} />}
                     {selectedDate && (
                         <div onClick={() => setStep(2)} style={{
                             display: 'inline-flex', alignItems: 'center', gap: '8px',

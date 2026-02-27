@@ -26,6 +26,7 @@ export default function BookingPage() {
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
     const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
+    const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
     const [slipFile, setSlipFile] = useState<File | null>(null)
     const [slipPreview, setSlipPreview] = useState<string | null>(null)
     const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string } }>>([])
@@ -147,6 +148,18 @@ export default function BookingPage() {
         }
     }, [step])
 
+    // Fetch sport types for participant dropdown
+    useEffect(() => {
+        fetch('/api/sport-types', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sportTypes) {
+                    setSportTypes(data.sportTypes.filter((s: any) => s.isActive).map((s: any) => ({ name: s.name, icon: s.icon })))
+                }
+            })
+            .catch(() => { })
+    }, [])
+
     useEffect(() => {
         const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
         if (stored.length === 0) { router.push('/courts'); return }
@@ -216,7 +229,7 @@ export default function BookingPage() {
             toast.error(`จำนวนผู้เรียนเต็มแล้ว (สูงสุด ${maxParticipants} คน)`)
             return
         }
-        setParticipants([...participants, { name: '', sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false }])
+        setParticipants([...participants, { name: '', sportType: participants[0]?.sportType || '', age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false }])
     }
 
     const removeParticipant = (idx: number) => {
@@ -226,17 +239,19 @@ export default function BookingPage() {
     const updateParticipant = (idx: number, field: keyof Participant, value: string) => {
         const updated = [...participants]
         updated[idx] = { ...updated[idx], [field]: value }
-        // Snowboard lock: if participant 1 changes sport, force all others to match
-        if (field === 'sportType' && idx === 0 && value === 'สโนว์บอร์ด') {
+        // When first participant changes sport type, force all others to match
+        if (field === 'sportType' && idx === 0) {
             for (let i = 1; i < updated.length; i++) {
-                updated[i] = { ...updated[i], sportType: 'สโนว์บอร์ด' }
+                updated[i] = { ...updated[i], sportType: value }
             }
-            toast('ผู้เรียนทุกคนต้องเล่นสโนว์บอร์ดเหมือนกัน', { icon: '⚠️' })
+            if (updated.length > 1) {
+                toast('ผู้เรียนทุกคนต้องเล่นประเภทเดียวกัน', { icon: '⚠️' })
+            }
         }
-        // If not first participant and first is snowboard, force snowboard
-        if (field === 'sportType' && idx > 0 && updated[0].sportType === 'สโนว์บอร์ด' && value !== 'สโนว์บอร์ด') {
-            updated[idx] = { ...updated[idx], sportType: 'สโนว์บอร์ด' }
-            toast.error('ผู้เรียนคนที่ 1 เลือกสโนว์บอร์ด คนอื่นต้องเลือกเหมือนกัน')
+        // If not first participant, force same sport as first
+        if (field === 'sportType' && idx > 0 && updated[0].sportType && value !== updated[0].sportType) {
+            updated[idx] = { ...updated[idx], sportType: updated[0].sportType }
+            toast.error('ผู้เรียนทุกคนต้องเลือกประเภทกีฬาเดียวกับคนแรก')
         }
         setParticipants(updated)
     }
@@ -449,11 +464,11 @@ export default function BookingPage() {
                                 </div>
                                 <div className="input-group">
                                     <label>ประเภทกีฬา *</label>
-                                    <select className="input-field" value={p.sportType} onChange={e => updateParticipant(idx, 'sportType', e.target.value)} required>
+                                    <select className="input-field" value={p.sportType} onChange={e => updateParticipant(idx, 'sportType', e.target.value)} required disabled={idx > 0 && !!participants[0]?.sportType}>
                                         <option value="">เลือก</option>
-                                        <option value="สกี">สกี</option>
-                                        <option value="สโนว์บอร์ด">สโนว์บอร์ด</option>
-                                        <option value="อื่นๆ">อื่นๆ</option>
+                                        {sportTypes.map(st => (
+                                            <option key={st.name} value={st.name}>{st.icon} {st.name}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="input-group">

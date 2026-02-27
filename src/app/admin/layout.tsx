@@ -40,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin', icon: LayoutDashboard, label: 'แดชบอร์ด', section: '' },
         { href: '/admin/courts', icon: MapPin, label: 'จัดการสนาม', section: 'จัดการ' },
         { href: '/admin/sport-types', icon: Dumbbell, label: 'ประเภทกีฬา', section: '' },
+        { href: '/admin/venues', icon: MapPin, label: 'สถานที่เรียน', section: '' },
         { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '' },
         { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '' },
         { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง' },

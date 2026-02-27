@@ -94,6 +94,17 @@ model SportType {
   @@map("sport_types")
 }
 
+model Venue {
+  id          String  @id @default(uuid())
+  name        String
+  image       String? // URL to venue image
+  description String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  @@map("venues")
+}
+
 model SlotLock {
   id        String   @id @default(uuid())
   courtId   String
