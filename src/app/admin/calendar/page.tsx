@@ -185,10 +185,10 @@ export default function CalendarPage() {
     for (let i = 0; i < firstDay; i++) calDays.push(null)
     for (let i = 1; i <= daysInMonth; i++) calDays.push(i)
 
-    const statusMap: Record<string, { cls: string; label: string }> = {
-        PENDING: { cls: 'badge-pending', label: 'รอชำระ' },
-        CONFIRMED: { cls: 'badge-success', label: 'ยืนยัน' },
-        CANCELLED: { cls: 'badge-danger', label: 'ยกเลิก' },
+    const statusMap: Record<string, { cls: string; label: string; bg: string; color: string; icon: string }> = {
+        PENDING: { cls: 'badge-pending', label: 'รอชำระเงิน', bg: '#fff8e1', color: '#f5a623', icon: '🟡' },
+        CONFIRMED: { cls: 'badge-success', label: 'ชำระเงินแล้ว', bg: '#e8f5e9', color: '#27ae60', icon: '✅' },
+        CANCELLED: { cls: 'badge-danger', label: 'ยกเลิก', bg: '#fde8e8', color: '#e74c3c', icon: '❌' },
     }
 
     const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
@@ -532,14 +532,26 @@ export default function CalendarPage() {
             {viewBooking && (
                 <div className="modal-overlay" onClick={() => setViewBooking(null)}>
                     <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                             <h2 style={{ fontSize: '20px', fontWeight: 700 }}>รายละเอียดการจอง</h2>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <span className={`badge ${statusMap[viewBooking.status]?.cls}`}>{statusMap[viewBooking.status]?.label}</span>
                                 <button onClick={() => setEditMode(!editMode)} className="btn-admin-outline" style={{ padding: '6px 12px', fontSize: '12px' }}>
                                     {editMode ? '🔒 ยกเลิกแก้ไข' : '✏️ แก้ไข'}
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Big Status Banner */}
+                        <div style={{
+                            padding: '14px 20px', borderRadius: '12px', marginBottom: '16px',
+                            background: statusMap[viewBooking.status]?.bg || '#f3f4f6',
+                            border: `2px solid ${statusMap[viewBooking.status]?.color || '#9ca3af'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        }}>
+                            <span style={{ fontSize: '22px' }}>{statusMap[viewBooking.status]?.icon}</span>
+                            <span style={{ fontSize: '18px', fontWeight: 800, color: statusMap[viewBooking.status]?.color || '#374151' }}>
+                                {statusMap[viewBooking.status]?.label || viewBooking.status}
+                            </span>
                         </div>
 
                         <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '10px', marginBottom: '16px' }}>
@@ -548,8 +560,11 @@ export default function CalendarPage() {
                                 <div>
                                     <strong>ยอดเงิน:</strong>{' '}
                                     {editMode ? (
-                                        <input type="number" value={editAmount} onChange={e => setEditAmount(parseFloat(e.target.value) || 0)}
-                                            style={{ width: '100px', padding: '2px 6px', border: '1px dashed #93c5fd', borderRadius: '4px', fontFamily: "'Inter'", fontWeight: 700 }} />
+                                        <>
+                                            <input type="number" value={editAmount} onChange={e => setEditAmount(parseFloat(e.target.value) || 0)}
+                                                style={{ width: '100px', padding: '2px 6px', border: '1px dashed #93c5fd', borderRadius: '4px', fontFamily: "'Inter'", fontWeight: 700 }} />
+                                            <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>เดิม: ฿{viewBooking.totalAmount.toLocaleString()}</div>
+                                        </>
                                     ) : `฿${viewBooking.totalAmount.toLocaleString()}`}
                                 </div>
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.name}</div>
@@ -561,9 +576,9 @@ export default function CalendarPage() {
                                         <strong>สถานะ:</strong>{' '}
                                         <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
                                             style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--a-border)', marginLeft: '8px' }}>
-                                            <option value="PENDING">รอชำระ</option>
-                                            <option value="CONFIRMED">ยืนยัน</option>
-                                            <option value="CANCELLED">ยกเลิก</option>
+                                            <option value="PENDING">🟡 รอชำระเงิน</option>
+                                            <option value="CONFIRMED">✅ ชำระเงินแล้ว</option>
+                                            <option value="CANCELLED">❌ ยกเลิก</option>
                                         </select>
                                     </div>
                                 )}
@@ -576,7 +591,12 @@ export default function CalendarPage() {
                                 {editMode ? (
                                     <>
                                         {editBookingItems.length > 1 && (
-                                            <button onClick={() => setEditBookingItems(editBookingItems.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '6px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '13px', fontWeight: 600 }}>✕</button>
+                                            <button onClick={() => {
+                                                if (!confirm('ต้องการลบรายการจองนี้ออกใช่ไหม?')) return
+                                                setEditBookingItems(editBookingItems.filter((_, j) => j !== i))
+                                            }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                                                🗑️ ลบ
+                                            </button>
                                         )}
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                                             <select value={(item as any).courtId} onChange={e => {
@@ -589,21 +609,34 @@ export default function CalendarPage() {
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], date: e.target.value }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }} />
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: '6px', alignItems: 'center' }}>
                                             <select value={(item as any).startTime} onChange={e => {
-                                                const hr = parseInt(e.target.value.split(':')[0])
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: e.target.value, endTime: `${String(hr + 1).padStart(2, '0')}:00` }; setEditBookingItems(u)
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: e.target.value }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 {Array.from({ length: 15 }, (_, h) => h + 8).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
                                                     return <option key={t} value={t}>{t}</option>
                                                 })}
                                             </select>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: 'var(--a-text-muted)' }}>ถึง {(item as any).endTime}</div>
+                                            <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', fontWeight: 600 }}>ถึง</div>
+                                            <select value={(item as any).endTime} onChange={e => {
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], endTime: e.target.value }; setEditBookingItems(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }}>
+                                                {Array.from({ length: 15 }, (_, h) => h + 9).map(h => {
+                                                    const t = `${String(h).padStart(2, '0')}:00`
+                                                    return <option key={t} value={t}>{t}</option>
+                                                })}
+                                            </select>
                                             <input type="number" value={(item as any).price} onChange={e => {
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
                                             }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
                                         </div>
+                                        {/* Show original data */}
+                                        {viewBooking.bookingItems[i] && (
+                                            <div style={{ fontSize: '11px', color: '#999', marginTop: '4px', padding: '4px 8px', background: '#fafafa', borderRadius: '4px', borderLeft: '3px solid #ddd' }}>
+                                                📌 ข้อมูลเดิม: {(viewBooking.bookingItems[i] as any).court?.name || courts.find(c => c.id === viewBooking.bookingItems[i].courtId)?.name} | {new Date(viewBooking.bookingItems[i].date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {viewBooking.bookingItems[i].startTime}-{viewBooking.bookingItems[i].endTime} | ฿{viewBooking.bookingItems[i].price.toLocaleString()}
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -633,7 +666,12 @@ export default function CalendarPage() {
                                 {editMode ? (
                                     <>
                                         {editParticipants.length > 1 && (
-                                            <button onClick={() => setEditParticipants(editParticipants.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '6px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '13px', fontWeight: 600 }}>✕</button>
+                                            <button onClick={() => {
+                                                if (!confirm('ต้องการลบผู้เรียนคนนี้ออกใช่ไหม?')) return
+                                                setEditParticipants(editParticipants.filter((_, j) => j !== i))
+                                            }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                                                🗑️ ลบ
+                                            </button>
                                         )}
                                         <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)', marginBottom: '6px' }}>ผู้เรียนคนที่ {i + 1}</div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
