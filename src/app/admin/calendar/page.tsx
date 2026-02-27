@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Booking {
@@ -24,10 +24,13 @@ interface Customer { id: string; name: string; email: string; phone: string }
 
 export default function CalendarPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const dateParam = searchParams.get('date')
     const now = new Date()
-    const [viewYear, setViewYear] = useState(now.getFullYear())
-    const [viewMonth, setViewMonth] = useState(now.getMonth())
-    const [selectedDate, setSelectedDate] = useState<string | null>(null)
+    const initDate = dateParam ? new Date(dateParam) : null
+    const [viewYear, setViewYear] = useState(initDate ? initDate.getFullYear() : now.getFullYear())
+    const [viewMonth, setViewMonth] = useState(initDate ? initDate.getMonth() : now.getMonth())
+    const [selectedDate, setSelectedDate] = useState<string | null>(dateParam || null)
     const [bookings, setBookings] = useState<Booking[]>([])
     const [daySummaries, setDaySummaries] = useState<Record<string, DaySummary>>({})
     const [loading, setLoading] = useState(false)
