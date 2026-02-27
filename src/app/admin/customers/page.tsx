@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 
 interface Customer {
     id: string; name: string; email: string; phone: string; role: string; isActive: boolean
-    createdAt: string; bookingCount: number; lineAvatar?: string
+    createdAt: string; bookingCount: number; lineAvatar?: string; lineUserId?: string; lineDisplayName?: string
 }
 
 interface BookingDetail {
@@ -92,9 +92,10 @@ export default function CustomersPage() {
                         </div>
                         <div>
                             <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>{selectedCustomer.name}</h2>
-                            <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px' }}>
-                                {selectedCustomer.email && <span><Mail size={13} style={{ marginRight: '4px' }} />{selectedCustomer.email}</span>}
-                                {selectedCustomer.phone && <span><Phone size={13} style={{ marginRight: '4px' }} />{selectedCustomer.phone}</span>}
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px', flexWrap: 'wrap' }}>
+                                {selectedCustomer.email && !selectedCustomer.email.endsWith('@line.local') && <span><Mail size={13} style={{ marginRight: '4px' }} />{selectedCustomer.email}</span>}
+                                {selectedCustomer.phone && !selectedCustomer.phone.startsWith('LINE-') && <span><Phone size={13} style={{ marginRight: '4px' }} />{selectedCustomer.phone}</span>}
+                                {selectedCustomer.lineUserId && <span style={{ color: '#06c755' }}>LINE: {selectedCustomer.lineDisplayName || selectedCustomer.lineUserId}</span>}
                             </div>
                         </div>
                     </div>
@@ -170,16 +171,27 @@ export default function CustomersPage() {
                             <tr key={c.id} onClick={() => viewCustomerHistory(c)} style={{ cursor: 'pointer' }}>
                                 <td>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px' }}>
-                                            {c.name?.charAt(0)?.toUpperCase() || '?'}
-                                        </div>
+                                        {c.lineAvatar ? (
+                                            <img src={c.lineAvatar} alt="" style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px' }}>
+                                                {c.name?.charAt(0)?.toUpperCase() || '?'}
+                                            </div>
+                                        )}
                                         <div>
-                                            <div style={{ fontWeight: 600 }}>{c.name}</div>
-                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{c.email}</div>
+                                            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                {c.name}
+                                                {c.lineUserId && <span style={{ fontSize: '10px', background: '#06c755', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>LINE</span>}
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{c.email && !c.email.endsWith('@line.local') ? c.email : c.lineUserId ? `LINE ID: ${c.lineUserId.substring(0, 12)}...` : '-'}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td>{c.phone || '-'}</td>
+                                <td>
+                                    {c.phone && !c.phone.startsWith('LINE-') ? c.phone : c.lineUserId ? (
+                                        <span style={{ color: '#06c755', fontSize: '13px' }}>{c.lineDisplayName || 'LINE User'}</span>
+                                    ) : '-'}
+                                </td>
                                 <td><span style={{ fontWeight: 700, color: 'var(--a-primary)' }}>{c.bookingCount}</span> ครั้ง</td>
                                 <td><span className="badge badge-success">Active</span></td>
                             </tr>
