@@ -183,7 +183,11 @@ export default function CustomersPage() {
                                                 {c.name}
                                                 {c.lineUserId && <span style={{ fontSize: '10px', background: '#06c755', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>LINE</span>}
                                             </div>
-                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{c.email && !c.email.endsWith('@line.local') ? c.email : c.lineUserId ? `LINE ID: ${c.lineUserId.substring(0, 12)}...` : '-'}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
+                                                {c.email && !c.email.endsWith('@line.local') && <span>{c.email}</span>}
+                                                {c.lineUserId && <span style={{ color: '#06c755' }}>{c.email && !c.email.endsWith('@line.local') ? ' · ' : ''}ID: {c.lineUserId}</span>}
+                                                {!c.email && !c.lineUserId && '-'}
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
