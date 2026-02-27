@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean
     user: { name: string; email: string; phone: string }
-    bookingItems: Array<{ court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
+    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
     payments: Array<{ method: string; status: string; amount: number }>
 }
@@ -34,6 +34,7 @@ export default function CalendarPage() {
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string }>>([])
+    const [editBookingItems, setEditBookingItems] = useState<Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number }>>([])
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
@@ -60,6 +61,7 @@ export default function CalendarPage() {
         setViewBooking(booking)
         setEditMode(false)
         setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
+        setEditBookingItems(booking.bookingItems.map(item => ({ courtId: item.courtId, date: item.date.split('T')[0], startTime: item.startTime, endTime: item.endTime, price: item.price })))
         setEditStatus(booking.status)
         setEditAmount(booking.totalAmount)
     }
@@ -89,6 +91,7 @@ export default function CalendarPage() {
                         height: p.height ? parseFloat(p.height) : null,
                         weight: p.weight ? parseFloat(p.weight) : null,
                     })),
+                    bookingItems: editBookingItems,
                 }),
             })
             if (res.ok) {
@@ -101,6 +104,11 @@ export default function CalendarPage() {
     }
 
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+    // Fetch courts for edit dropdown
+    useEffect(() => {
+        fetch('/api/courts', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
+    }, [])
 
     // Fetch monthly summary
     useEffect(() => {
@@ -560,14 +568,50 @@ export default function CalendarPage() {
                         </div>
 
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
-                        {viewBooking.bookingItems.map((item, i) => (
-                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
-                                <div style={{ fontWeight: 600 }}>{item.court.name}</div>
-                                <div style={{ color: 'var(--a-text-secondary)' }}>
-                                    {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime} | ฿{item.price.toLocaleString()}
-                                </div>
-                                {item.teacher && (
-                                    <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '4px' }}>👨‍🏫 ครู: {item.teacher.name}</div>
+                        {(editMode ? editBookingItems : viewBooking.bookingItems).map((item, i) => (
+                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px', position: 'relative' }}>
+                                {editMode ? (
+                                    <>
+                                        {editBookingItems.length > 1 && (
+                                            <button onClick={() => setEditBookingItems(editBookingItems.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '6px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '13px', fontWeight: 600 }}>✕</button>
+                                        )}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                                            <select value={(item as any).courtId} onChange={e => {
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], courtId: e.target.value }; setEditBookingItems(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }}>
+                                                <option value="">เลือกสนาม</option>
+                                                {courts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                            <input type="date" value={(item as any).date} onChange={e => {
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], date: e.target.value }; setEditBookingItems(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }} />
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                                            <select value={(item as any).startTime} onChange={e => {
+                                                const hr = parseInt(e.target.value.split(':')[0])
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: e.target.value, endTime: `${String(hr + 1).padStart(2, '0')}:00` }; setEditBookingItems(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }}>
+                                                {Array.from({ length: 15 }, (_, h) => h + 8).map(h => {
+                                                    const t = `${String(h).padStart(2, '0')}:00`
+                                                    return <option key={t} value={t}>{t}</option>
+                                                })}
+                                            </select>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: 'var(--a-text-muted)' }}>ถึง {(item as any).endTime}</div>
+                                            <input type="number" value={(item as any).price} onChange={e => {
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
+                                            }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div style={{ fontWeight: 600 }}>{(item as any).court?.name || courts.find(c => c.id === (item as any).courtId)?.name}</div>
+                                        <div style={{ color: 'var(--a-text-secondary)' }}>
+                                            {new Date((item as any).date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}
+                                        </div>
+                                        {(item as any).teacher && (
+                                            <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '4px' }}>👨‍🏫 ครู: {(item as any).teacher.name}</div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         ))}
