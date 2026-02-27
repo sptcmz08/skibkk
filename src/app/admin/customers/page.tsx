@@ -87,16 +87,23 @@ export default function CustomersPage() {
                 {/* Customer header */}
                 <div className="admin-card" style={{ padding: '24px', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '22px' }}>
-                            {selectedCustomer.name?.charAt(0)?.toUpperCase() || '?'}
-                        </div>
+                        {selectedCustomer.lineAvatar ? (
+                            <img src={selectedCustomer.lineAvatar} alt="" style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover' }} />
+                        ) : (
+                            <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '22px' }}>
+                                {selectedCustomer.name?.charAt(0)?.toUpperCase() || '?'}
+                            </div>
+                        )}
                         <div>
                             <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>{selectedCustomer.name}</h2>
                             <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px', flexWrap: 'wrap' }}>
                                 {selectedCustomer.email && !selectedCustomer.email.endsWith('@line.local') && <span><Mail size={13} style={{ marginRight: '4px' }} />{selectedCustomer.email}</span>}
                                 {selectedCustomer.phone && !selectedCustomer.phone.startsWith('LINE-') && <span><Phone size={13} style={{ marginRight: '4px' }} />{selectedCustomer.phone}</span>}
-                                {selectedCustomer.lineUserId && <span style={{ color: '#06c755' }}>LINE: {selectedCustomer.lineDisplayName || selectedCustomer.lineUserId}</span>}
+                                {selectedCustomer.lineUserId && <span style={{ color: '#06c755' }}>LINE: {selectedCustomer.lineDisplayName || '-'}</span>}
                             </div>
+                            {selectedCustomer.lineUserId && (
+                                <div style={{ fontSize: '12px', color: '#06c755', marginTop: '2px', fontFamily: "'Inter', monospace" }}>ID: {selectedCustomer.lineUserId}</div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -139,7 +146,7 @@ export default function CustomersPage() {
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </div >
         )
     }
 
