@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
     LayoutDashboard, MapPin, DollarSign, Package, Calendar, ClipboardList,
     Users, GraduationCap, FileText, BarChart3, Clock, Shield,
-    LogOut, Menu, X, ChevronDown, Settings, Star, BookOpen, Dumbbell
+    LogOut, Menu, X, ChevronDown, Settings, Star, BookOpen, Dumbbell, UserPlus
 } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '' },
         { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '' },
         { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง' },
+        { href: '/admin/book', icon: UserPlus, label: 'จองให้ลูกค้า', section: '' },
         { href: '/admin/bookings', icon: ClipboardList, label: 'รายการจองทั้งหมด', section: '' },
         { href: '/admin/participants', icon: Users, label: 'ผู้เรียน & ครูสอน', section: '' },
         { href: '/admin/customers', icon: Users, label: 'ลูกค้า', section: '' },
