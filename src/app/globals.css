@@ -1160,8 +1160,10 @@ select.input-field option {
 
   /* Modals */
   .modal-overlay {
-    padding: 12px;
-    align-items: flex-end;
+    padding: 24px 12px;
+    align-items: flex-start;
+    /* Prevent top cropping if taller than screen */
+    overflow-y: auto;
   }
 
   /* Admin layout — force margin override */
