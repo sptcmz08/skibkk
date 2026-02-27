@@ -90,3 +90,26 @@ export async function POST(req: NextRequest) {
     }
 }
 
+export async function DELETE(req: NextRequest) {
+    try {
+        await requireAdmin()
+        const { id } = await req.json()
+        if (!id) return NextResponse.json({ error: 'ไม่พบข้อมูล' }, { status: 400 })
+
+        // Check if court has bookings
+        const bookingCount = await prisma.bookingItem.count({ where: { courtId: id } })
+        if (bookingCount > 0) {
+            return NextResponse.json({ error: `ลบไม่ได้ สนามนี้มีข้อมูลการจอง ${bookingCount} รายการ กรุณาเปลี่ยนสถานะเป็น "ยกเลิก" แทน` }, { status: 400 })
+        }
+
+        await prisma.court.delete({ where: { id } })
+
+        return NextResponse.json({ success: true })
+    } catch (error) {
+        if ((error as Error).message === 'Forbidden') {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
+        console.error('Courts DELETE error:', error)
+        return NextResponse.json({ error: 'ลบไม่สำเร็จ อาจมีข้อมูลจองอยู่' }, { status: 500 })
+    }
+}

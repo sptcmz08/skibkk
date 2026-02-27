@@ -88,6 +88,24 @@ export default function CourtsManagement() {
         } catch { toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ') }
     }
 
+    const deleteCourt = async (court: Court) => {
+        if (!confirm(`ต้องการลบ "${court.name}" ใช่ไหม?\nข้อมูลเวลาเปิด-ปิดจะถูกลบไปด้วย`)) return
+        try {
+            const res = await fetch('/api/courts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: court.id }),
+            })
+            if (res.ok) {
+                toast.success('ลบสนามสำเร็จ')
+                fetchCourts()
+            } else {
+                const data = await res.json().catch(() => ({}))
+                toast.error(data.error || 'ลบไม่สำเร็จ')
+            }
+        } catch { toast.error('เกิดข้อผิดพลาด') }
+    }
+
     const filteredCourts = selectedFilter
         ? courts.filter(c => c.sportType === selectedFilter)
         : courts
@@ -116,6 +134,9 @@ export default function CourtsManagement() {
                         </span>
                         <button onClick={() => openModal(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text-secondary)' }}>
                             <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => deleteCourt(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c' }}>
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 </div>
