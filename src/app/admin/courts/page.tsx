@@ -11,7 +11,7 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อาทิตย์' },
 ]
 
-interface SportType { id: string; name: string; icon: string; color: string }
+interface Venue { id: string; name: string; image: string | null; description: string | null }
 interface Court {
     id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; status: string; sortOrder: number
     operatingHours: Array<{ id: string; dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
@@ -19,7 +19,7 @@ interface Court {
 
 export default function CourtsManagement() {
     const [courts, setCourts] = useState<Court[]>([])
-    const [sportTypes, setSportTypes] = useState<SportType[]>([])
+    const [venues, setVenues] = useState<Venue[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
@@ -29,7 +29,7 @@ export default function CourtsManagement() {
 
     useEffect(() => {
         fetchCourts()
-        fetchSportTypes()
+        fetchVenues()
     }, [])
 
     const fetchCourts = async () => {
@@ -42,11 +42,11 @@ export default function CourtsManagement() {
         finally { setLoading(false) }
     }
 
-    const fetchSportTypes = async () => {
+    const fetchVenues = async () => {
         try {
-            const res = await fetch('/api/sport-types', { cache: 'no-store' })
+            const res = await fetch('/api/venues', { cache: 'no-store' })
             const data = await res.json()
-            if (data.sportTypes) setSportTypes(data.sportTypes.filter((s: SportType & { isActive: boolean }) => s.isActive !== false))
+            if (data.venues) setVenues(data.venues.filter((v: Venue & { isActive: boolean }) => v.isActive !== false))
         } catch { /* ignore */ }
     }
 
@@ -54,6 +54,7 @@ export default function CourtsManagement() {
         if (court) {
             setEditingCourt(court)
             setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder, status: court.status || 'ACTIVE' })
+            // sportType field now stores venue name
             setHours(DAYS.map(d => {
                 const existing = court.operatingHours.find(h => h.dayOfWeek === d.key)
                 return existing ? { dayOfWeek: d.key, openTime: existing.openTime, closeTime: existing.closeTime, isClosed: existing.isClosed }
@@ -62,6 +63,7 @@ export default function CourtsManagement() {
         } else {
             setEditingCourt(null)
             setForm({ name: '', description: '', sportType: selectedFilter || '', sortOrder: 0, status: 'ACTIVE' })
+            // sportType field now stores venue name
             setHours(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
         }
         setShowModal(true)
@@ -91,7 +93,7 @@ export default function CourtsManagement() {
         : courts
 
     const renderCourtCard = (court: Court) => {
-        const stObj = sportTypes.find(s => s.name === court.sportType)
+        const venueObj = venues.find(v => v.name === court.sportType)
         return (
             <div key={court.id} className="admin-card" style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
@@ -149,8 +151,8 @@ export default function CourtsManagement() {
                 </button>
             </div>
 
-            {/* Sport Type Filter Tabs */}
-            {sportTypes.length > 0 && (
+            {/* Venue Filter Tabs */}
+            {venues.length > 0 && (
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => setSelectedFilter(null)}
@@ -161,21 +163,21 @@ export default function CourtsManagement() {
                             color: selectedFilter === null ? 'white' : '#374151',
                             boxShadow: selectedFilter === null ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
                         }}>
-                        🏟️ ทั้งหมด ({courts.length})
+                        📍 ทั้งหมด ({courts.length})
                     </button>
-                    {sportTypes.map(st => {
-                        const count = courts.filter(c => c.sportType === st.name).length
+                    {venues.map(v => {
+                        const count = courts.filter(c => c.sportType === v.name).length
                         return (
-                            <button key={st.id}
-                                onClick={() => setSelectedFilter(selectedFilter === st.name ? null : st.name)}
+                            <button key={v.id}
+                                onClick={() => setSelectedFilter(selectedFilter === v.name ? null : v.name)}
                                 style={{
                                     padding: '8px 20px', borderRadius: '999px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
                                     fontFamily: 'inherit', border: 'none', transition: 'all 0.2s',
-                                    background: selectedFilter === st.name ? st.color : '#f3f4f6',
-                                    color: selectedFilter === st.name ? 'white' : '#374151',
-                                    boxShadow: selectedFilter === st.name ? `0 2px 8px ${st.color}44` : 'none',
+                                    background: selectedFilter === v.name ? '#f59e0b' : '#f3f4f6',
+                                    color: selectedFilter === v.name ? 'white' : '#374151',
+                                    boxShadow: selectedFilter === v.name ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
                                 }}>
-                                {st.icon} {st.name} ({count})
+                                📍 {v.name} ({count})
                             </button>
                         )
                     })}
@@ -188,23 +190,23 @@ export default function CourtsManagement() {
                 <div className="admin-card" style={{ padding: '60px', textAlign: 'center' }}>
                     <MapPin size={48} style={{ color: 'var(--a-text-muted)', marginBottom: '16px' }} />
                     <p style={{ fontWeight: 600, color: 'var(--a-text-secondary)', marginBottom: '8px' }}>
-                        {selectedFilter ? `ไม่มีสนามในประเภท "${selectedFilter}"` : 'ยังไม่มีสนาม'}
+                        {selectedFilter ? `ไม่มีสนามในสถานที่ "${selectedFilter}"` : 'ยังไม่มีสนาม'}
                     </p>
                     <button onClick={() => openModal()} className="btn-admin">เพิ่มสนาม</button>
                 </div>
             ) : (
                 <div>
-                    {/* Group by sport type when showing all */}
+                    {/* Group by venue when showing all */}
                     {!selectedFilter ? (
                         <>
-                            {sportTypes.map(st => {
-                                const group = courts.filter(c => c.sportType === st.name)
+                            {venues.map(v => {
+                                const group = courts.filter(c => c.sportType === v.name)
                                 if (group.length === 0) return null
                                 return (
-                                    <div key={st.id} style={{ marginBottom: '28px' }}>
+                                    <div key={v.id} style={{ marginBottom: '28px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                            <span style={{ fontSize: '18px' }}>{st.icon}</span>
-                                            <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{st.name}</h3>
+                                            <span style={{ fontSize: '18px' }}>📍</span>
+                                            <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>{v.name}</h3>
                                             <span style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>({group.length} สนาม)</span>
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}>
@@ -213,19 +215,19 @@ export default function CourtsManagement() {
                                     </div>
                                 )
                             })}
-                            {/* Courts without sport type */}
+                            {/* Courts without venue */}
                             {(() => {
-                                const noType = courts.filter(c => !c.sportType || !sportTypes.find(s => s.name === c.sportType))
-                                if (noType.length === 0) return null
+                                const noVenue = courts.filter(c => !c.sportType || !venues.find(v => v.name === c.sportType))
+                                if (noVenue.length === 0) return null
                                 return (
                                     <div style={{ marginBottom: '28px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                            <span style={{ fontSize: '18px' }}>🏟️</span>
+                                            <span style={{ fontSize: '18px' }}>📍</span>
                                             <h3 style={{ fontWeight: 700, fontSize: '16px', color: 'var(--a-text)' }}>อื่นๆ</h3>
-                                            <span style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>({noType.length} สนาม)</span>
+                                            <span style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>({noVenue.length} สนาม)</span>
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}>
-                                            {noType.map(court => renderCourtCard(court))}
+                                            {noVenue.map(court => renderCourtCard(court))}
                                         </div>
                                     </div>
                                 )
@@ -256,25 +258,25 @@ export default function CourtsManagement() {
                                 <input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="เช่น สนาม A" />
                             </div>
                             <div className="input-group">
-                                <label style={{ color: 'var(--a-text-secondary)' }}>ประเภทกีฬา</label>
-                                {sportTypes.length > 0 ? (
+                                <label style={{ color: 'var(--a-text-secondary)' }}>สถานที่เรียน</label>
+                                {venues.length > 0 ? (
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        {sportTypes.map(st => (
-                                            <button key={st.id}
-                                                onClick={() => setForm({ ...form, sportType: form.sportType === st.name ? '' : st.name })}
+                                        {venues.map(v => (
+                                            <button key={v.id}
+                                                onClick={() => setForm({ ...form, sportType: form.sportType === v.name ? '' : v.name })}
                                                 style={{
                                                     padding: '8px 16px', borderRadius: '999px', cursor: 'pointer',
                                                     fontWeight: 600, fontSize: '13px', fontFamily: 'inherit',
                                                     border: 'none', transition: 'all 0.2s',
-                                                    background: form.sportType === st.name ? st.color : '#f3f4f6',
-                                                    color: form.sportType === st.name ? 'white' : '#374151',
+                                                    background: form.sportType === v.name ? '#f59e0b' : '#f3f4f6',
+                                                    color: form.sportType === v.name ? 'white' : '#374151',
                                                 }}>
-                                                {st.icon} {st.name}
+                                                📍 {v.name}
                                             </button>
                                         ))}
                                     </div>
                                 ) : (
-                                    <input className="admin-input" value={form.sportType} onChange={e => setForm({ ...form, sportType: e.target.value })} placeholder="เช่น สกี้, สโนบอร์ด" />
+                                    <input className="admin-input" value={form.sportType} onChange={e => setForm({ ...form, sportType: e.target.value })} placeholder="เช่น สโลปสกี A" />
                                 )}
                             </div>
                             <div className="input-group">
