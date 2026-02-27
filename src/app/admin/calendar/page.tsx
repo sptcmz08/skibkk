@@ -46,6 +46,9 @@ export default function CalendarPage() {
     const [bookDates, setBookDates] = useState<string[]>([])
     const [bookTimes, setBookTimes] = useState<string[]>([])
     const [bookSubmitting, setBookSubmitting] = useState(false)
+    // bookedSlots: Map of "date|time" => court name (for showing what's booked)
+    const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set())
+    const [loadingSlots, setLoadingSlots] = useState(false)
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -173,13 +176,36 @@ export default function CalendarPage() {
         return `${h}:00`
     })
 
+    // Fetch booked slots when court or dates change
+    useEffect(() => {
+        if (!bookCourt || bookDates.length === 0) { setBookedSlots(new Set()); return }
+        setLoadingSlots(true)
+        const params = new URLSearchParams()
+        params.set('courtId', bookCourt)
+        bookDates.forEach(d => params.append('dates', d))
+        fetch(`/api/bookings/booked-slots?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => {
+                const set = new Set<string>()
+                    ; (data.bookedSlots || []).forEach((s: { date: string; startTime: string }) => {
+                        set.add(`${s.date}|${s.startTime}`)
+                    })
+                setBookedSlots(set)
+            })
+            .catch(() => { })
+            .finally(() => setLoadingSlots(false))
+    }, [bookCourt, bookDates])
+
     // Toggle date for multi-date booking
     const toggleBookDate = (dateStr: string) => {
         setBookDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort())
     }
 
-    // Toggle time for multi-time booking
+    // Toggle time for multi-time booking — prevent selecting fully booked times
     const toggleBookTime = (time: string) => {
+        // Check if this time is booked on ALL selected dates
+        const allBooked = bookDates.length > 0 && bookDates.every(d => bookedSlots.has(`${d}|${time}`))
+        if (allBooked) { toast.error('เวลานี้ถูกจองหมดแล้วทุกวันที่เลือก'); return }
         setBookTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time].sort())
     }
 
@@ -701,19 +727,30 @@ export default function CalendarPage() {
                             <label style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Clock size={14} /> เลือกเวลา <span style={{ fontWeight: 400, color: 'var(--a-text-muted)', fontSize: '12px' }}>(เลือกได้หลายชั่วโมง)</span>
                             </label>
+                            {loadingSlots && <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginBottom: '6px' }}>⏳ กำลังตรวจสอบเวลาที่ว่าง...</div>}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
                                 {timeSlots.map(t => {
                                     const chosen = bookTimes.includes(t)
+                                    // Check how many selected dates have this slot booked
+                                    const bookedCount = bookDates.filter(d => bookedSlots.has(`${d}|${t}`)).length
+                                    const allBooked = bookDates.length > 0 && bookedCount === bookDates.length
+                                    const someBooked = bookedCount > 0 && !allBooked
                                     return (
                                         <button key={t} onClick={() => toggleBookTime(t)}
+                                            disabled={allBooked}
+                                            title={allBooked ? 'ถูกจองแล้วทุกวันที่เลือก' : someBooked ? `จองแล้ว ${bookedCount}/${bookDates.length} วัน` : ''}
                                             style={{
-                                                padding: '8px 4px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
-                                                border: chosen ? '2px solid var(--a-primary)' : '1px solid var(--a-border)',
-                                                background: chosen ? 'var(--a-primary)' : 'white',
-                                                color: chosen ? 'white' : 'var(--a-text)',
+                                                padding: '8px 4px', fontSize: '13px', fontWeight: 600, borderRadius: '8px',
+                                                cursor: allBooked ? 'not-allowed' : 'pointer',
+                                                border: allBooked ? '1px solid #e0e0e0' : chosen ? '2px solid var(--a-primary)' : someBooked ? '1px solid #f5a623' : '1px solid var(--a-border)',
+                                                background: allBooked ? '#f3f3f3' : chosen ? 'var(--a-primary)' : someBooked ? '#fff8e1' : 'white',
+                                                color: allBooked ? '#bbb' : chosen ? 'white' : 'var(--a-text)',
                                                 fontFamily: 'inherit', transition: 'all 0.15s',
+                                                textDecoration: allBooked ? 'line-through' : 'none',
+                                                position: 'relative',
                                             }}>
                                             {t}
+                                            {someBooked && <span style={{ display: 'block', fontSize: '9px', color: '#f5a623', fontWeight: 700 }}>⚠️ {bookedCount}วันจองแล้ว</span>}
                                         </button>
                                     )
                                 })}
