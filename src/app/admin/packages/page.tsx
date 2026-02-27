@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 interface PackageItem {
     id: string; name: string; totalHours: number; price: number
     description: string | null; isActive: boolean; validDays: number
+    validFrom: string | null; validTo: string | null
     _count?: { userPackages: number }
 }
 
@@ -26,7 +27,7 @@ export default function PackagesPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editId, setEditId] = useState<string | null>(null)
-    const [form, setForm] = useState({ name: '', totalHours: '', price: '', description: '', validDays: '30' })
+    const [form, setForm] = useState({ name: '', totalHours: '', price: '', description: '', validDays: '30', validFrom: '', validTo: '' })
 
     // Assign modal
     const [showAssign, setShowAssign] = useState(false)
@@ -63,7 +64,7 @@ export default function PackagesPage() {
         if (res.ok) {
             toast.success(editId ? 'แก้ไขสำเร็จ' : 'เพิ่มแพ็คเกจสำเร็จ')
             setShowModal(false); setEditId(null)
-            setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30' })
+            setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30', validFrom: '', validTo: '' })
             fetchData()
         } else { toast.error('เกิดข้อผิดพลาด') }
     }
@@ -83,6 +84,8 @@ export default function PackagesPage() {
             name: pkg.name, totalHours: pkg.totalHours.toString(),
             price: pkg.price.toString(), description: pkg.description || '',
             validDays: pkg.validDays.toString(),
+            validFrom: pkg.validFrom ? pkg.validFrom.slice(0, 10) : '',
+            validTo: pkg.validTo ? pkg.validTo.slice(0, 10) : '',
         })
         setShowModal(true)
     }
@@ -144,7 +147,7 @@ export default function PackagesPage() {
                     <button onClick={() => setShowAssign(true)} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <UserPlus size={16} /> มอบแพ็คเกจให้ลูกค้า
                     </button>
-                    <button onClick={() => { setEditId(null); setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30' }); setShowModal(true) }} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={() => { setEditId(null); setForm({ name: '', totalHours: '', price: '', description: '', validDays: '30', validFrom: '', validTo: '' }); setShowModal(true) }} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Plus size={18} /> เพิ่มแพ็คเกจ
                     </button>
                 </div>
@@ -169,6 +172,13 @@ export default function PackagesPage() {
                                     <div>
                                         <h3 style={{ fontWeight: 700, color: 'var(--a-text)' }}>{pkg.name}</h3>
                                         <p style={{ fontSize: '13px', color: 'var(--a-text-muted)' }}>{pkg.description || '-'}</p>
+                                        {(pkg.validFrom || pkg.validTo) && (
+                                            <p style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600, marginTop: '2px' }}>
+                                                📅 {pkg.validFrom ? new Date(pkg.validFrom).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                                {' - '}
+                                                {pkg.validTo ? new Date(pkg.validTo).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -277,6 +287,10 @@ export default function PackagesPage() {
                             </div>
                             <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>อายุแพ็คเกจ (วัน)</label><input type="number" className="admin-input" value={form.validDays} onChange={e => setForm({ ...form, validDays: e.target.value })} /></div>
                             <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label><input className="admin-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="เช่น ซื้อ 10 ชม. ลด 15%" /></div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันเริ่มต้นใช้งาน</label><input type="date" className="admin-input" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })} /></div>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันสิ้นสุดใช้งาน</label><input type="date" className="admin-input" value={form.validTo} onChange={e => setForm({ ...form, validTo: e.target.value })} /></div>
+                            </div>
                         </div>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
                             <button onClick={() => setShowModal(false)} className="btn-admin-outline">ยกเลิก</button>

@@ -22,7 +22,7 @@ export async function GET() {
 // POST — create a new package
 export async function POST(req: NextRequest) {
     try {
-        const { name, description, totalHours, price, validDays, isActive } = await req.json()
+        const { name, description, totalHours, price, validDays, validFrom, validTo, isActive } = await req.json()
         if (!name || !totalHours || !price) {
             return NextResponse.json({ error: 'กรุณากรอกข้อมูลให้ครบ' }, { status: 400 })
         }
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
                 totalHours: parseInt(totalHours),
                 price: parseFloat(price),
                 validDays: parseInt(validDays) || 30,
+                validFrom: validFrom ? new Date(validFrom) : null,
+                validTo: validTo ? new Date(validTo) : null,
                 isActive: isActive !== false,
             },
         })
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 // PUT — update a package
 export async function PUT(req: NextRequest) {
     try {
-        const { id, name, description, totalHours, price, validDays, isActive } = await req.json()
+        const { id, name, description, totalHours, price, validDays, validFrom, validTo, isActive } = await req.json()
         if (!id) return NextResponse.json({ error: 'ต้องระบุ id' }, { status: 400 })
         const pkg = await prisma.package.update({
             where: { id },
@@ -56,6 +58,8 @@ export async function PUT(req: NextRequest) {
                 ...(totalHours !== undefined && { totalHours: parseInt(totalHours) }),
                 ...(price !== undefined && { price: parseFloat(price) }),
                 ...(validDays !== undefined && { validDays: parseInt(validDays) }),
+                ...(validFrom !== undefined && { validFrom: validFrom ? new Date(validFrom) : null }),
+                ...(validTo !== undefined && { validTo: validTo ? new Date(validTo) : null }),
                 ...(isActive !== undefined && { isActive }),
             },
         })

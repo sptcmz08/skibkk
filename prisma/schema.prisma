@@ -230,15 +230,17 @@ model Payment {
 }
 
 model Package {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
   description String?
   totalHours  Int
   price       Float
-  validDays   Int      @default(30) // days until expiry
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  validDays   Int       @default(30) // days until expiry
+  validFrom   DateTime? // วันที่เริ่มใช้งานได้
+  validTo     DateTime? // วันที่สิ้นสุดการใช้งาน
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   userPackages UserPackage[]
 
