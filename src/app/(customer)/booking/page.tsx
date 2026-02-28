@@ -635,7 +635,7 @@ export default function BookingPage() {
                             {/* QR Code display */}
                             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                                 <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
-                                    <img src="/qr-payment.png" alt="PromptPay QR - SKI BKK" style={{ width: '260px', height: 'auto', borderRadius: '8px' }} />
+                                    <img src="/qr-payment.png" alt="PromptPay QR - SKI BKK" style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }} />
                                 </div>
                                 <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>
                                 <div style={{
@@ -671,7 +671,7 @@ export default function BookingPage() {
                                 </label>
 
                                 {/* Verify button */}
-                                {slipPreview && remaining > 1 && (
+                                {slipPreview && (
                                     <button
                                         onClick={handleVerifySlip}
                                         disabled={slipVerifying}
