@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const dateStr = searchParams.get('date')
         const sessionId = searchParams.get('sessionId') || ''
+        const venueId = searchParams.get('venueId')
 
         if (!dateStr) {
             return NextResponse.json({ error: 'กรุณาระบุวันที่' }, { status: 400 })
@@ -29,9 +30,12 @@ export async function GET(req: NextRequest) {
             })
         }
 
-        // Get all visible courts (ACTIVE + CLOSED, not HIDDEN)
+        // Get visible courts, filtered by venue if specified
+        const courtWhere: any = { status: { in: ['ACTIVE', 'CLOSED'] } }
+        if (venueId) courtWhere.venueId = venueId
+
         const courts = await prisma.court.findMany({
-            where: { status: { in: ['ACTIVE', 'CLOSED'] } },
+            where: courtWhere,
             include: {
                 operatingHours: { where: { dayOfWeek: dayOfWeek as any } },
                 pricingRules: {

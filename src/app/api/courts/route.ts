@@ -7,14 +7,22 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
     try {
         const isAdmin = req.nextUrl.searchParams.get('admin') === '1'
+        const venueId = req.nextUrl.searchParams.get('venueId')
+
+        const where: any = isAdmin
+            ? {} // Admin sees all courts
+            : { status: { in: ['ACTIVE', 'CLOSED'] } }
+
+        if (venueId) {
+            where.venueId = venueId
+        }
 
         const courts = await prisma.court.findMany({
-            where: isAdmin
-                ? {} // Admin sees all courts
-                : { status: { in: ['ACTIVE', 'CLOSED'] } }, // Customer sees ACTIVE + CLOSED
+            where,
             include: {
                 operatingHours: true,
                 pricingRules: { where: { isActive: true } },
+                venue: true,
             },
             orderBy: { sortOrder: 'asc' },
         })
@@ -46,6 +54,7 @@ export async function POST(req: NextRequest) {
                     status: body.status || 'ACTIVE',
                     isActive: body.status !== 'HIDDEN',
                     sortOrder: parseInt(body.sortOrder) || 0,
+                    venueId: body.venueId || null,
                     operatingHours: {
                         deleteMany: {},
                         create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
@@ -68,6 +77,7 @@ export async function POST(req: NextRequest) {
                 sportType: body.sportType || null,
                 status: body.status || 'ACTIVE',
                 sortOrder: parseInt(body.sortOrder) || 0,
+                venueId: body.venueId || null,
                 operatingHours: {
                     create: (body.operatingHours || []).map((oh: { dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }) => ({
                         dayOfWeek: oh.dayOfWeek,

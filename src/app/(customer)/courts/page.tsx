@@ -181,7 +181,8 @@ export default function CourtsPage() {
         if (!silent) setLoading(true)
         try {
             const sessionId = getSessionId()
-            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}`, { cache: 'no-store' })
+            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}${venueParam}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) {
                 setAllCourts(data.availability)
@@ -195,7 +196,7 @@ export default function CourtsPage() {
             }
         } catch { if (!silent) toast.error('ไม่สามารถโหลดข้อมูลได้') }
         finally { if (!silent) setLoading(false) }
-    }, [])
+    }, [selectedVenue])
 
     // Poll availability every 5s when on step 3
     useEffect(() => {
@@ -208,12 +209,13 @@ export default function CourtsPage() {
     // Fetch calendar availability for month coloring
     useEffect(() => {
         if (step === 2) {
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}`, { cache: 'no-store' })
+            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
                 .then(r => r.json())
                 .then(data => { if (data.availability) setCalAvail(data.availability) })
                 .catch(() => { })
         }
-    }, [step, viewYear, viewMonth])
+    }, [step, viewYear, viewMonth, selectedVenue])
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)

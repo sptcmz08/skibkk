@@ -73,9 +73,11 @@ model Court {
   isActive    Boolean  @default(true)
   status      String   @default("ACTIVE") // ACTIVE, CLOSED, HIDDEN
   sortOrder   Int      @default(0)
+  venueId     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  venue          Venue?           @relation(fields: [venueId], references: [id])
   operatingHours OperatingHours[]
   bookingItems   BookingItem[]
   pricingRules   PricingRule[]
@@ -101,6 +103,8 @@ model Venue {
   description String?
   isActive    Boolean @default(true)
   sortOrder   Int     @default(0)
+
+  courts Court[]
 
   @@map("venues")
 }

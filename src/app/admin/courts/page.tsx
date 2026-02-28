@@ -13,8 +13,9 @@ const DAYS = [
 
 interface Venue { id: string; name: string; image: string | null; description: string | null }
 interface Court {
-    id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; status: string; sortOrder: number
+    id: string; name: string; description: string | null; sportType: string | null; isActive: boolean; status: string; sortOrder: number; venueId: string | null
     operatingHours: Array<{ id: string; dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
+    venue?: Venue | null
 }
 
 export default function CourtsManagement() {
@@ -23,9 +24,9 @@ export default function CourtsManagement() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingCourt, setEditingCourt] = useState<Court | null>(null)
-    const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0, status: 'ACTIVE' })
+    const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0, status: 'ACTIVE', venueId: '' })
     const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '08:00', closeTime: '23:00', isClosed: false })))
-    const [selectedFilter, setSelectedFilter] = useState<string | null>(null) // null = all
+    const [selectedFilter, setSelectedFilter] = useState<string | null>(null) // null = all, venueId string
 
     useEffect(() => {
         fetchCourts()
@@ -53,8 +54,7 @@ export default function CourtsManagement() {
     const openModal = (court?: Court) => {
         if (court) {
             setEditingCourt(court)
-            setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder, status: court.status || 'ACTIVE' })
-            // sportType field now stores venue name
+            setForm({ name: court.name, description: court.description || '', sportType: court.sportType || '', sortOrder: court.sortOrder, status: court.status || 'ACTIVE', venueId: court.venueId || '' })
             setHours(DAYS.map(d => {
                 const existing = court.operatingHours.find(h => h.dayOfWeek === d.key)
                 return existing ? { dayOfWeek: d.key, openTime: existing.openTime, closeTime: existing.closeTime, isClosed: existing.isClosed }
@@ -62,8 +62,7 @@ export default function CourtsManagement() {
             }))
         } else {
             setEditingCourt(null)
-            setForm({ name: '', description: '', sportType: selectedFilter || '', sortOrder: 0, status: 'ACTIVE' })
-            // sportType field now stores venue name
+            setForm({ name: '', description: '', sportType: '', sortOrder: 0, status: 'ACTIVE', venueId: selectedFilter || '' })
             setHours(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '09:00', closeTime: '00:00', isClosed: false })))
         }
         setShowModal(true)
@@ -107,11 +106,10 @@ export default function CourtsManagement() {
     }
 
     const filteredCourts = selectedFilter
-        ? courts.filter(c => c.sportType === selectedFilter)
+        ? courts.filter(c => c.venueId === selectedFilter)
         : courts
 
     const renderCourtCard = (court: Court) => {
-        const venueObj = venues.find(v => v.name === court.sportType)
         return (
             <div key={court.id} className="admin-card" style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
@@ -187,16 +185,16 @@ export default function CourtsManagement() {
                         📍 ทั้งหมด ({courts.length})
                     </button>
                     {venues.map(v => {
-                        const count = courts.filter(c => c.sportType === v.name).length
+                        const count = courts.filter(c => c.venueId === v.id).length
                         return (
                             <button key={v.id}
-                                onClick={() => setSelectedFilter(selectedFilter === v.name ? null : v.name)}
+                                onClick={() => setSelectedFilter(selectedFilter === v.id ? null : v.id)}
                                 style={{
                                     padding: '8px 20px', borderRadius: '999px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
                                     fontFamily: 'inherit', border: 'none', transition: 'all 0.2s',
-                                    background: selectedFilter === v.name ? '#f59e0b' : '#f3f4f6',
-                                    color: selectedFilter === v.name ? 'white' : '#374151',
-                                    boxShadow: selectedFilter === v.name ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
+                                    background: selectedFilter === v.id ? '#f59e0b' : '#f3f4f6',
+                                    color: selectedFilter === v.id ? 'white' : '#374151',
+                                    boxShadow: selectedFilter === v.id ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
                                 }}>
                                 📍 {v.name} ({count})
                             </button>
@@ -211,7 +209,7 @@ export default function CourtsManagement() {
                 <div className="admin-card" style={{ padding: '60px', textAlign: 'center' }}>
                     <MapPin size={48} style={{ color: 'var(--a-text-muted)', marginBottom: '16px' }} />
                     <p style={{ fontWeight: 600, color: 'var(--a-text-secondary)', marginBottom: '8px' }}>
-                        {selectedFilter ? `ไม่มีสนามในสถานที่ "${selectedFilter}"` : 'ยังไม่มีสนาม'}
+                        {selectedFilter ? `ไม่มีสนามในสถานที่ "${venues.find(v => v.id === selectedFilter)?.name || selectedFilter}"` : 'ยังไม่มีสนาม'}
                     </p>
                     <button onClick={() => openModal()} className="btn-admin">เพิ่มสนาม</button>
                 </div>
@@ -221,7 +219,7 @@ export default function CourtsManagement() {
                     {!selectedFilter ? (
                         <>
                             {venues.map(v => {
-                                const group = courts.filter(c => c.sportType === v.name)
+                                const group = courts.filter(c => c.venueId === v.id)
                                 if (group.length === 0) return null
                                 return (
                                     <div key={v.id} style={{ marginBottom: '28px' }}>
@@ -238,7 +236,7 @@ export default function CourtsManagement() {
                             })}
                             {/* Courts without venue */}
                             {(() => {
-                                const noVenue = courts.filter(c => !c.sportType || !venues.find(v => v.name === c.sportType))
+                                const noVenue = courts.filter(c => !c.venueId)
                                 if (noVenue.length === 0) return null
                                 return (
                                     <div style={{ marginBottom: '28px' }}>
@@ -284,13 +282,13 @@ export default function CourtsManagement() {
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         {venues.map(v => (
                                             <button key={v.id}
-                                                onClick={() => setForm({ ...form, sportType: form.sportType === v.name ? '' : v.name })}
+                                                onClick={() => setForm({ ...form, venueId: form.venueId === v.id ? '' : v.id })}
                                                 style={{
                                                     padding: '8px 16px', borderRadius: '999px', cursor: 'pointer',
                                                     fontWeight: 600, fontSize: '13px', fontFamily: 'inherit',
                                                     border: 'none', transition: 'all 0.2s',
-                                                    background: form.sportType === v.name ? '#f59e0b' : '#f3f4f6',
-                                                    color: form.sportType === v.name ? 'white' : '#374151',
+                                                    background: form.venueId === v.id ? '#f59e0b' : '#f3f4f6',
+                                                    color: form.venueId === v.id ? 'white' : '#374151',
                                                 }}>
                                                 📍 {v.name}
                                             </button>

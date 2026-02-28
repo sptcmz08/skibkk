@@ -10,14 +10,19 @@ export async function GET(req: NextRequest) {
         const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString())
         const month = parseInt(searchParams.get('month') || (new Date().getMonth() + 1).toString())
         const sportType = searchParams.get('sportType') || null
+        const venueId = searchParams.get('venueId')
 
         // Date range for the month
         const startDate = new Date(year, month - 1, 1)
         const endDate = new Date(year, month, 0) // last day of month
 
-        // Get courts for this sport
+        // Get courts for this sport/venue
+        const courtWhere: any = { isActive: true }
+        if (sportType) courtWhere.sportType = sportType
+        if (venueId) courtWhere.venueId = venueId
+
         const courts = await prisma.court.findMany({
-            where: sportType ? { sportType, isActive: true } : { isActive: true },
+            where: courtWhere,
             select: { id: true },
         })
         const courtIds = courts.map(c => c.id)
