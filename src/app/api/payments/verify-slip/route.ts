@@ -19,22 +19,33 @@ export async function POST(req: NextRequest) {
             }, { status: 500 })
         }
 
-        // Convert base64 data URL to binary for multipart upload
-        // Input: "data:image/png;base64,iVBORw0KGgo..."
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
+        // ============ STEP 1: Convert base64 → binary ============
+        // Support all image formats: image/png, image/jpeg, image/jpg, image/webp, image/heic
+        const base64Data = image.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
         const binaryData = Buffer.from(base64Data, 'base64')
 
-        // Detect mime type from data URL
-        const mimeMatch = image.match(/^data:(image\/\w+);base64,/)
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
-        const ext = mimeType.split('/')[1] || 'png'
+        // Validate: must have actual image data
+        if (binaryData.length < 1000) {
+            return NextResponse.json({ error: 'ไฟล์รูปภาพไม่ถูกต้องหรือเสียหาย', verified: false }, { status: 400 })
+        }
+        if (binaryData.length > 10 * 1024 * 1024) {
+            return NextResponse.json({ error: 'ไฟล์ใหญ่เกินไป (สูงสุด 10MB)', verified: false }, { status: 400 })
+        }
 
-        // Build multipart/form-data (EasySlip expects 'file' field)
+        // Detect mime type from data URL
+        const mimeMatch = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+        // Normalize extension
+        let ext = mimeType.split('/')[1] || 'jpg'
+        if (ext === 'jpeg') ext = 'jpg'
+
+        console.log(`[SlipVerify] Image: ${(binaryData.length / 1024).toFixed(0)}KB, type: ${mimeType}`)
+
+        // ============ STEP 2: Send to EasySlip API ============
         const formData = new FormData()
         const blob = new Blob([binaryData], { type: mimeType })
         formData.append('file', blob, `slip.${ext}`)
 
-        // Call EasySlip API with 15-second timeout
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 15000)
 
@@ -44,7 +55,6 @@ export async function POST(req: NextRequest) {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${EASYSLIP_API_KEY}`,
-                    // Do NOT set Content-Type — fetch auto-sets it with boundary for FormData
                 },
                 body: formData,
                 signal: controller.signal,
@@ -52,7 +62,7 @@ export async function POST(req: NextRequest) {
         } catch (fetchError) {
             clearTimeout(timeout)
             const isTimeout = (fetchError as Error).name === 'AbortError'
-            console.error('EasySlip fetch error:', isTimeout ? 'TIMEOUT' : fetchError)
+            console.error('[SlipVerify] Fetch error:', isTimeout ? 'TIMEOUT 15s' : fetchError)
             return NextResponse.json({
                 verified: false,
                 error: isTimeout
@@ -63,17 +73,26 @@ export async function POST(req: NextRequest) {
             clearTimeout(timeout)
         }
 
-        const result = await easyslipRes.json()
+        // ============ STEP 3: Parse EasySlip response ============
+        let result: any
+        try {
+            result = await easyslipRes.json()
+        } catch {
+            console.error('[SlipVerify] Failed to parse EasySlip JSON response, status:', easyslipRes.status)
+            return NextResponse.json({
+                error: 'ระบบตรวจสลิปส่งข้อมูลผิดรูปแบบ กรุณาลองใหม่',
+                verified: false,
+            }, { status: 500 })
+        }
 
         if (!easyslipRes.ok || result.status !== 200) {
-            console.error('EasySlip verify error:', JSON.stringify(result), `Image size: ${(binaryData.length / 1024).toFixed(0)}KB`)
+            console.error('[SlipVerify] EasySlip ERROR:', JSON.stringify(result))
             const errorMsg = result.data?.message || result.message || ''
             const statusCode = result.status || easyslipRes.status
 
-            // Handle specific "not found" / QR code not detected errors
             if (statusCode === 404 || errorMsg.includes('ไม่พบ') || errorMsg.includes('not found') || errorMsg.includes('No slip')) {
                 return NextResponse.json({
-                    error: 'ไม่พบข้อมูลสลิปในรูปนี้ — กรุณาถ่ายรูปสลิปจากแอปธนาคารโดยตรง (ไม่ใช่ screenshot) หรือตรวจสอบว่ารูปชัดเจนและเห็น QR Code ครบ',
+                    error: 'ไม่พบข้อมูลสลิปในรูปนี้ — กรุณาใช้รูปสลิปจากแอปธนาคารโดยตรง (save/share รูปจากแอป ไม่ใช่ screenshot)',
                     verified: false,
                 }, { status: 400 })
             }
@@ -84,83 +103,114 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // Extract slip data from response
-        // EasySlip response format:
-        // { status: 200, data: { amount: { amount: 1800 }, transRef: "...", sender: { name: "..." }, receiver: { name: "..." }, date: "2026-02-25", sendingBank: "..." } }
+        // ============ STEP 4: Extract data from successful response ============
         const slipData = result.data
+        console.log('[SlipVerify] SUCCESS — Full EasySlip data:', JSON.stringify(slipData, null, 2))
+
         const amount = slipData?.amount?.amount || 0
         const transRef = slipData?.transRef || ''
-        const sender = slipData?.sender?.name || ''
-        const receiver = slipData?.receiver?.name || ''
+        // Sender: try displayName first (more complete), then name
+        const sender = slipData?.sender?.displayName || slipData?.sender?.name || ''
+        // Receiver: for personal transfer → name/account, for merchant QR → proxy fields
+        const receiverName = slipData?.receiver?.displayName || slipData?.receiver?.name || ''
         const receiverAccount = slipData?.receiver?.account?.value || ''
+        const receiverProxyName = slipData?.receiver?.proxy?.name || ''
+        const receiverProxyValue = slipData?.receiver?.proxy?.value || ''
+        const receiverProxyType = slipData?.receiver?.proxy?.type || '' // BILLERID, MSISDN, etc.
         const date = slipData?.date || ''
         const bankCode = slipData?.sendingBank || ''
 
-        // ============ SECURITY: Duplicate slip detection by transRef ============
+        // Validate amount
+        if (!amount || amount <= 0) {
+            console.error('[SlipVerify] Invalid amount:', amount)
+            return NextResponse.json({
+                error: 'ไม่พบจำนวนเงินในสลิป กรุณาลองใหม่',
+                verified: false,
+            }, { status: 400 })
+        }
+
+        // ============ STEP 5: Duplicate slip detection ============
         if (transRef) {
-            const existingPayment = await prisma.payment.findFirst({
-                where: { slipHash: transRef },
-            })
-            if (existingPayment) {
-                return NextResponse.json({
-                    error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
-                    verified: false,
-                }, { status: 400 })
-            }
-            const existingUsedSlip = await prisma.usedSlip.findFirst({
-                where: { slipHash: transRef },
-            })
-            if (existingUsedSlip) {
+            const [existingPayment, existingUsedSlip] = await Promise.all([
+                prisma.payment.findFirst({ where: { slipHash: transRef } }),
+                prisma.usedSlip.findFirst({ where: { slipHash: transRef } }),
+            ])
+            if (existingPayment || existingUsedSlip) {
                 return NextResponse.json({
                     error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
                     verified: false,
                 }, { status: 400 })
             }
         }
-        // ============ SECURITY: Verify receiver matches SKIBKK account ============
+
+        // ============ STEP 6: Verify receiver matches SKIBKK ============
         const expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
         const expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+
         if (expectedReceiver || expectedAccount) {
-            const receiverLower = receiver.toLowerCase()
-            const expectedLower = expectedReceiver.toLowerCase()
-            const accountMatch = expectedAccount && receiverAccount.includes(expectedAccount)
-            const nameMatch = expectedReceiver && (receiverLower.includes(expectedLower) || expectedLower.includes(receiverLower))
+            // Collect ALL receiver-related text from EasySlip response into one searchable string
+            const allReceiverParts = [
+                receiverName,
+                receiverAccount,
+                receiverProxyName,
+                receiverProxyValue,
+                // Also check nested fields that might contain merchant info
+                slipData?.receiver?.account?.bank?.short || '',
+                slipData?.receiver?.account?.bank?.name || '',
+            ]
+            const allReceiverText = allReceiverParts.join(' ').toLowerCase()
+
+            console.log(`[SlipVerify] Receiver check — allText: "${allReceiverText}" | expected name: "${expectedReceiver}" account: "${expectedAccount}"`)
+
+            const nameMatch = expectedReceiver && allReceiverText.includes(expectedReceiver.toLowerCase())
+            const accountMatch = expectedAccount && allReceiverText.includes(expectedAccount.toLowerCase())
 
             if (!nameMatch && !accountMatch) {
-                console.error(`Receiver mismatch: name="${receiver}" account="${receiverAccount}", expected name="${expectedReceiver}" account="${expectedAccount}"`)
+                // Log all raw receiver data for debugging
+                console.error('[SlipVerify] RECEIVER MISMATCH — raw receiver:', JSON.stringify(slipData?.receiver))
                 return NextResponse.json({
-                    error: `สลิปนี้ไม่ได้โอนให้ SKIBKK (ผู้รับ: ${receiver || receiverAccount})`,
+                    error: `สลิปนี้ไม่ได้โอนให้ SKIBKK (ผู้รับ: ${receiverName || receiverProxyName || receiverAccount || 'ไม่ทราบ'})`,
                     verified: false,
                 }, { status: 400 })
             }
         }
 
-        // ============ SECURITY: Verify slip is recent (within 20 minutes — must match slot lock timer) ============
+        // ============ STEP 7: Verify slip is recent (within 20 minutes) ============
         if (date) {
             const slipDate = new Date(date)
-            const now = new Date()
-            const diffMinutes = (now.getTime() - slipDate.getTime()) / (1000 * 60)
-            if (diffMinutes > 20) {
-                return NextResponse.json({
-                    error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนเงินใหม่ภายใน 20 นาที`,
-                    verified: false,
-                }, { status: 400 })
-            }
-            if (diffMinutes < -5) {
-                // Slip date is in the future — suspicious
-                return NextResponse.json({
-                    error: 'วันที่ในสลิปไม่ถูกต้อง',
-                    verified: false,
-                }, { status: 400 })
+            // Guard against invalid date parsing
+            if (isNaN(slipDate.getTime())) {
+                console.error('[SlipVerify] Invalid date from EasySlip:', date)
+                // Don't block — just log and continue
+            } else {
+                const now = new Date()
+                const diffMinutes = (now.getTime() - slipDate.getTime()) / (1000 * 60)
+                console.log(`[SlipVerify] Time check — slip: ${date}, now: ${now.toISOString()}, diff: ${diffMinutes.toFixed(1)} min`)
+
+                if (diffMinutes > 20) {
+                    return NextResponse.json({
+                        error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนเงินใหม่ภายใน 20 นาที`,
+                        verified: false,
+                    }, { status: 400 })
+                }
+                if (diffMinutes < -5) {
+                    return NextResponse.json({
+                        error: 'วันที่ในสลิปไม่ถูกต้อง',
+                        verified: false,
+                    }, { status: 400 })
+                }
             }
         }
+
+        // ============ STEP 8: Return success ============
+        console.log(`[SlipVerify] ✅ VERIFIED — amount: ${amount}, sender: ${sender}, transRef: ${transRef}`)
 
         return NextResponse.json({
             verified: true,
             amount: parseFloat(String(amount)),
             transRef,
             sender,
-            receiver,
+            receiver: receiverName || receiverProxyName,
             date,
             bankCode,
         })
@@ -168,7 +218,7 @@ export async function POST(req: NextRequest) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         }
-        console.error('Verify slip error:', error)
+        console.error('[SlipVerify] Unexpected error:', error)
         return NextResponse.json({
             error: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป กรุณาลองใหม่อีกครั้ง',
             verified: false,
