@@ -19,7 +19,7 @@ interface DaySummary {
     totalAmount: number
 }
 
-interface Court { id: string; name: string; sportType: string }
+interface Court { id: string; name: string; sportType: string; venueId: string | null }
 interface Customer { id: string; name: string; email: string; phone: string }
 
 export default function CalendarPage() {
@@ -110,7 +110,7 @@ export default function CalendarPage() {
 
     // Fetch courts for edit dropdown
     useEffect(() => {
-        fetch('/api/courts', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
+        fetch('/api/courts?admin=1', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
     }, [])
 
     // Fetch monthly summary
@@ -152,10 +152,7 @@ export default function CalendarPage() {
         fetchBookings()
     }, [selectedDate])
 
-    // Fetch courts for booking modal
-    useEffect(() => {
-        fetch('/api/courts').then(r => r.json()).then(d => setCourts(d.courts || [])).catch(() => { })
-    }, [])
+    // Fetch courts for booking modal (duplicate removed - already fetched above)
 
     // Search customers for booking modal
     useEffect(() => {
@@ -603,7 +600,13 @@ export default function CalendarPage() {
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], courtId: e.target.value }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 <option value="">เลือกสนาม</option>
-                                                {courts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                {(() => {
+                                                    // Filter courts by same venue as current booking
+                                                    const currentCourt = courts.find(c => c.id === (item as any).courtId)
+                                                    const venueId = currentCourt?.venueId
+                                                    const filtered = venueId ? courts.filter(c => c.venueId === venueId) : courts
+                                                    return filtered.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                                                })()}
                                             </select>
                                             <input type="date" value={(item as any).date} onChange={e => {
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], date: e.target.value }; setEditBookingItems(u)
