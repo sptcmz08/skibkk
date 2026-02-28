@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/auth'
 
 // One-time migration: set venueId on courts based on sportType (venue name match)
-export async function POST() {
+export async function POST(req: NextRequest) {
     try {
-        await requireAdmin()
+        // Auth via CRON_SECRET (for server-side curl)
+        const secret = req.headers.get('x-cron-secret') || req.nextUrl.searchParams.get('secret')
+        if (secret !== process.env.CRON_SECRET) {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
 
         const venues = await prisma.venue.findMany()
         const courts = await prisma.court.findMany()
