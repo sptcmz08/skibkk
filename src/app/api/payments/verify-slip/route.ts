@@ -66,10 +66,20 @@ export async function POST(req: NextRequest) {
         const result = await easyslipRes.json()
 
         if (!easyslipRes.ok || result.status !== 200) {
-            console.error('EasySlip verify error:', JSON.stringify(result))
-            const errorMsg = result.data?.message || result.message || 'ไม่สามารถตรวจสอบสลิปได้'
+            console.error('EasySlip verify error:', JSON.stringify(result), `Image size: ${(binaryData.length / 1024).toFixed(0)}KB`)
+            const errorMsg = result.data?.message || result.message || ''
+            const statusCode = result.status || easyslipRes.status
+
+            // Handle specific "not found" / QR code not detected errors
+            if (statusCode === 404 || errorMsg.includes('ไม่พบ') || errorMsg.includes('not found') || errorMsg.includes('No slip')) {
+                return NextResponse.json({
+                    error: 'ไม่พบข้อมูลสลิปในรูปนี้ — กรุณาถ่ายรูปสลิปจากแอปธนาคารโดยตรง (ไม่ใช่ screenshot) หรือตรวจสอบว่ารูปชัดเจนและเห็น QR Code ครบ',
+                    verified: false,
+                }, { status: 400 })
+            }
+
             return NextResponse.json({
-                error: `สลิปไม่ถูกต้อง: ${errorMsg}`,
+                error: `ตรวจสอบสลิปไม่สำเร็จ: ${errorMsg || 'กรุณาลองใหม่อีกครั้ง'}`,
                 verified: false,
             }, { status: 400 })
         }

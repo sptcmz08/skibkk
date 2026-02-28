@@ -73,12 +73,55 @@ export default function BookingPage() {
     }, [step])
 
 
+    // Compress image for better EasySlip verification
+    const compressImage = (file: File): Promise<File> => {
+        return new Promise((resolve) => {
+            // If file is already small (<500KB), use as-is
+            if (file.size < 500 * 1024) { resolve(file); return }
+
+            const img = new window.Image()
+            const canvas = document.createElement('canvas')
+            const reader = new FileReader()
+
+            reader.onload = (e) => {
+                img.onload = () => {
+                    // Resize to max 1600px while maintaining aspect ratio
+                    const maxDim = 1600
+                    let { width, height } = img
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) { height = Math.round(height * maxDim / width); width = maxDim }
+                        else { width = Math.round(width * maxDim / height); height = maxDim }
+                    }
+                    canvas.width = width
+                    canvas.height = height
+                    const ctx = canvas.getContext('2d')!
+                    ctx.drawImage(img, 0, 0, width, height)
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' })
+                            console.log(`Slip compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`)
+                            resolve(compressed)
+                        } else { resolve(file) }
+                    }, 'image/jpeg', 0.85)
+                }
+                img.src = e.target?.result as string
+            }
+            reader.readAsDataURL(file)
+        })
+    }
+
     // Handle slip file selection
-    const handleSlipSelect = (file: File) => {
-        setSlipFile(file)
+    const handleSlipSelect = async (file: File) => {
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error('ไฟล์ใหญ่เกินไป (สูงสุด 10MB)')
+            return
+        }
+        const compressed = await compressImage(file)
+        setSlipFile(compressed)
         const reader = new FileReader()
         reader.onload = (e) => setSlipPreview(e.target?.result as string)
-        reader.readAsDataURL(file)
+        reader.readAsDataURL(compressed)
     }
 
     // Verify slip via EasySlip API (supports multiple slips — accumulates amounts)
@@ -664,6 +707,7 @@ export default function BookingPage() {
                                         <>
                                             <Upload size={28} style={{ color: 'var(--c-text-muted)' }} />
                                             <span style={{ fontSize: '14px', color: 'var(--c-text-secondary)' }}>แตะเพื่อเลือกรูปสลิป</span>
+                                            <span style={{ fontSize: '11px', color: 'var(--c-text-muted)', textAlign: 'center' }}>💡 ใช้รูปจากแอปธนาคารโดยตรง ไม่ใช่ screenshot</span>
                                         </>
                                     )}
                                     <input type="file" accept="image/*" style={{ display: 'none' }}
