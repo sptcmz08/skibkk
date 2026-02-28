@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle } from 'lucide-react'
+import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number
     createdAt: string; createdByAdmin: boolean; isBookerLearner: boolean; notes: string | null
     user: { id: string; name: string; email: string; phone: string }
-    bookingItems: Array<{ court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
+    bookingItems: Array<{ court: { name: string; venue?: { name: string } | null }; courtId: string; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string }>
     payments: Array<{ id: string; method: string; status: string; amount: number; slipUrl: string | null; createdAt: string; verifiedAt: string | null }>
 }
@@ -35,6 +36,7 @@ const paymentMethodMap: Record<string, string> = {
 }
 
 export default function BookingsManagement() {
+    const router = useRouter()
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -282,6 +284,12 @@ export default function BookingsManagement() {
                                 ) : (
                                     <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>🌐 เว็บ</span>
                                 )}
+                                <button onClick={() => {
+                                    const firstDate = viewBooking.bookingItems[0]?.date?.split('T')[0]
+                                    router.push(`/admin/calendar${firstDate ? `?date=${firstDate}` : ''}`)
+                                }} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    <Edit2 size={12} /> แก้ไข
+                                </button>
                                 <button onClick={() => setViewBooking(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                             </div>
                         </div>
@@ -305,6 +313,7 @@ export default function BookingsManagement() {
                                 <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <div style={{ fontWeight: 600 }}>{item.court.name}</div>
+                                        {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>📍 {item.court.venue.name}</div>}
                                         <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
                                             {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
                                         </div>
