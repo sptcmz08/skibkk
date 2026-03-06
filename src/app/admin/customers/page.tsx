@@ -194,7 +194,7 @@ export default function CustomersPage() {
                                             </div>
                                             <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
                                                 {c.email && !c.email.endsWith('@line.local') && <span>{c.email}</span>}
-                                                {c.lineUserId && <span style={{ color: '#06c755' }}>{c.email && !c.email.endsWith('@line.local') ? ' · ' : ''}ID: {c.lineUserId}</span>}
+                                                {c.lineUserId && c.lineDisplayName && <span style={{ color: '#06c755' }}>{c.email && !c.email.endsWith('@line.local') ? ' · ' : ''}LINE: {c.lineDisplayName}</span>}
                                                 {!c.email && !c.lineUserId && '-'}
                                             </div>
                                         </div>
