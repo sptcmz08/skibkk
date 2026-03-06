@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -522,7 +524,7 @@ export default function InvoicesPage() {
 
     // ── Main list ──
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ใบกำกับภาษี / ใบเสร็จรับเงิน</h2>
@@ -578,6 +580,6 @@ export default function InvoicesPage() {
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

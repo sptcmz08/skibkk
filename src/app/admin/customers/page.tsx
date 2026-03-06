@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Users, Search, Phone, Mail, Calendar, ChevronLeft, Clock, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -152,7 +154,7 @@ export default function CustomersPage() {
 
     // ── Customer List View ──
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ลูกค้า ({filtered.length})</h2>
@@ -210,6 +212,6 @@ export default function CustomersPage() {
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

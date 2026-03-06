@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -35,7 +37,7 @@ export default function AvailabilityPage() {
     const bookedSlots = availability.reduce((s, c) => s + c.slots.filter(sl => sl.status === 'booked').length, 0)
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                 <button onClick={() => changeDate(-1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronLeft size={18} /></button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -92,6 +94,6 @@ export default function AvailabilityPage() {
                     ))}
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

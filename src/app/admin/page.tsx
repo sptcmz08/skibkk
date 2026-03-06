@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Calendar, Users, DollarSign, Clock, TrendingUp, MapPin, ArrowUpRight, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
@@ -90,7 +92,7 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             {/* Stat Cards */}
             <div className="grid-4" style={{ marginBottom: '28px' }}>
                 {[
@@ -209,6 +211,6 @@ export default function AdminDashboard() {
                     </table>
                 </div>
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

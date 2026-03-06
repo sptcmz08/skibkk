@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Users, GraduationCap, Copy, ExternalLink, Search, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -89,7 +91,7 @@ export default function ParticipantsPage() {
     if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--a-text-muted)' }}>กำลังโหลด...</div>
 
     return (
-        <div>
+        <FadeIn><div>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
@@ -197,6 +199,6 @@ export default function ParticipantsPage() {
                     </div>
                 ))}
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

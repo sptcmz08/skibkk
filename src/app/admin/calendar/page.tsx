@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -338,7 +340,7 @@ export default function CalendarPage() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ปฏิทินการจอง</h2>
@@ -962,6 +964,6 @@ export default function CalendarPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

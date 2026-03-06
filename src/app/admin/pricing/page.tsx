@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { DollarSign, Plus, Edit2, Trash2, Save, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -121,7 +123,7 @@ export default function PricingPage() {
     const getDayLabels = (days: string[]) => days.map(d => DAYS.find(dd => dd.key === d)?.label).join(', ')
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>กำหนดราคา</h2>
@@ -226,6 +228,6 @@ export default function PricingPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -111,7 +113,7 @@ export default function BookingsManagement() {
     const fromWeb = bookings.filter(b => !b.createdByAdmin).length
 
     return (
-        <div>
+        <FadeIn><div>
             {/* Header */}
             <div style={{ marginBottom: '24px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>รายการจองทั้งหมด</h2>
@@ -428,6 +430,6 @@ export default function BookingsManagement() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

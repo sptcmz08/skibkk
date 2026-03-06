@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { MapPin, Plus, Edit2, Trash2, Clock, Save, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -159,7 +161,7 @@ export default function CourtsManagement() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>จัดการสนาม</h2>
@@ -362,6 +364,6 @@ export default function CourtsManagement() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

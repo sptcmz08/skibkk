@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Shield, Plus, Trash2, X, Save, RefreshCw, Edit2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -114,7 +116,7 @@ export default function UsersPage() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ผู้ใช้งานระบบ ({users.length})</h2>
@@ -225,6 +227,6 @@ export default function UsersPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

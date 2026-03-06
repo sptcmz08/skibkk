@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Star, BarChart3, Copy, Link, MessageSquare, Users, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -85,7 +87,7 @@ export default function EvaluationsPage() {
     if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--a-text-muted)' }}>กำลังโหลด...</div>
 
     return (
-        <div>
+        <FadeIn><div>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
@@ -258,6 +260,6 @@ export default function EvaluationsPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

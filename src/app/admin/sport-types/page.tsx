@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -92,7 +94,7 @@ export default function SportTypesPage() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ประเภทกีฬา ({sportTypes.length})</h2>
@@ -236,6 +238,6 @@ export default function SportTypesPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }

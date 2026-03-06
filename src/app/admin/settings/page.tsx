@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -90,7 +92,7 @@ export default function AdminSettingsPage() {
 
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ marginBottom: '24px' }}>
                 <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#2d3436' }}>ตั้งค่าเว็บไซต์</h1>
                 <p style={{ color: '#636e72', fontSize: '14px', marginTop: '4px' }}>
@@ -234,6 +236,6 @@ export default function AdminSettingsPage() {
                     }}>บันทึก</button>
                 </div>
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

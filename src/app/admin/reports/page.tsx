@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { BarChart3, Calendar, TrendingUp, DollarSign, Users, Clock, Download, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -63,7 +65,7 @@ export default function ReportsPage() {
     if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</div>
 
     return (
-        <div>
+        <FadeIn><div>
             {/* Header + Date Range */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
@@ -134,6 +136,6 @@ export default function ReportsPage() {
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

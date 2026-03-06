@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Calendar, Download, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -237,7 +239,7 @@ export default function InvoiceReportPage() {
     if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</div>
 
     return (
-        <div>
+        <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -325,6 +327,6 @@ export default function InvoiceReportPage() {
                     </div>
                 ))}
             </div>
-        </div>
+        </div></FadeIn>
     )
 }

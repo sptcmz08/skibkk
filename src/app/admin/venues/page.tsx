@@ -1,5 +1,7 @@
 'use client'
 
+import { FadeIn } from '@/components/Motion'
+
 import { useState, useEffect } from 'react'
 import { MapPin, Plus, Edit2, Trash2, Save, X, Image, ArrowUp, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -82,7 +84,7 @@ export default function VenuesManagement() {
     }
 
     return (
-        <div>
+        <FadeIn><div>
             <div className="admin-card-header" style={{ marginBottom: '20px' }}>
                 <div>
                     <h1 className="admin-page-title">สถานที่เรียน</h1>
@@ -185,6 +187,6 @@ export default function VenuesManagement() {
                     </div>
                 </div>
             )}
-        </div>
+        </div></FadeIn>
     )
 }
