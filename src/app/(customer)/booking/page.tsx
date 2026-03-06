@@ -36,6 +36,7 @@ export default function BookingPage() {
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
     const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string }>>([])
+    const [qrImage, setQrImage] = useState<string | null>(null)
 
     const total = cart.reduce((s, i) => s + i.price, 0)
     const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
@@ -182,11 +183,15 @@ export default function BookingPage() {
         }
     }
 
-    // Fetch user packages when entering payment step
+    // Fetch user packages + QR image when entering payment step
     useEffect(() => {
         if (step === 2) {
             fetch('/api/user-packages').then(r => r.json())
                 .then(data => setUserPackages(data.packages || []))
+                .catch(() => { })
+            // Load QR from DB
+            fetch('/api/admin/qr-settings').then(r => r.json())
+                .then(data => { if (data.qrImage) setQrImage(data.qrImage) })
                 .catch(() => { })
         }
     }, [step])
@@ -678,7 +683,7 @@ export default function BookingPage() {
                             {/* QR Code display */}
                             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                                 <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
-                                    <img src="/qr-payment.png" alt="PromptPay QR - SKI BKK" style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }} />
+                                    <img src={qrImage || '/qr-payment.png'} alt="QR Payment - SKI BKK" style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }} />
                                 </div>
                                 <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>
                                 <div style={{

@@ -143,30 +143,67 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // ============ STEP 6: Verify receiver matches SKIBKK ============
-        const expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
-        const expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+        // ============ STEP 6: Verify receiver — Auto-learn from DB ============
+        // Try DB first, fall back to .env for backward compatibility
+        let expectedReceiver = ''
+        let expectedAccount = ''
+        let isLearningMode = false
 
-        if (expectedReceiver || expectedAccount) {
-            // Collect ALL receiver-related text from EasySlip response into one searchable string
-            const allReceiverParts = [
-                receiverName,
-                receiverAccount,
-                receiverProxyName,
-                receiverProxyValue,
-                // Also check nested fields that might contain merchant info
-                slipData?.receiver?.account?.bank?.short || '',
-                slipData?.receiver?.account?.bank?.name || '',
-            ]
-            const allReceiverText = allReceiverParts.join(' ').toLowerCase()
+        try {
+            const receiverSetting = await prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } })
+            if (receiverSetting) {
+                const receiverData = JSON.parse(receiverSetting.value)
+                expectedReceiver = receiverData.name || ''
+                expectedAccount = receiverData.account || ''
+                isLearningMode = !expectedReceiver && !expectedAccount
+            } else {
+                // No DB setting yet — fall back to .env
+                expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
+                expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+            }
+        } catch {
+            // DB error — fall back to .env
+            expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
+            expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+        }
 
+        // Collect ALL receiver-related text from EasySlip response
+        const allReceiverParts = [
+            receiverName,
+            receiverAccount,
+            receiverProxyName,
+            receiverProxyValue,
+            slipData?.receiver?.account?.bank?.short || '',
+            slipData?.receiver?.account?.bank?.name || '',
+        ]
+        const allReceiverText = allReceiverParts.join(' ').toLowerCase()
+
+        if (isLearningMode) {
+            // AUTO-LEARN: Save receiver info from this slip
+            const learnedName = receiverName || receiverProxyName || ''
+            const learnedAccount = receiverAccount || receiverProxyValue || ''
+            console.log(`[SlipVerify] 🎓 AUTO-LEARN — name: "${learnedName}", account: "${learnedAccount}"`)
+
+            if (learnedName || learnedAccount) {
+                try {
+                    await prisma.siteSetting.upsert({
+                        where: { key: 'payment_receiver' },
+                        update: { value: JSON.stringify({ name: learnedName, account: learnedAccount, learnedAt: new Date().toISOString(), autoLearned: true }) },
+                        create: { key: 'payment_receiver', value: JSON.stringify({ name: learnedName, account: learnedAccount, learnedAt: new Date().toISOString(), autoLearned: true }) },
+                    })
+                    console.log(`[SlipVerify] ✅ Receiver auto-saved to DB: "${learnedName}" / "${learnedAccount}"`)
+                } catch (dbErr) {
+                    console.error('[SlipVerify] Failed to auto-save receiver:', dbErr)
+                }
+            }
+        } else if (expectedReceiver || expectedAccount) {
+            // NORMAL MODE: Verify receiver matches
             console.log(`[SlipVerify] Receiver check — allText: "${allReceiverText}" | expected name: "${expectedReceiver}" account: "${expectedAccount}"`)
 
             const nameMatch = expectedReceiver && allReceiverText.includes(expectedReceiver.toLowerCase())
             const accountMatch = expectedAccount && allReceiverText.includes(expectedAccount.toLowerCase())
 
             if (!nameMatch && !accountMatch) {
-                // Log all raw receiver data for debugging
                 console.error('[SlipVerify] RECEIVER MISMATCH — raw receiver:', JSON.stringify(slipData?.receiver))
                 return NextResponse.json({
                     error: `สลิปนี้ไม่ได้โอนให้ SKIBKK (ผู้รับ: ${receiverName || receiverProxyName || receiverAccount || 'ไม่ทราบ'})`,

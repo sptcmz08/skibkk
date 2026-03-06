@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus } from 'lucide-react'
+import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
 
@@ -17,6 +17,11 @@ export default function AdminSettingsPage() {
     const [maxBookingHours, setMaxBookingHours] = useState(0)
     const [maxParticipants, setMaxParticipants] = useState(2)
     const logoInputRef = useRef<HTMLInputElement>(null)
+    const qrInputRef = useRef<HTMLInputElement>(null)
+    const [qrImage, setQrImage] = useState<string | null>(null)
+    const [qrReceiver, setQrReceiver] = useState<{ name: string; account: string; learnedAt: string | null; autoLearned: boolean } | null>(null)
+    const [qrStatus, setQrStatus] = useState<'ready' | 'learning' | 'no_qr'>('no_qr')
+    const [qrUploading, setQrUploading] = useState(false)
 
     useEffect(() => {
         fetch('/api/settings', { cache: 'no-store' })
@@ -29,6 +34,12 @@ export default function AdminSettingsPage() {
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
+        // Load QR settings
+        fetch('/api/admin/qr-settings').then(r => r.json()).then(data => {
+            if (data.qrImage) setQrImage(data.qrImage)
+            if (data.receiver) setQrReceiver(data.receiver)
+            if (data.status) setQrStatus(data.status)
+        }).catch(() => { })
     }, [])
 
     const uploadFile = async (file: File): Promise<string | null> => {
@@ -143,7 +154,134 @@ export default function AdminSettingsPage() {
                 </div>
             </div>
 
+            {/* QR Code Payment */}
+            <div style={cardStyle}>
+                <h2 style={sectionTitle}>
+                    <QrCode size={20} color="#6c5ce7" /> QR Code ชำระเงิน
+                </h2>
+                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>
+                    อัปโหลดรูป QR Code สำหรับรับเงิน — เปลี่ยน QR แล้วระบบจะเรียนรู้ผู้รับอัตโนมัติจากสลิปแรก
+                </p>
 
+                {/* Status indicator */}
+                <div style={{
+                    padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
+                    background: qrStatus === 'ready' ? '#e8f5e9' : qrStatus === 'learning' ? '#fff8e1' : '#f5f5f5',
+                    border: `1px solid ${qrStatus === 'ready' ? '#a5d6a7' : qrStatus === 'learning' ? '#ffe082' : '#e0e0e0'}`,
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                }}>
+                    <span style={{ fontSize: '18px' }}>
+                        {qrStatus === 'ready' ? '🟢' : qrStatus === 'learning' ? '🟡' : '⚪'}
+                    </span>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#2d3436' }}>
+                            {qrStatus === 'ready'
+                                ? `ระบบพร้อมใช้งาน (ผู้รับ: ${qrReceiver?.name || 'ไม่ทราบ'})`
+                                : qrStatus === 'learning'
+                                    ? 'รอเรียนรู้ผู้รับจากสลิปแรก'
+                                    : 'ยังไม่ได้ตั้งค่า QR Code'}
+                        </div>
+                        {qrStatus === 'ready' && qrReceiver?.learnedAt && (
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
+                                เรียนรู้เมื่อ: {new Date(qrReceiver.learnedAt).toLocaleString('th-TH')}
+                                {qrReceiver.account && ` • บัญชี: ${qrReceiver.account}`}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap' }}>
+                    {/* QR Preview */}
+                    {qrImage ? (
+                        <div style={{
+                            width: '180px', height: '180px', borderRadius: '12px',
+                            border: '2px solid #e9ecef', overflow: 'hidden',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'white', padding: '8px',
+                        }}>
+                            <img src={qrImage} alt="QR Payment" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                        </div>
+                    ) : (
+                        <div style={{
+                            width: '180px', height: '180px', borderRadius: '12px',
+                            border: '2px dashed #ddd', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', color: '#ccc', fontSize: '48px',
+                        }}>
+                            📱
+                        </div>
+                    )}
+
+                    {/* Upload + Actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <input ref={qrInputRef} type="file" accept="image/*" hidden onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            setQrUploading(true)
+                            try {
+                                // Convert to base64
+                                const reader = new FileReader()
+                                const base64 = await new Promise<string>((resolve) => {
+                                    reader.onload = (ev) => resolve(ev.target?.result as string)
+                                    reader.readAsDataURL(file)
+                                })
+                                const res = await fetch('/api/admin/qr-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ qrImage: base64 }),
+                                })
+                                const data = await res.json()
+                                if (res.ok) {
+                                    setQrImage(base64)
+                                    setQrStatus('learning')
+                                    setQrReceiver(null)
+                                    toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
+                                } else {
+                                    toast.error(data.error || 'อัปโหลดไม่สำเร็จ')
+                                }
+                            } catch {
+                                toast.error('อัปโหลดไม่สำเร็จ')
+                            } finally {
+                                setQrUploading(false)
+                                e.target.value = ''
+                            }
+                        }} />
+
+                        <button
+                            className="btn-admin"
+                            onClick={() => qrInputRef.current?.click()}
+                            disabled={qrUploading}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            <Upload size={16} />
+                            {qrUploading ? 'กำลังอัปโหลด...' : qrImage ? 'เปลี่ยน QR Code' : 'อัปโหลด QR Code'}
+                        </button>
+
+                        {qrStatus === 'ready' && (
+                            <button
+                                className="btn-admin"
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e17055' }}
+                                onClick={async () => {
+                                    if (!confirm('รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป')) return
+                                    await fetch('/api/admin/qr-settings', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
+                                    })
+                                    setQrStatus('learning')
+                                    setQrReceiver(null)
+                                    toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
+                                }}
+                            >
+                                <RefreshCw size={16} /> รีเซ็ตผู้รับ (เรียนรู้ใหม่)
+                            </button>
+                        )}
+
+                        <p style={{ fontSize: '11px', color: '#b2bec3', maxWidth: '260px', lineHeight: 1.5 }}>
+                            💡 หลังอัปโหลด QR ใหม่ ระบบจะเข้าโหมด "เรียนรู้" — สลิปแรกที่ตรวจสำเร็จจะถูกใช้เป็นข้อมูลผู้รับอัตโนมัติ
+                        </p>
+                    </div>
+                </div>
+            </div>
 
             {/* Booking Terms */}
             <div style={cardStyle}>
