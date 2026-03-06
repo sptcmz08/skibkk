@@ -154,133 +154,189 @@ export default function AdminSettingsPage() {
                 </div>
             </div>
 
-            {/* QR Code Payment */}
+            {/* QR Code Payment — เลขบัญชี */}
             <div style={cardStyle}>
                 <h2 style={sectionTitle}>
                     <QrCode size={20} color="#6c5ce7" /> QR Code ชำระเงิน
                 </h2>
-                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>
-                    อัปโหลดรูป QR Code สำหรับรับเงิน — เปลี่ยน QR แล้วระบบจะเรียนรู้ผู้รับอัตโนมัติจากสลิปแรก
-                </p>
 
-                {/* Status indicator */}
-                <div style={{
-                    padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
-                    background: qrStatus === 'ready' ? '#e8f5e9' : qrStatus === 'learning' ? '#fff8e1' : '#f5f5f5',
-                    border: `1px solid ${qrStatus === 'ready' ? '#a5d6a7' : qrStatus === 'learning' ? '#ffe082' : '#e0e0e0'}`,
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                }}>
-                    <span style={{ fontSize: '18px' }}>
-                        {qrStatus === 'ready' ? '🟢' : qrStatus === 'learning' ? '🟡' : '⚪'}
-                    </span>
-                    <div>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#2d3436' }}>
-                            {qrStatus === 'ready'
-                                ? `ระบบพร้อมใช้งาน (ผู้รับ: ${qrReceiver?.name || 'ไม่ทราบ'})`
-                                : qrStatus === 'learning'
-                                    ? 'รอเรียนรู้ผู้รับจากสลิปแรก'
-                                    : 'ยังไม่ได้ตั้งค่า QR Code'}
-                        </div>
-                        {qrStatus === 'ready' && qrReceiver?.learnedAt && (
-                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
-                                เรียนรู้เมื่อ: {new Date(qrReceiver.learnedAt).toLocaleString('th-TH')}
-                                {qrReceiver.account && ` • บัญชี: ${qrReceiver.account}`}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap' }}>
-                    {/* QR Preview */}
-                    {qrImage ? (
+                <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
+                    {/* Left: QR Display */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto' }}>
+                        {/* THAI QR PAYMENT Header */}
                         <div style={{
-                            width: '180px', height: '180px', borderRadius: '12px',
-                            border: '2px solid #e9ecef', overflow: 'hidden',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: 'white', padding: '8px',
+                            background: 'linear-gradient(135deg, #1a237e, #283593)',
+                            color: 'white', padding: '10px 32px', borderRadius: '10px 10px 0 0',
+                            width: '280px', textAlign: 'center',
+                            fontSize: '13px', fontWeight: 700, letterSpacing: '1px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         }}>
-                            <img src={qrImage} alt="QR Payment" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            <QrCode size={16} /> THAI QR PAYMENT
                         </div>
-                    ) : (
-                        <div style={{
-                            width: '180px', height: '180px', borderRadius: '12px',
-                            border: '2px dashed #ddd', display: 'flex', alignItems: 'center',
-                            justifyContent: 'center', color: '#ccc', fontSize: '48px',
-                        }}>
-                            📱
-                        </div>
-                    )}
 
-                    {/* Upload + Actions */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <input ref={qrInputRef} type="file" accept="image/*" hidden onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            setQrUploading(true)
-                            try {
-                                // Convert to base64
-                                const reader = new FileReader()
-                                const base64 = await new Promise<string>((resolve) => {
-                                    reader.onload = (ev) => resolve(ev.target?.result as string)
-                                    reader.readAsDataURL(file)
-                                })
-                                const res = await fetch('/api/admin/qr-settings', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ qrImage: base64 }),
-                                })
-                                const data = await res.json()
-                                if (res.ok) {
-                                    setQrImage(base64)
-                                    setQrStatus('learning')
-                                    setQrReceiver(null)
-                                    toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
-                                } else {
-                                    toast.error(data.error || 'อัปโหลดไม่สำเร็จ')
-                                }
-                            } catch {
-                                toast.error('อัปโหลดไม่สำเร็จ')
-                            } finally {
-                                setQrUploading(false)
-                                e.target.value = ''
-                            }
-                        }} />
-
-                        <button
-                            className="btn-admin"
+                        {/* QR Image with click overlay */}
+                        <div
                             onClick={() => qrInputRef.current?.click()}
-                            disabled={qrUploading}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{
+                                width: '280px', minHeight: '280px',
+                                border: '2px solid #e0e0e0', borderTop: 'none',
+                                background: 'white', cursor: 'pointer',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                position: 'relative', padding: '16px',
+                            }}
                         >
-                            <Upload size={16} />
-                            {qrUploading ? 'กำลังอัปโหลด...' : qrImage ? 'เปลี่ยน QR Code' : 'อัปโหลด QR Code'}
-                        </button>
+                            {qrImage ? (
+                                <img src={qrImage} alt="QR Payment" style={{ width: '100%', maxWidth: '240px', height: 'auto' }} />
+                            ) : (
+                                <div style={{
+                                    width: '240px', height: '240px',
+                                    border: '3px dashed #ccc', borderRadius: '12px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#bbb', fontSize: '60px',
+                                }}>
+                                    📱
+                                </div>
+                            )}
 
-                        {qrStatus === 'ready' && (
-                            <button
-                                className="btn-admin"
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e17055' }}
-                                onClick={async () => {
-                                    if (!confirm('รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป')) return
-                                    await fetch('/api/admin/qr-settings', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
-                                    })
-                                    setQrStatus('learning')
-                                    setQrReceiver(null)
-                                    toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
-                                }}
-                            >
-                                <RefreshCw size={16} /> รีเซ็ตผู้รับ (เรียนรู้ใหม่)
-                            </button>
-                        )}
+                            {/* Red overlay button */}
+                            <div style={{
+                                position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+                                background: '#e53935', color: 'white',
+                                padding: '8px 20px', borderRadius: '6px',
+                                fontSize: '12px', fontWeight: 700,
+                                boxShadow: '0 2px 8px rgba(229,57,53,0.4)',
+                                whiteSpace: 'nowrap',
+                                opacity: qrUploading ? 0.6 : 1,
+                            }}>
+                                {qrUploading ? 'กำลังอัปโหลด...' : 'คลิกเพื่อเปลี่ยน QR-CODE'}
+                            </div>
+                        </div>
 
-                        <p style={{ fontSize: '11px', color: '#b2bec3', maxWidth: '260px', lineHeight: 1.5 }}>
-                            💡 หลังอัปโหลด QR ใหม่ ระบบจะเข้าโหมด "เรียนรู้" — สลิปแรกที่ตรวจสำเร็จจะถูกใช้เป็นข้อมูลผู้รับอัตโนมัติ
-                        </p>
+                        {/* Merchant name below QR */}
+                        <div style={{
+                            width: '280px', background: 'white',
+                            borderRadius: '0 0 10px 10px',
+                            border: '2px solid #e0e0e0', borderTop: 'none',
+                            padding: '14px', textAlign: 'center',
+                        }}>
+                            <div style={{ fontSize: '16px', fontWeight: 800, color: '#2d3436' }}>
+                                {qrReceiver?.name || 'SKI BKK รามอินทรา40'}
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#636e72', marginTop: '2px' }}>
+                                SKI BKK
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right: Info Panel */}
+                    <div style={{ flex: 1, minWidth: '240px' }}>
+                        {/* Status indicator */}
+                        <div style={{
+                            padding: '14px 18px', borderRadius: '10px', marginBottom: '20px',
+                            background: qrStatus === 'ready' ? '#e8f5e9' : qrStatus === 'learning' ? '#fff8e1' : '#f5f5f5',
+                            border: `1px solid ${qrStatus === 'ready' ? '#a5d6a7' : qrStatus === 'learning' ? '#ffe082' : '#e0e0e0'}`,
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                        }}>
+                            <span style={{ fontSize: '20px' }}>
+                                {qrStatus === 'ready' ? '🟢' : qrStatus === 'learning' ? '🟡' : '⚪'}
+                            </span>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '14px', color: '#2d3436' }}>
+                                    {qrStatus === 'ready' ? 'ระบบพร้อมใช้งาน'
+                                        : qrStatus === 'learning' ? 'รอเรียนรู้ผู้รับจากสลิปแรก'
+                                            : 'ยังไม่ได้ตั้งค่า QR Code'}
+                                </div>
+                                {qrStatus === 'ready' && qrReceiver?.learnedAt && (
+                                    <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
+                                        เรียนรู้เมื่อ: {new Date(qrReceiver.learnedAt).toLocaleString('th-TH')}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Info fields */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>ชื่อบัญชี / ร้านค้า</div>
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
+                                    background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
+                                }}>
+                                    {qrReceiver?.name || 'รอเรียนรู้จากสลิป...'}
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>เลขบัญชี / รหัสร้าน</div>
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
+                                    background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
+                                }}>
+                                    {qrReceiver?.account || 'รอเรียนรู้จากสลิป...'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {qrStatus === 'ready' && (
+                                <button
+                                    className="btn-admin"
+                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e17055' }}
+                                    onClick={async () => {
+                                        if (!confirm('รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป')) return
+                                        await fetch('/api/admin/qr-settings', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
+                                        })
+                                        setQrStatus('learning')
+                                        setQrReceiver(null)
+                                        toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
+                                    }}
+                                >
+                                    <RefreshCw size={16} /> รีเซ็ตผู้รับ (เรียนรู้ใหม่)
+                                </button>
+                            )}
+
+                            <p style={{ fontSize: '11px', color: '#b2bec3', lineHeight: 1.6 }}>
+                                💡 คลิกที่รูป QR Code เพื่อเปลี่ยน — ระบบจะเรียนรู้ข้อมูลผู้รับอัตโนมัติจากสลิปแรกที่ตรวจสำเร็จ
+                            </p>
+                        </div>
                     </div>
                 </div>
+
+                {/* Hidden file input */}
+                <input ref={qrInputRef} type="file" accept="image/*" hidden onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setQrUploading(true)
+                    try {
+                        const reader = new FileReader()
+                        const base64 = await new Promise<string>((resolve) => {
+                            reader.onload = (ev) => resolve(ev.target?.result as string)
+                            reader.readAsDataURL(file)
+                        })
+                        const res = await fetch('/api/admin/qr-settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ qrImage: base64 }),
+                        })
+                        const data = await res.json()
+                        if (res.ok) {
+                            setQrImage(base64)
+                            setQrStatus('learning')
+                            setQrReceiver(null)
+                            toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
+                        } else {
+                            toast.error(data.error || 'อัปโหลดไม่สำเร็จ')
+                        }
+                    } catch {
+                        toast.error('อัปโหลดไม่สำเร็จ')
+                    } finally {
+                        setQrUploading(false)
+                        e.target.value = ''
+                    }
+                }} />
             </div>
 
             {/* Booking Terms */}
