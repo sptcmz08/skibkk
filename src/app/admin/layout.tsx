@@ -86,16 +86,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <aside className="admin-sidebar"
                 style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.3s ease' }}
             >
-                <div className="admin-sidebar-header">
-                    <div className="admin-sidebar-logo">S</div>
-                    <div>
-                        <div className="admin-sidebar-title">SKIBKK</div>
-                        <div className="admin-sidebar-subtitle">Admin Panel</div>
+                <div className="admin-sidebar-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="admin-sidebar-logo">S</div>
+                        <div>
+                            <div className="admin-sidebar-title">SKIBKK</div>
+                            <div className="admin-sidebar-subtitle">Admin Panel</div>
+                        </div>
                     </div>
-                </div>
-
-                {/* Home Button */}
-                <div style={{ padding: '0 12px 8px' }}>
                     <button
                         onClick={() => {
                             const today = new Date()
@@ -104,17 +102,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             if (window.innerWidth <= 1024) setSidebarOpen(false)
                         }}
                         style={{
-                            width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                            display: 'flex', alignItems: 'center', gap: '5px',
                             background: 'linear-gradient(135deg, var(--a-primary), #818cf8)',
-                            color: '#fff', border: 'none', borderRadius: '10px',
-                            padding: '10px 14px', cursor: 'pointer', fontSize: '14px',
+                            color: '#fff', border: 'none', borderRadius: '8px',
+                            padding: '6px 12px', cursor: 'pointer', fontSize: '12px',
                             fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s',
-                            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+                            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
+                            whiteSpace: 'nowrap',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(99, 102, 241, 0.5)' }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(99, 102, 241, 0.35)' }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 3px 12px rgba(99, 102, 241, 0.5)' }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(99, 102, 241, 0.3)' }}
                     >
-                        <Home size={18} />
+                        <Home size={14} />
                         หน้าหลัก
                     </button>
                 </div>
