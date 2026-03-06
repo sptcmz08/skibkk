@@ -94,6 +94,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </div>
                 </div>
 
+                {/* Home Button */}
+                <div style={{ padding: '0 12px 8px' }}>
+                    <button
+                        onClick={() => {
+                            const today = new Date()
+                            const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+                            router.push(`/admin/calendar?date=${dateStr}`)
+                            if (window.innerWidth <= 1024) setSidebarOpen(false)
+                        }}
+                        style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                            background: 'linear-gradient(135deg, var(--a-primary), #818cf8)',
+                            color: '#fff', border: 'none', borderRadius: '10px',
+                            padding: '10px 14px', cursor: 'pointer', fontSize: '14px',
+                            fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s',
+                            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(99, 102, 241, 0.5)' }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(99, 102, 241, 0.35)' }}
+                    >
+                        <Home size={18} />
+                        หน้าหลัก
+                    </button>
+                </div>
+
                 <nav className="admin-sidebar-nav">
                     {navItems.map((item) => {
                         const showSection = item.section && item.section !== currentSection
@@ -154,26 +179,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text)', padding: '8px', display: 'flex', alignItems: 'center' }}
                         >
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-                        </button>
-                        <button
-                            onClick={() => {
-                                const today = new Date()
-                                const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-                                router.push(`/admin/calendar?date=${dateStr}`)
-                            }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                background: 'var(--a-primary)', color: '#fff',
-                                border: 'none', borderRadius: '10px', padding: '8px 16px',
-                                cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                                fontFamily: 'inherit', transition: 'all 0.2s',
-                                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.4)' }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(99, 102, 241, 0.3)' }}
-                        >
-                            <Home size={16} />
-                            หน้าหลัก
                         </button>
                         <h1 className="admin-topbar-title">{getPageTitle()}</h1>
                     </div>
