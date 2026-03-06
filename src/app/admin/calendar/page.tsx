@@ -449,7 +449,7 @@ export default function CalendarPage() {
                 </div>
             </div>
 
-            {/* Bookings for selected date */}
+            {/* Bookings Grid for selected date */}
             {selectedDate && (
                 <div className="admin-card">
                     <div className="admin-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -464,68 +464,189 @@ export default function CalendarPage() {
                             </button>
                         </div>
                     </div>
-                    <div style={{ padding: '16px' }}>
+                    <div style={{ padding: '16px', overflowX: 'auto' }}>
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
-                        ) : bookings.filter(b => b.status !== 'CANCELLED').length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
-                                <Calendar size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
-                                <p>ไม่มีการจองในวันนี้</p>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {bookings
-                                    .filter(b => b.status !== 'CANCELLED')
-                                    .sort((a, b) => (a.bookingItems[0]?.startTime || '').localeCompare(b.bookingItems[0]?.startTime || ''))
-                                    .map(booking => (
-                                        <div key={booking.id} style={{
-                                            display: 'flex', alignItems: 'center', gap: '16px',
-                                            padding: '12px 16px', borderRadius: '10px',
-                                            background: booking.status === 'CONFIRMED' ? '#e8f5e9' : '#fff8e1',
-                                            border: `1px solid ${booking.status === 'CONFIRMED' ? '#c8e6c9' : '#ffecb3'}`,
-                                            cursor: 'pointer', transition: 'all 0.2s',
-                                        }} onClick={() => openBookingModal(booking)}>
-                                            <div style={{ minWidth: '70px' }}>
-                                                <div style={{ fontWeight: 800, fontSize: '16px', fontFamily: "'Inter'", color: 'var(--a-text)' }}>
-                                                    {booking.bookingItems[0]?.startTime || '--:--'}
-                                                </div>
-                                                <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
-                                                    {booking.bookingItems[0]?.endTime || '--:--'}
-                                                </div>
+                        ) : (() => {
+                            const activeBookings = bookings.filter(b => b.status !== 'CANCELLED')
+                            if (activeBookings.length === 0) {
+                                return (
+                                    <div style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
+                                        <Calendar size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                                        <p>ไม่มีการจองในวันนี้</p>
+                                    </div>
+                                )
+                            }
+
+                            // Build lookup: courtId_startTime -> { booking, item, participants }
+                            const slotMap: Record<string, { booking: Booking; item: Booking['bookingItems'][0] }> = {}
+                            activeBookings.forEach(booking => {
+                                booking.bookingItems.forEach(item => {
+                                    const key = `${item.courtId}_${item.startTime}`
+                                    slotMap[key] = { booking, item }
+                                })
+                            })
+
+                            // Get courts that have bookings or from the courts list
+                            const courtIds = new Set<string>()
+                            activeBookings.forEach(b => b.bookingItems.forEach(item => courtIds.add(item.courtId)))
+                            const gridCourts = courts.filter(c => courtIds.has(c.id))
+                            // If courts not in master list, add from booking data
+                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                                if (!gridCourts.find(c => c.id === item.courtId)) {
+                                    gridCourts.push({ id: item.courtId, name: item.court.name, sportType: '', venueId: null })
+                                }
+                            }))
+
+                            // Determine time range from bookings
+                            let minHour = 23, maxHour = 0
+                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                                const h = parseInt(item.startTime.split(':')[0])
+                                const eh = parseInt(item.endTime.split(':')[0])
+                                if (h < minHour) minHour = h
+                                if (eh > maxHour) maxHour = eh
+                            }))
+                            // Pad 1 hour before/after
+                            minHour = Math.max(0, minHour - 1)
+                            maxHour = Math.min(24, maxHour + 1)
+                            const gridTimes: string[] = []
+                            for (let h = minHour; h < maxHour; h++) {
+                                gridTimes.push(`${h.toString().padStart(2, '0')}:00`)
+                            }
+
+                            const sportEmoji: Record<string, string> = {
+                                'ski': '⛷️', 'สกี้': '⛷️', 'สกี': '⛷️',
+                                'snowboard': '🏂', 'สโนบอร์ด': '🏂', 'สโนว์บอร์ด': '🏂',
+                                'ฟุตบอล': '⚽', 'แบดมินตัน': '🏸', 'บาสเกตบอล': '🏀',
+                                'วอลเลย์บอล': '🏐', 'เทนนิส': '🎾',
+                            }
+                            const getSportEmoji = (type: string) => {
+                                const key = type.toLowerCase().trim()
+                                return sportEmoji[key] || '🏟️'
+                            }
+
+                            return (
+                                <div style={{ minWidth: gridCourts.length > 2 ? `${gridCourts.length * 220 + 70}px` : 'auto' }}>
+                                    {/* Court header row */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`,
+                                        gap: '4px', marginBottom: '4px',
+                                    }}>
+                                        <div />
+                                        {gridCourts.map(court => (
+                                            <div key={court.id} style={{
+                                                textAlign: 'center', padding: '10px 8px',
+                                                background: '#e74c3c', color: '#fff',
+                                                borderRadius: '8px 8px 0 0',
+                                                fontWeight: 800, fontSize: '15px',
+                                            }}>
+                                                {court.name}
                                             </div>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--a-text)' }}>
-                                                    {booking.user?.name}
-                                                    {booking.bookingItems[0]?.teacher && (
-                                                        <span style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 500, marginLeft: '8px' }}>
-                                                            ครู: {booking.bookingItems[0].teacher.name}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)', display: 'flex', gap: '12px', marginTop: '2px', flexWrap: 'wrap' }}>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <MapPin size={12} /> {booking.bookingItems[0]?.court?.name}
-                                                    </span>
-                                                    <span>{booking.participants.map(p => p.sportType).join(', ')}</span>
-                                                    <span>{booking.user?.phone}</span>
-                                                </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Time rows */}
+                                    {gridTimes.map(time => (
+                                        <div key={time} style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`,
+                                            gap: '4px', marginBottom: '4px',
+                                        }}>
+                                            {/* Time label */}
+                                            <div style={{
+                                                display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                                                paddingTop: '10px', fontWeight: 700, fontSize: '14px',
+                                                color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
+                                            }}>
+                                                {time}
                                             </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <span className={`badge ${statusMap[booking.status]?.cls || 'badge-info'}`}>
-                                                    {statusMap[booking.status]?.label || booking.status}
-                                                </span>
-                                                <div style={{ fontWeight: 700, fontSize: '14px', marginTop: '4px', color: 'var(--a-text)' }}>
-                                                    ฿{booking.totalAmount.toLocaleString()}
-                                                </div>
-                                            </div>
-                                            <Eye size={16} style={{ color: 'var(--a-text-muted)' }} />
+
+                                            {/* Court cells */}
+                                            {gridCourts.map(court => {
+                                                const key = `${court.id}_${time}`
+                                                const data = slotMap[key]
+
+                                                if (!data) {
+                                                    // Empty slot
+                                                    return (
+                                                        <div key={key} style={{
+                                                            minHeight: '70px', borderRadius: '6px',
+                                                            border: '1px solid var(--a-border)',
+                                                            background: '#fafafa',
+                                                        }} />
+                                                    )
+                                                }
+
+                                                const { booking, item } = data
+                                                const isPaid = booking.status === 'CONFIRMED'
+                                                const sportTypes = booking.participants.map(p => p.sportType).filter(Boolean)
+                                                const sportLabel = sportTypes[0] || ''
+
+                                                return (
+                                                    <div key={key}
+                                                        onClick={() => openBookingModal(booking)}
+                                                        style={{
+                                                            minHeight: '70px', borderRadius: '6px',
+                                                            padding: '10px 12px', cursor: 'pointer',
+                                                            background: 'linear-gradient(135deg, #2196F3, #1976D2)',
+                                                            color: '#fff', transition: 'all 0.15s',
+                                                            display: 'flex', flexDirection: 'column',
+                                                            justifyContent: 'space-between', gap: '4px',
+                                                            boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
+                                                            position: 'relative', overflow: 'hidden',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
+                                                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
+                                                    >
+                                                        {/* Customer name */}
+                                                        <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
+                                                            {booking.user?.name || '-'}
+                                                        </div>
+                                                        {/* Sport type */}
+                                                        {sportLabel && (
+                                                            <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                {getSportEmoji(sportLabel)} [{sportLabel}]
+                                                            </div>
+                                                        )}
+                                                        {/* Phone */}
+                                                        <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85 }}>
+                                                            {booking.user?.phone || '-'}
+                                                        </div>
+                                                        {/* Price + Status */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                                                            <span style={{
+                                                                background: 'rgba(255,255,255,0.2)', padding: '2px 8px',
+                                                                borderRadius: '6px', fontSize: '13px', fontWeight: 800,
+                                                            }}>
+                                                                ฿ {item.price.toLocaleString()}
+                                                            </span>
+                                                            <span style={{
+                                                                background: isPaid ? '#4caf50' : '#ff9800',
+                                                                padding: '2px 8px', borderRadius: '6px',
+                                                                fontSize: '11px', fontWeight: 700,
+                                                            }}>
+                                                                {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
+                                                            </span>
+                                                        </div>
+                                                        {/* Teacher */}
+                                                        {item.teacher && (
+                                                            <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
+                                                                🎓 ครู: {item.teacher.name}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     ))}
-                            </div>
-                        )}
+                                </div>
+                            )
+                        })()}
                     </div>
                 </div>
             )}
+
 
             {/* Booking detail modal with edit */}
             {viewBooking && (
