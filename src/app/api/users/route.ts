@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, requireAdmin } from '@/lib/auth'
+import { requireAuth, requireRole } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 
 export const dynamic = 'force-dynamic'
@@ -9,14 +9,18 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
     try {
         const user = await requireAuth()
+        // For admin users list (all=1), require SUPERUSER
+        const { searchParams } = new URL(req.url)
+        const listAll = searchParams.get('all') === '1'
+        if (listAll && !['SUPERUSER'].includes(user.role)) {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
         if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 
-        const { searchParams } = new URL(req.url)
         const search = searchParams.get('search') || ''
         const role = searchParams.get('role') || ''
-        const listAll = searchParams.get('all') === '1'
 
         const where: Record<string, unknown> = {}
         if (search) {
@@ -56,7 +60,7 @@ export async function GET(req: NextRequest) {
 // POST — create admin/staff user
 export async function POST(req: NextRequest) {
     try {
-        await requireAdmin()
+        await requireRole('SUPERUSER')
         const body = await req.json()
 
         if (!body.name || !body.email || !body.password) {
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
 // PATCH — edit user
 export async function PATCH(req: NextRequest) {
     try {
-        await requireAdmin()
+        await requireRole('SUPERUSER')
         const body = await req.json()
         const { userId, name, email, phone, role, password } = body
 
@@ -129,7 +133,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE — actually delete user
 export async function DELETE(req: NextRequest) {
     try {
-        await requireAdmin()
+        await requireRole('SUPERUSER')
         const { searchParams } = new URL(req.url)
         const userId = searchParams.get('id')
         if (!userId) return NextResponse.json({ error: 'ระบุ user id' }, { status: 400 })

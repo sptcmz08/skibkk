@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -29,13 +29,10 @@ export async function GET() {
     }
 }
 
-// POST /api/admin/qr-settings — upload new QR image (admin only)
+// POST /api/admin/qr-settings — upload new QR image (SUPERUSER only)
 export async function POST(req: NextRequest) {
     try {
-        const auth = await requireAuth()
-        if ((auth as any).role !== 'ADMIN' && (auth as any).role !== 'SUPERADMIN') {
-            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
-        }
+        await requireRole('SUPERUSER')
 
         const { qrImage, resetReceiver } = await req.json()
 

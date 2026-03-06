@@ -9,6 +9,10 @@ import {
     LogOut, Menu, X, ChevronDown, Settings, Star, BookOpen, Dumbbell, UserPlus, Home
 } from 'lucide-react'
 
+// Role hierarchy for client-side nav filtering
+const ROLE_LEVEL: Record<string, number> = { CUSTOMER: 0, STAFF: 1, ADMIN: 2, SUPERUSER: 3 }
+const hasMinRole = (userRole: string, minRole: string) => (ROLE_LEVEL[userRole] || 0) >= (ROLE_LEVEL[minRole] || 0)
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const router = useRouter()
@@ -36,29 +40,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             .catch(() => router.push('/admin/login'))
     }, [router])
 
-    const navItems = [
-        { href: '/admin', icon: LayoutDashboard, label: 'แดชบอร์ด', section: '' },
-        { href: '/admin/courts', icon: MapPin, label: 'จัดการสนาม', section: 'จัดการ' },
-        { href: '/admin/sport-types', icon: Dumbbell, label: 'ประเภทกีฬา', section: '' },
-        { href: '/admin/venues', icon: MapPin, label: 'สถานที่เรียน', section: '' },
-        { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '' },
-        { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '' },
-        { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง' },
-        { href: '/admin/book', icon: UserPlus, label: 'จองให้ลูกค้า', section: '' },
-        { href: '/admin/bookings', icon: ClipboardList, label: 'รายการจองทั้งหมด', section: '' },
-        { href: '/admin/participants', icon: Users, label: 'ผู้เรียน & ครูสอน', section: '' },
-        { href: '/admin/customers', icon: Users, label: 'ลูกค้า', section: '' },
-        { href: '/admin/teachers', icon: GraduationCap, label: 'ครูผู้สอน', section: 'บุคลากร' },
-        { href: '/admin/evaluations', icon: Star, label: 'แบบประเมิน', section: '' },
-        { href: '/admin/invoices', icon: FileText, label: 'ใบกำกับภาษี', section: 'รายงาน' },
-        { href: '/admin/invoice-report', icon: FileText, label: 'รวมใบกำกับภาษี', section: '' },
-        { href: '/admin/reports', icon: BarChart3, label: 'สรุปการจอง', section: '' },
-        { href: '/admin/teacher-report', icon: BookOpen, label: 'ชั่วโมงสอน', section: '' },
-        { href: '/admin/availability', icon: Clock, label: 'ตรวจสอบเวลาว่าง', section: '' },
-        { href: '/admin/users', icon: Shield, label: 'ผู้ใช้งาน', section: 'ระบบ' },
-        { href: '/admin/logs', icon: FileText, label: 'บันทึกการใช้งาน', section: '' },
-        { href: '/admin/settings', icon: Settings, label: 'ตั้งค่าเว็บไซต์', section: '' },
+    const allNavItems = [
+        { href: '/admin', icon: LayoutDashboard, label: 'แดชบอร์ด', section: '', minRole: 'STAFF' },
+        { href: '/admin/courts', icon: MapPin, label: 'จัดการสนาม', section: 'จัดการ', minRole: 'ADMIN' },
+        { href: '/admin/sport-types', icon: Dumbbell, label: 'ประเภทกีฬา', section: '', minRole: 'ADMIN' },
+        { href: '/admin/venues', icon: MapPin, label: 'สถานที่เรียน', section: '', minRole: 'ADMIN' },
+        { href: '/admin/pricing', icon: DollarSign, label: 'กำหนดราคา', section: '', minRole: 'ADMIN' },
+        { href: '/admin/packages', icon: Package, label: 'แพ็คเกจ', section: '', minRole: 'ADMIN' },
+        { href: '/admin/calendar', icon: Calendar, label: 'ปฏิทินการจอง', section: 'การจอง', minRole: 'STAFF' },
+        { href: '/admin/book', icon: UserPlus, label: 'จองให้ลูกค้า', section: '', minRole: 'STAFF' },
+        { href: '/admin/bookings', icon: ClipboardList, label: 'รายการจองทั้งหมด', section: '', minRole: 'STAFF' },
+        { href: '/admin/participants', icon: Users, label: 'ผู้เรียน & ครูสอน', section: '', minRole: 'STAFF' },
+        { href: '/admin/customers', icon: Users, label: 'ลูกค้า', section: '', minRole: 'STAFF' },
+        { href: '/admin/teachers', icon: GraduationCap, label: 'ครูผู้สอน', section: 'บุคลากร', minRole: 'ADMIN' },
+        { href: '/admin/evaluations', icon: Star, label: 'แบบประเมิน', section: '', minRole: 'ADMIN' },
+        { href: '/admin/invoices', icon: FileText, label: 'ใบกำกับภาษี', section: 'รายงาน', minRole: 'ADMIN' },
+        { href: '/admin/invoice-report', icon: FileText, label: 'รวมใบกำกับภาษี', section: '', minRole: 'ADMIN' },
+        { href: '/admin/reports', icon: BarChart3, label: 'สรุปการจอง', section: '', minRole: 'ADMIN' },
+        { href: '/admin/teacher-report', icon: BookOpen, label: 'ชั่วโมงสอน', section: '', minRole: 'ADMIN' },
+        { href: '/admin/availability', icon: Clock, label: 'ตรวจสอบเวลาว่าง', section: '', minRole: 'STAFF' },
+        { href: '/admin/users', icon: Shield, label: 'ผู้ใช้งาน', section: 'ระบบ', minRole: 'SUPERUSER' },
+        { href: '/admin/logs', icon: FileText, label: 'บันทึกการใช้งาน', section: '', minRole: 'SUPERUSER' },
+        { href: '/admin/settings', icon: Settings, label: 'ตั้งค่าเว็บไซต์', section: '', minRole: 'SUPERUSER' },
     ]
+
+    // Filter nav items by user role
+    const navItems = user ? allNavItems.filter(item => hasMinRole(user.role, item.minRole)) : allNavItems
 
     const getPageTitle = () => {
         const item = navItems.find(n => n.href === pathname)

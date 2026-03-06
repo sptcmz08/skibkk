@@ -85,3 +85,22 @@ export async function requireAdmin() {
     }
     return user
 }
+
+// Role hierarchy: STAFF < ADMIN < SUPERUSER
+const ROLE_LEVEL: Record<string, number> = {
+    CUSTOMER: 0,
+    STAFF: 1,
+    ADMIN: 2,
+    SUPERUSER: 3,
+}
+
+export function hasMinRole(userRole: string, minRole: string): boolean {
+    return (ROLE_LEVEL[userRole] || 0) >= (ROLE_LEVEL[minRole] || 0)
+}
+
+export async function requireRole(minRole: string) {
+    const user = await getCurrentUser()
+    if (!user) throw new Error('Unauthorized')
+    if (!hasMinRole(user.role, minRole)) throw new Error('Forbidden')
+    return user
+}
