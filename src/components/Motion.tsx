@@ -1,6 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
+import type { Variants } from 'framer-motion'
 import { ReactNode } from 'react'
 
 // ─── Page transition wrapper (fade + slide up) ───────────────────────────────
@@ -13,7 +14,7 @@ export function PageTransition({ children, className, style }: {
         <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
             className={className}
             style={style}
         >
@@ -43,7 +44,7 @@ export function FadeIn({ children, className, style, delay = 0 }: {
 }
 
 // ─── Stagger container + items ────────────────────────────────────────────────
-const staggerContainer = {
+const staggerContainer: Variants = {
     hidden: { opacity: 0 },
     show: {
         opacity: 1,
@@ -51,11 +52,11 @@ const staggerContainer = {
     },
 }
 
-const staggerItem = {
+const staggerItem: Variants = {
     hidden: { opacity: 0, y: 12 },
     show: {
         opacity: 1, y: 0,
-        transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] },
+        transition: { duration: 0.3, ease: 'easeOut' },
     },
 }
 
@@ -122,7 +123,7 @@ export function SlideIn({ children, direction = 'left', className, style }: {
         <motion.div
             initial={{ opacity: 0, [axis]: offset }}
             animate={{ opacity: 1, [axis]: 0 }}
-            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
             className={className}
             style={style}
         >
