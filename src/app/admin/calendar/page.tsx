@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean
-    user: { name: string; email: string; phone: string }
+    user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
     payments: Array<{ method: string; status: string; amount: number }>
@@ -601,7 +601,7 @@ export default function CalendarPage() {
                                                     >
                                                         {/* Customer name */}
                                                         <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
-                                                            {booking.user?.name || '-'}
+                                                            {booking.user?.lineDisplayName || booking.user?.name || '-'}
                                                         </div>
                                                         {/* Sport type */}
                                                         {sportLabel && (
@@ -609,9 +609,11 @@ export default function CalendarPage() {
                                                                 {getSportEmoji(sportLabel)} [{sportLabel}]
                                                             </div>
                                                         )}
-                                                        {/* Phone */}
+                                                        {/* Phone — hide LINE placeholder, show real phone or LINE badge */}
                                                         <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85 }}>
-                                                            {booking.user?.phone || '-'}
+                                                            {booking.user?.phone?.startsWith('LINE-')
+                                                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>🟢 LINE</span>
+                                                                : (booking.user?.phone || '-')}
                                                         </div>
                                                         {/* Price + Status */}
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
@@ -687,9 +689,9 @@ export default function CalendarPage() {
                                         </>
                                     ) : `฿${viewBooking.totalAmount.toLocaleString()}`}
                                 </div>
-                                <div><strong>ลูกค้า:</strong> {viewBooking.user?.name}</div>
-                                <div><strong>โทร:</strong> {viewBooking.user?.phone || '-'}</div>
-                                <div><strong>อีเมล:</strong> {viewBooking.user?.email}</div>
+                                <div><strong>ลูกค้า:</strong> {viewBooking.user?.lineDisplayName || viewBooking.user?.name}{viewBooking.user?.lineDisplayName && viewBooking.user?.name !== viewBooking.user?.lineDisplayName ? ` (${viewBooking.user?.name})` : ''}</div>
+                                <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
+                                <div><strong>อีเมล:</strong> {viewBooking.user?.email?.endsWith('@line.local') ? <span style={{ color: '#999' }}>ไม่มี (LINE)</span> : viewBooking.user?.email}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH')}</div>
                                 {editMode && (
                                     <div style={{ gridColumn: '1 / -1' }}>
