@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
     LayoutDashboard, MapPin, DollarSign, Package, Calendar, ClipboardList,
     Users, GraduationCap, FileText, BarChart3, Clock, Shield,
-    LogOut, Menu, X, ChevronDown, Settings, Star, BookOpen, Dumbbell, UserPlus
+    LogOut, Menu, X, ChevronDown, Settings, Star, BookOpen, Dumbbell, UserPlus, Home
 } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -154,6 +154,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text)', padding: '8px', display: 'flex', alignItems: 'center' }}
                         >
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
+                        </button>
+                        <button
+                            onClick={() => {
+                                const today = new Date()
+                                const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+                                router.push(`/admin/calendar?date=${dateStr}`)
+                            }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                background: 'var(--a-primary)', color: '#fff',
+                                border: 'none', borderRadius: '10px', padding: '8px 16px',
+                                cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                                fontFamily: 'inherit', transition: 'all 0.2s',
+                                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.4)' }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(99, 102, 241, 0.3)' }}
+                        >
+                            <Home size={16} />
+                            หน้าหลัก
                         </button>
                         <h1 className="admin-topbar-title">{getPageTitle()}</h1>
                     </div>
