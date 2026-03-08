@@ -171,7 +171,8 @@ function AdminBookInner() {
     const fetchAvailability = useCallback(async (dateStr: string, silent = false) => {
         if (!silent) setLoading(true)
         try {
-            const res = await fetch(`/api/availability?date=${dateStr}`, { cache: 'no-store' })
+            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+            const res = await fetch(`/api/availability?date=${dateStr}${venueParam}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) {
                 setAvailability(data.availability)
@@ -184,7 +185,7 @@ function AdminBookInner() {
             }
         } catch { if (!silent) toast.error('ไม่สามารถโหลดข้อมูลได้') }
         finally { if (!silent) setLoading(false) }
-    }, [])
+    }, [selectedVenue])
 
     // Auto-initialize from URL date param (from calendar page)
     useEffect(() => {
