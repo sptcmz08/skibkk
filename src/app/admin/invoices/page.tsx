@@ -180,7 +180,9 @@ export default function InvoicesPage() {
             const serviceDate = b.bookingItems[0] ? formatShortDate(b.bookingItems[0].date) : '-'
             const payMethod = b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (b.payments[0]?.method || '-')
             const payAmount = b.payments[0]?.amount || b.totalAmount
-            const courtNames = b.bookingItems.map(i => i.court.name).join(', ')
+            const uniqueCourts = [...new Set(b.bookingItems.map(i => i.court.name))]
+            const sportType = b.participants[0]?.sportType || ''
+            const courtNames = uniqueCourts.join(', ') + (sportType ? ` (${sportType})` : '')
 
             rows.push([
                 { v: idx + 1, s: cellCenter },
