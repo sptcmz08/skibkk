@@ -13,16 +13,22 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อา.' },
 ]
 
+interface Court {
+    id: string; name: string; venue?: { name: string }
+}
+
 interface PricingRule {
-    id: string; daysOfWeek: string[]; startTime: string; endTime: string; price: number; includesVat: boolean
+    id: string; courtId: string | null; court?: { name: string; venue?: { name: string } }; daysOfWeek: string[]; startTime: string; endTime: string; price: number; includesVat: boolean
 }
 
 export default function PricingPage() {
     const [rules, setRules] = useState<PricingRule[]>([])
+    const [courts, setCourts] = useState<Court[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         fetchPricingRules()
+        fetchCourts()
     }, [])
 
     const fetchPricingRules = async () => {
@@ -39,17 +45,28 @@ export default function PricingPage() {
             setLoading(false)
         }
     }
+
+    const fetchCourts = async () => {
+        try {
+            const res = await fetch('/api/courts', { cache: 'no-store' })
+            if (res.ok) {
+                const data = await res.json()
+                setCourts(data.courts || [])
+            }
+        } catch { /* ignore */ }
+    }
+
     const [showModal, setShowModal] = useState(false)
     const [editRule, setEditRule] = useState<PricingRule | null>(null)
-    const [form, setForm] = useState({ daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
+    const [form, setForm] = useState({ courtId: '' as string, daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
 
     const openModal = (rule?: PricingRule) => {
         if (rule) {
             setEditRule(rule)
-            setForm({ daysOfWeek: rule.daysOfWeek, startTime: rule.startTime, endTime: rule.endTime, price: rule.price.toString(), includesVat: rule.includesVat })
+            setForm({ courtId: rule.courtId || '', daysOfWeek: rule.daysOfWeek, startTime: rule.startTime, endTime: rule.endTime, price: rule.price.toString(), includesVat: rule.includesVat })
         } else {
             setEditRule(null)
-            setForm({ daysOfWeek: [], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
+            setForm({ courtId: '', daysOfWeek: [], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
         }
         setShowModal(true)
     }
@@ -71,7 +88,7 @@ export default function PricingPage() {
                 const res = await fetch('/api/pricing-rules', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: editRule.id, ...form, price: parseFloat(form.price) })
+                    body: JSON.stringify({ id: editRule.id, ...form, courtId: form.courtId || null, price: parseFloat(form.price) })
                 })
                 if (res.ok) {
                     const data = await res.json()
@@ -84,7 +101,7 @@ export default function PricingPage() {
                 const res = await fetch('/api/pricing-rules', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...form, price: parseFloat(form.price) })
+                    body: JSON.stringify({ ...form, courtId: form.courtId || null, price: parseFloat(form.price) })
                 })
                 if (res.ok) {
                     const data = await res.json()
@@ -138,6 +155,7 @@ export default function PricingPage() {
                 <table className="admin-table">
                     <thead>
                         <tr>
+                            <th>สนาม</th>
                             <th>วัน</th>
                             <th>ช่วงเวลา</th>
                             <th>ราคา (บาท/ชม.)</th>
@@ -147,12 +165,17 @@ export default function PricingPage() {
                     </thead>
                     <tbody>
                         {loading && rules.length === 0 ? (
-                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>กำลังโหลดข้อมูล...</td></tr>
+                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>กำลังโหลดข้อมูล...</td></tr>
                         ) : rules.length === 0 ? (
-                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>ยังไม่มีการกำหนดราคา</td></tr>
+                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>ยังไม่มีการกำหนดราคา</td></tr>
                         ) : (
                             rules.map(rule => (
                                 <tr key={rule.id}>
+                                    <td>
+                                        <span style={{ fontWeight: 600, color: rule.courtId ? 'var(--a-primary)' : '#888' }}>
+                                            {rule.court ? `${rule.court.venue?.name ? rule.court.venue.name + ' / ' : ''}${rule.court.name}` : 'ทุกสนาม'}
+                                        </span>
+                                    </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                             {rule.daysOfWeek.map(d => (
@@ -187,6 +210,17 @@ export default function PricingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
                             <h2 style={{ fontSize: '20px', fontWeight: 700 }}>{editRule ? 'แก้ไขราคา' : 'เพิ่มราคาใหม่'}</h2>
                             <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                        </div>
+
+                        {/* Court selector */}
+                        <div className="input-group" style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>สนาม</label>
+                            <select className="admin-input" value={form.courtId} onChange={e => setForm({ ...form, courtId: e.target.value })}>
+                                <option value="">ทุกสนาม (ราคาเดียวกัน)</option>
+                                {courts.map(c => (
+                                    <option key={c.id} value={c.id}>{c.venue?.name ? c.venue.name + ' / ' : ''}{c.name}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
@@ -228,6 +262,6 @@ export default function PricingPage() {
                     </div>
                 </div>
             )}
-        </div></FadeIn>
+        </div></FadeIn >
     )
 }

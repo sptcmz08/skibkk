@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/lib/auth'
 export async function GET() {
     try {
         const rules = await prisma.pricingRule.findMany({
+            include: { court: { include: { venue: true } } },
             orderBy: [{ priority: 'desc' }, { startTime: 'asc' }]
         })
         return NextResponse.json({ rules })
