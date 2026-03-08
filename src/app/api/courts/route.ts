@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, getCurrentUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
     try {
-        const isAdmin = req.nextUrl.searchParams.get('admin') === '1'
+        const isAdminParam = req.nextUrl.searchParams.get('admin') === '1'
         const venueId = req.nextUrl.searchParams.get('venueId')
+
+        // Only authenticated admins can use admin mode
+        let isAdmin = false
+        if (isAdminParam) {
+            const user = await getCurrentUser()
+            isAdmin = !!user && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)
+        }
 
         const where: any = isAdmin
             ? {} // Admin sees all courts
