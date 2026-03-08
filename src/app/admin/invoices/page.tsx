@@ -5,7 +5,7 @@ import { FadeIn } from '@/components/Motion'
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
-import * as XLSX from 'xlsx'
+import XLSX from 'xlsx-js-style'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -108,90 +108,156 @@ export default function InvoicesPage() {
     const formatShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const genInvoiceNumber = (bookingNumber: string) => 'INV-' + bookingNumber.replace('BK', '')
 
-    // ── Excel Export ──
+    // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
         if (filtered.length === 0) return toast.error('ไม่มีข้อมูลสำหรับ Export')
 
         const wb = XLSX.utils.book_new()
 
-        // Build header rows matching the template
-        const headerRows = [
-            ['บริษัท ขีเอิน เวิดส์ จำกัด'],
-            [`รายงานรับเงิน (ภาษีจ่าย) ประจำเดือง.................. (เรียงตามวันที่ใบเสร็จสำมาคาหา)`],
-            ['ลำดับ', 'วันที่ใบเสร็จ\n(ลำดับ)', 'เลขที่ใบ/เลขผส์', 'รายการ (มือกิจกรรม)', 'จำนวนเงิน', '', '', 'วันที่จ่ายงาน', 'วันที่ใช้บริการ', 'การชำระเงิน', '', '', '', 'หมายเหตุ'],
-            ['', '', '', '', 'ก่อนภาษีมูลค่าเพิ่ม', 'ภาษีมูลค่าเพิ่ม', 'รวม', '', '', 'วันที่/เวลา', 'ธนาคาร #', 'จำนวนเงิน', '', '(เช่น เลขที่ใบกำกับภาษีซื้อ)'],
-        ]
+        // Styles
+        const titleStyle = { font: { bold: true, sz: 14, name: 'TH SarabunPSK', color: { rgb: '006100' } }, alignment: { horizontal: 'left' as const, vertical: 'center' as const } }
+        const subtitleStyle = { font: { sz: 11, name: 'TH SarabunPSK', color: { rgb: '006100' } }, alignment: { horizontal: 'left' as const, vertical: 'center' as const } }
+        const border = { top: { style: 'thin' as const, color: { rgb: 'BBBBBB' } }, bottom: { style: 'thin' as const, color: { rgb: 'BBBBBB' } }, left: { style: 'thin' as const, color: { rgb: 'BBBBBB' } }, right: { style: 'thin' as const, color: { rgb: 'BBBBBB' } } }
+        const headerStyle = {
+            font: { bold: true, sz: 11, name: 'TH SarabunPSK', color: { rgb: '006100' } },
+            fill: { fgColor: { rgb: 'FFFFDD' } }, border,
+            alignment: { horizontal: 'center' as const, vertical: 'center' as const, wrapText: true },
+        }
+        const cellStyle = { font: { sz: 11, name: 'TH SarabunPSK' }, border, alignment: { vertical: 'center' as const } }
+        const cellCenter = { ...cellStyle, alignment: { ...cellStyle.alignment, horizontal: 'center' as const } }
+        const numStyle = { ...cellStyle, alignment: { ...cellStyle.alignment, horizontal: 'right' as const }, numFmt: '#,##0.00' }
+        const totalsLabel = { ...headerStyle }
+        const totalsNum = { ...numStyle, fill: { fgColor: { rgb: 'FFFFDD' } }, font: { bold: true, sz: 11, name: 'TH SarabunPSK' } }
+
+        const rows: any[][] = []
+
+        // Row 0: Company name
+        rows.push([{ v: 'บริษัท ขีเอิน เวิดส์ จำกัด', s: titleStyle }])
+        // Row 1: Report title with period
+        const periodLabel = dateFrom && dateTo
+            ? `ประจำเดือน ${formatShortDate(dateFrom + 'T00:00:00')} - ${formatShortDate(dateTo + 'T00:00:00')}`
+            : 'ประจำเดือน..................'
+        rows.push([{ v: `รายงานรับเงิน (ภาษีจ่าย) ${periodLabel} (เรียงตามวันที่ใบเสร็จสำมาคาหา)`, s: subtitleStyle }])
+
+        // Row 2-3: Header rows
+        rows.push([
+            { v: 'ลำดับที่', s: headerStyle },
+            { v: 'วันที่ใบเสร็จ\n(ลำดับ)', s: headerStyle },
+            { v: 'เลขที่ใบ/ออเดอร์', s: headerStyle },
+            { v: 'รายการ (ชื่อกิจกรรม)', s: headerStyle },
+            { v: 'จำนวนเงิน', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: 'วันที่รายการ', s: headerStyle },
+            { v: 'วันที่ใช้บริการ', s: headerStyle },
+            { v: 'การรับชำระเงิน', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: 'หมายเหตุ', s: headerStyle },
+        ])
+        rows.push([
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: 'ก่อนภาษีมูลค่าเพิ่ม', s: headerStyle },
+            { v: 'ภาษีมูลค่าเพิ่ม', s: headerStyle },
+            { v: 'รวม', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: 'วันที่/เวลา', s: headerStyle },
+            { v: 'ธนาคาร #', s: headerStyle },
+            { v: 'จำนวนเงิน', s: headerStyle },
+            { v: '', s: headerStyle },
+            { v: '(เช่น เลขที่ใบกำกับภาษีเดียวกัน)', s: headerStyle },
+        ])
 
         // Data rows
-        const dataRows = filtered.map((b, idx) => {
+        filtered.forEach((b, idx) => {
             const beforeVat = Math.round((b.totalAmount / 1.07) * 100) / 100
             const vatAmt = Math.round((b.totalAmount - beforeVat) * 100) / 100
             const serviceDate = b.bookingItems[0] ? formatShortDate(b.bookingItems[0].date) : '-'
             const payMethod = b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (b.payments[0]?.method || '-')
             const payAmount = b.payments[0]?.amount || b.totalAmount
             const courtNames = b.bookingItems.map(i => i.court.name).join(', ')
-            return [
-                idx + 1,
-                formatShortDate(b.createdAt),
-                genInvoiceNumber(b.bookingNumber),
-                courtNames,
-                beforeVat,
-                vatAmt,
-                b.totalAmount,
-                formatShortDate(b.createdAt),
-                serviceDate,
-                formatShortDate(b.createdAt),
-                payMethod,
-                payAmount,
-                '',
-                '',
-            ]
+
+            rows.push([
+                { v: idx + 1, s: cellCenter },
+                { v: formatShortDate(b.createdAt), s: cellCenter },
+                { v: genInvoiceNumber(b.bookingNumber), s: cellStyle },
+                { v: courtNames, s: cellStyle },
+                { v: beforeVat, s: numStyle },
+                { v: vatAmt, s: numStyle },
+                { v: b.totalAmount, s: numStyle },
+                { v: formatShortDate(b.createdAt), s: cellCenter },
+                { v: serviceDate, s: cellCenter },
+                { v: formatShortDate(b.createdAt), s: cellCenter },
+                { v: payMethod, s: cellStyle },
+                { v: payAmount, s: numStyle },
+                { v: '', s: cellStyle },
+                { v: '', s: cellStyle },
+            ])
         })
 
         // Totals row
-        const totalBeforeVat = filtered.reduce((s, b) => s + Math.round((b.totalAmount / 1.07) * 100) / 100, 0)
-        const totalVat = filtered.reduce((s, b) => {
-            const bv = Math.round((b.totalAmount / 1.07) * 100) / 100
-            return s + Math.round((b.totalAmount - bv) * 100) / 100
-        }, 0)
+        const totalBV = filtered.reduce((s, b) => s + Math.round((b.totalAmount / 1.07) * 100) / 100, 0)
+        const totalV = filtered.reduce((s, b) => { const bv = Math.round((b.totalAmount / 1.07) * 100) / 100; return s + Math.round((b.totalAmount - bv) * 100) / 100 }, 0)
         const totalAll = filtered.reduce((s, b) => s + b.totalAmount, 0)
-        const totalsRow = ['', 'รวม', '', '', totalBeforeVat, totalVat, totalAll, '', '', '', '', '', '', '']
+        rows.push([
+            { v: '', s: totalsLabel },
+            { v: 'รวม', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: totalBV, s: totalsNum },
+            { v: totalV, s: totalsNum },
+            { v: totalAll, s: totalsNum },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
+        ])
 
-        const allRows = [...headerRows, ...dataRows, totalsRow]
-        const ws = XLSX.utils.aoa_to_sheet(allRows)
+        const ws = XLSX.utils.aoa_to_sheet(rows)
 
-        // Set column widths
+        // Column widths
         ws['!cols'] = [
-            { wch: 6 },   // A: ลำดับ
-            { wch: 14 },  // B: วันที่
-            { wch: 20 },  // C: เลขที่
-            { wch: 24 },  // D: รายการ
-            { wch: 18 },  // E: ก่อน VAT
-            { wch: 16 },  // F: VAT
-            { wch: 14 },  // G: รวม
-            { wch: 14 },  // H: วันที่จ่ายงาน
-            { wch: 14 },  // I: วันที่ใช้บริการ
-            { wch: 14 },  // J: วันที่/เวลา
-            { wch: 14 },  // K: ธนาคาร
-            { wch: 14 },  // L: จำนวนเงิน
-            { wch: 6 },   // M: blank
-            { wch: 28 },  // N: หมายเหตุ
+            { wch: 8 },   // A
+            { wch: 16 },  // B
+            { wch: 22 },  // C
+            { wch: 28 },  // D
+            { wch: 20 },  // E
+            { wch: 18 },  // F
+            { wch: 14 },  // G
+            { wch: 16 },  // H
+            { wch: 16 },  // I
+            { wch: 16 },  // J
+            { wch: 14 },  // K
+            { wch: 14 },  // L
+            { wch: 6 },   // M
+            { wch: 30 },  // N
         ]
 
-        // Merge header cells
+        // Merge cells
         ws['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },  // Row 1: company name
-            { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },  // Row 2: report title
-            { s: { r: 2, c: 4 }, e: { r: 2, c: 6 } },   // Row 3: จำนวนเงิน merge
-            { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } },  // Row 3: การชำระเงิน merge
-            { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },   // ลำดับ merge rows
-            { s: { r: 2, c: 1 }, e: { r: 3, c: 1 } },   // วันที่ merge rows
-            { s: { r: 2, c: 2 }, e: { r: 3, c: 2 } },   // เลขที่ merge rows
-            { s: { r: 2, c: 3 }, e: { r: 3, c: 3 } },   // รายการ merge rows
-            { s: { r: 2, c: 7 }, e: { r: 3, c: 7 } },   // วันที่จ่ายงาน merge rows
-            { s: { r: 2, c: 8 }, e: { r: 3, c: 8 } },   // วันที่ใช้บริการ merge rows
-            { s: { r: 2, c: 13 }, e: { r: 3, c: 13 } },  // หมายเหตุ merge rows
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
+            { s: { r: 2, c: 4 }, e: { r: 2, c: 6 } },
+            { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } },
+            { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },
+            { s: { r: 2, c: 1 }, e: { r: 3, c: 1 } },
+            { s: { r: 2, c: 2 }, e: { r: 3, c: 2 } },
+            { s: { r: 2, c: 3 }, e: { r: 3, c: 3 } },
+            { s: { r: 2, c: 7 }, e: { r: 3, c: 7 } },
+            { s: { r: 2, c: 8 }, e: { r: 3, c: 8 } },
+            { s: { r: 2, c: 13 }, e: { r: 3, c: 13 } },
         ]
+
+        // Row heights
+        ws['!rows'] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 30 }, { hpt: 30 }]
 
         XLSX.utils.book_append_sheet(wb, ws, 'ใบกำกับภาษี')
 
