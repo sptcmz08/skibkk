@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, MapPin, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight, Search, Plus, UserPlus } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Slot {
@@ -109,6 +109,7 @@ interface Customer { id: string; name: string; email: string; phone: string }
 
 function AdminBookInner() {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const dateParam = searchParams.get('date')
 
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
@@ -290,9 +291,9 @@ function AdminBookInner() {
                 const data = await res.json()
                 await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
-                setStep(1); setBookCustomer(null); setBookSearch(''); setIsNewCustomer(false); setNewBookerName(''); setNewBookerPhone('')
-                setSelectedVenue(null); setSelectedDate(null); setCart([]); setAvailability([]); setSelectedCourt(null)
-                setParticipants([{ name: '', sportType: '', height: '', weight: '', phone: '' }]); setBookStatus('CONFIRMED'); setIsBookerLearner(false)
+                // Redirect to calendar page with the booked date
+                const bookedDate = cart[0]?.date || selectedDate
+                router.push(`/admin/calendar?date=${bookedDate}`)
             } else {
                 const err = await res.json().catch(() => ({}))
                 console.error('Booking error:', err)
