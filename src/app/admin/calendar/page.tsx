@@ -22,6 +22,7 @@ interface DaySummary {
 }
 
 interface Court { id: string; name: string; sportType: string; venueId: string | null }
+interface Venue { id: string; name: string }
 interface Customer { id: string; name: string; email: string; phone: string }
 
 export default function CalendarPage() {
@@ -61,6 +62,8 @@ export default function CalendarPage() {
     const [bookParticipants, setBookParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([{ name: '', sportType: '', phone: '' }])
     // Booking status: CONFIRMED=paid, PENDING=unpaid
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
+    const [venues, setVenues] = useState<Venue[]>([])
+    const [selectedVenueId, setSelectedVenueId] = useState<string>('')
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -113,6 +116,13 @@ export default function CalendarPage() {
     // Fetch courts for edit dropdown
     useEffect(() => {
         fetch('/api/courts?admin=1', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
+        fetch('/api/venues', { cache: 'no-store' }).then(r => r.json()).then(data => {
+            if (data.venues) {
+                const active = data.venues.filter((v: any) => v.isActive)
+                setVenues(active)
+                if (active.length > 0 && !selectedVenueId) setSelectedVenueId(active[0].id)
+            }
+        }).catch(() => { })
     }, [])
 
     // Fetch monthly summary
@@ -458,6 +468,12 @@ export default function CalendarPage() {
                             {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </h3>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {venues.length > 1 && (
+                                <select className="admin-input" style={{ minWidth: '160px', fontSize: '13px' }} value={selectedVenueId} onChange={e => setSelectedVenueId(e.target.value)}>
+                                    <option value="">ทุกสาขา</option>
+                                    {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                </select>
+                            )}
                             <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
                             <button onClick={() => router.push(`/admin/book?date=${selectedDate}`)} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Plus size={14} /> จอง
@@ -490,10 +506,13 @@ export default function CalendarPage() {
                             // Get courts that have bookings or from the courts list
                             const courtIds = new Set<string>()
                             activeBookings.forEach(b => b.bookingItems.forEach(item => courtIds.add(item.courtId)))
-                            const gridCourts = courts.filter(c => courtIds.has(c.id))
-                            // If courts not in master list, add from booking data
+                            // Filter courts by selected venue
+                            const venueCourts = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
+                            const venueCourtIds = new Set(venueCourts.map(c => c.id))
+                            const gridCourts = venueCourts.filter(c => courtIds.has(c.id))
+                            // If courts not in master list, add from booking data (respecting venue filter)
                             activeBookings.forEach(b => b.bookingItems.forEach(item => {
-                                if (!gridCourts.find(c => c.id === item.courtId)) {
+                                if (!gridCourts.find(c => c.id === item.courtId) && (!selectedVenueId || venueCourtIds.has(item.courtId))) {
                                     gridCourts.push({ id: item.courtId, name: item.court.name, sportType: '', venueId: null })
                                 }
                             }))
