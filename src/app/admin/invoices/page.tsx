@@ -3,8 +3,9 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect, useRef } from 'react'
-import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save } from 'lucide-react'
+import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -54,6 +55,8 @@ export default function InvoicesPage() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
     const [docType, setDocType] = useState<DocType>('full')
     const [editMode, setEditMode] = useState(false)
@@ -86,13 +89,116 @@ export default function InvoicesPage() {
             .finally(() => setLoading(false))
     }, [])
 
-    const filtered = bookings.filter(b =>
-        b.bookingNumber.toLowerCase().includes(search.toLowerCase()) ||
-        b.user.name.toLowerCase().includes(search.toLowerCase())
-    )
+    const filtered = bookings.filter(b => {
+        const matchSearch = b.bookingNumber.toLowerCase().includes(search.toLowerCase()) ||
+            b.user.name.toLowerCase().includes(search.toLowerCase())
+        if (!matchSearch) return false
+        if (dateFrom) {
+            const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
+            if (bDate < dateFrom) return false
+        }
+        if (dateTo) {
+            const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
+            if (bDate > dateTo) return false
+        }
+        return true
+    })
 
     const formatThaiDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+    const formatShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const genInvoiceNumber = (bookingNumber: string) => 'INV-' + bookingNumber.replace('BK', '')
+
+    // ── Excel Export ──
+    const handleExportExcel = () => {
+        if (filtered.length === 0) return toast.error('ไม่มีข้อมูลสำหรับ Export')
+
+        const wb = XLSX.utils.book_new()
+
+        // Build header rows matching the template
+        const headerRows = [
+            ['บริษัท ขีเอิน เวิดส์ จำกัด'],
+            [`รายงานรับเงิน (ภาษีจ่าย) ประจำเดือง.................. (เรียงตามวันที่ใบเสร็จสำมาคาหา)`],
+            ['ลำดับ', 'วันที่ใบเสร็จ\n(ลำดับ)', 'เลขที่ใบ/เลขผส์', 'รายการ (มือกิจกรรม)', 'จำนวนเงิน', '', '', 'วันที่จ่ายงาน', 'วันที่ใช้บริการ', 'การชำระเงิน', '', '', '', 'หมายเหตุ'],
+            ['', '', '', '', 'ก่อนภาษีมูลค่าเพิ่ม', 'ภาษีมูลค่าเพิ่ม', 'รวม', '', '', 'วันที่/เวลา', 'ธนาคาร #', 'จำนวนเงิน', '', '(เช่น เลขที่ใบกำกับภาษีซื้อ)'],
+        ]
+
+        // Data rows
+        const dataRows = filtered.map((b, idx) => {
+            const beforeVat = Math.round((b.totalAmount / 1.07) * 100) / 100
+            const vatAmt = Math.round((b.totalAmount - beforeVat) * 100) / 100
+            const serviceDate = b.bookingItems[0] ? formatShortDate(b.bookingItems[0].date) : '-'
+            const payMethod = b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (b.payments[0]?.method || '-')
+            const payAmount = b.payments[0]?.amount || b.totalAmount
+            const courtNames = b.bookingItems.map(i => i.court.name).join(', ')
+            return [
+                idx + 1,
+                formatShortDate(b.createdAt),
+                genInvoiceNumber(b.bookingNumber),
+                courtNames,
+                beforeVat,
+                vatAmt,
+                b.totalAmount,
+                formatShortDate(b.createdAt),
+                serviceDate,
+                formatShortDate(b.createdAt),
+                payMethod,
+                payAmount,
+                '',
+                '',
+            ]
+        })
+
+        // Totals row
+        const totalBeforeVat = filtered.reduce((s, b) => s + Math.round((b.totalAmount / 1.07) * 100) / 100, 0)
+        const totalVat = filtered.reduce((s, b) => {
+            const bv = Math.round((b.totalAmount / 1.07) * 100) / 100
+            return s + Math.round((b.totalAmount - bv) * 100) / 100
+        }, 0)
+        const totalAll = filtered.reduce((s, b) => s + b.totalAmount, 0)
+        const totalsRow = ['', 'รวม', '', '', totalBeforeVat, totalVat, totalAll, '', '', '', '', '', '', '']
+
+        const allRows = [...headerRows, ...dataRows, totalsRow]
+        const ws = XLSX.utils.aoa_to_sheet(allRows)
+
+        // Set column widths
+        ws['!cols'] = [
+            { wch: 6 },   // A: ลำดับ
+            { wch: 14 },  // B: วันที่
+            { wch: 20 },  // C: เลขที่
+            { wch: 24 },  // D: รายการ
+            { wch: 18 },  // E: ก่อน VAT
+            { wch: 16 },  // F: VAT
+            { wch: 14 },  // G: รวม
+            { wch: 14 },  // H: วันที่จ่ายงาน
+            { wch: 14 },  // I: วันที่ใช้บริการ
+            { wch: 14 },  // J: วันที่/เวลา
+            { wch: 14 },  // K: ธนาคาร
+            { wch: 14 },  // L: จำนวนเงิน
+            { wch: 6 },   // M: blank
+            { wch: 28 },  // N: หมายเหตุ
+        ]
+
+        // Merge header cells
+        ws['!merges'] = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },  // Row 1: company name
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },  // Row 2: report title
+            { s: { r: 2, c: 4 }, e: { r: 2, c: 6 } },   // Row 3: จำนวนเงิน merge
+            { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } },  // Row 3: การชำระเงิน merge
+            { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },   // ลำดับ merge rows
+            { s: { r: 2, c: 1 }, e: { r: 3, c: 1 } },   // วันที่ merge rows
+            { s: { r: 2, c: 2 }, e: { r: 3, c: 2 } },   // เลขที่ merge rows
+            { s: { r: 2, c: 3 }, e: { r: 3, c: 3 } },   // รายการ merge rows
+            { s: { r: 2, c: 7 }, e: { r: 3, c: 7 } },   // วันที่จ่ายงาน merge rows
+            { s: { r: 2, c: 8 }, e: { r: 3, c: 8 } },   // วันที่ใช้บริการ merge rows
+            { s: { r: 2, c: 13 }, e: { r: 3, c: 13 } },  // หมายเหตุ merge rows
+        ]
+
+        XLSX.utils.book_append_sheet(wb, ws, 'ใบกำกับภาษี')
+
+        const dateLabel = dateFrom && dateTo ? `${dateFrom}_${dateTo}` : new Date().toISOString().slice(0, 10)
+        XLSX.writeFile(wb, `invoices_${dateLabel}.xlsx`)
+        toast.success('Export Excel สำเร็จ!')
+    }
 
     // Populate editable fields when booking is selected
     const selectBooking = (b: Booking, type: DocType) => {
@@ -525,14 +631,30 @@ export default function InvoicesPage() {
     // ── Main list ──
     return (
         <FadeIn><div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ใบกำกับภาษี / ใบเสร็จรับเงิน</h2>
                     <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ออกใบกำกับภาษีและใบเสร็จรับเงินจากรายการจอง</p>
                 </div>
-                <div style={{ position: 'relative' }}>
+                <button onClick={handleExportExcel} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '14px', background: '#16a34a' }}>
+                    <Download size={16} /> Export Excel
+                </button>
+            </div>
+
+            {/* Date range + search */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={16} style={{ color: 'var(--a-text-muted)' }} />
+                    <input type="date" className="admin-input" style={{ width: '160px' }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                    <span style={{ color: 'var(--a-text-muted)', fontSize: '13px' }}>ถึง</span>
+                    <input type="date" className="admin-input" style={{ width: '160px' }} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                    {(dateFrom || dateTo) && (
+                        <button onClick={() => { setDateFrom(''); setDateTo('') }} className="btn-admin-outline" style={{ padding: '7px 12px', fontSize: '12px' }}>ล้าง</button>
+                    )}
+                </div>
+                <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
                     <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--a-text-muted)' }} />
-                    <input className="admin-input" style={{ width: '280px', paddingLeft: '36px' }} placeholder="ค้นหาเลขจอง / ชื่อลูกค้า" value={search} onChange={e => setSearch(e.target.value)} />
+                    <input className="admin-input" style={{ width: '100%', paddingLeft: '36px' }} placeholder="ค้นหาเลขจอง / ชื่อลูกค้า" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
             </div>
 
