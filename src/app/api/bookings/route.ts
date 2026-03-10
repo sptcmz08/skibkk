@@ -27,15 +27,20 @@ export async function GET(req: NextRequest) {
                 ]
             }
             if (date) {
-                where.bookingItems = { some: { date: new Date(date) } }
+                // Use date range to avoid timezone mismatch with @db.Date fields
+                const startOfDay = new Date(date + 'T00:00:00+07:00')
+                const endOfDay = new Date(date + 'T23:59:59+07:00')
+                where.bookingItems = { some: { date: { gte: startOfDay, lte: endOfDay } } }
             }
 
             // Month filter for calendar view: ?month=2026-03
             const monthParam = searchParams.get('month')
             if (monthParam && !date) {
                 const [y, m] = monthParam.split('-').map(Number)
-                const startDate = new Date(y, m - 1, 1)
-                const endDate = new Date(y, m, 0, 23, 59, 59)
+                // Use timezone-aware dates to match @db.Date field properly
+                const startDate = new Date(`${y}-${String(m).padStart(2, '0')}-01T00:00:00+07:00`)
+                const lastDay = new Date(y, m, 0).getDate()
+                const endDate = new Date(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59+07:00`)
                 where.bookingItems = { some: { date: { gte: startDate, lte: endDate } } }
             }
 
