@@ -133,7 +133,8 @@ function AdminBookInner() {
     const [isNewCustomer, setIsNewCustomer] = useState(false)
     const [newBookerName, setNewBookerName] = useState('')
     const [newBookerPhone, setNewBookerPhone] = useState('')
-    const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '' }])
+    const [newBookerLineId, setNewBookerLineId] = useState('')
+    const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string; shoeSize: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '', shoeSize: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
@@ -201,7 +202,8 @@ function AdminBookInner() {
     // Fetch calendar availability for month coloring — same API as customer page
     useEffect(() => {
         if (step === 2) {
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}`, { cache: 'no-store' })
+            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
                 .then(r => r.json())
                 .then(data => { if (data.availability) setCalAvail(data.availability) })
                 .catch(() => { })
@@ -268,9 +270,13 @@ function AdminBookInner() {
         const validParts = participants.filter(p => p.name.trim())
         if (validParts.length === 0) { toast.error('กรุณากรอกชื่อผู้เรียนอย่างน้อย 1 คน'); return }
 
+        // Confirmation popup (Bug 6.7)
+        const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
+        const confirmMsg = `ยืนยันการจอง ${cart.length} รายการ\nยอดรวม ฿${totalAmount.toLocaleString()}\n\nต้องการดำเนินการต่อหรือไม่?`
+        if (!confirm(confirmMsg)) return
+
         setSubmitting(true)
         try {
-            const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
             const body: any = {
                 items: cart, totalAmount, isBookerLearner,
                 participants: validParts.map((p, i) => ({
@@ -279,21 +285,23 @@ function AdminBookInner() {
                     height: p.height ? parseFloat(p.height) : null,
                     weight: p.weight ? parseFloat(p.weight) : null,
                     phone: p.phone || null,
+                    shoeSize: p.shoeSize || null,
                     isBooker: i === 0,
                 })),
                 createdByAdmin: true,
             }
             if (bookCustomer) body.userId = bookCustomer.id
-            else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim() }
+            else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim(); body.guestLineId = newBookerLineId.trim() || null }
 
             const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (res.ok) {
                 const data = await res.json()
                 await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
-                // Redirect to calendar page with the booked date
+                // Redirect to calendar page with the booked date + venue (Bug 6.8)
                 const bookedDate = cart[0]?.date || selectedDate
-                router.push(`/admin/calendar?date=${bookedDate}`)
+                const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+                router.push(`/admin/calendar?date=${bookedDate}${venueParam}`)
             } else {
                 const err = await res.json().catch(() => ({}))
                 console.error('Booking error:', err)
@@ -679,10 +687,13 @@ function AdminBookInner() {
                             )}
                         </>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                             <input className="admin-input" placeholder="ชื่อผู้จอง *" value={newBookerName} onChange={e => setNewBookerName(e.target.value)} />
                             <input className="admin-input" placeholder="เบอร์โทร" value={newBookerPhone} onChange={e => setNewBookerPhone(e.target.value)} />
                         </div>
+                        <div>
+                            <input className="admin-input" placeholder="Line ID (ถ้ามี)" value={newBookerLineId} onChange={e => setNewBookerLineId(e.target.value)} />
+                        </div></>
                     )}
                 </div>
 
@@ -710,7 +721,7 @@ function AdminBookInner() {
                 <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                         <h3 style={{ fontWeight: 700, fontSize: '15px' }}>👥 ผู้เรียน ({participants.length} คน)</h3>
-                        <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', height: '', weight: '', phone: '' }])}
+                        <button onClick={() => setParticipants(prev => [...prev, { name: '', sportType: '', height: '', weight: '', phone: '', shoeSize: '' }])}
                             style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '6px', border: '1px solid #f5a623', background: 'rgba(245,166,35,0.08)', color: '#f5a623', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Plus size={13} /> เพิ่ม
                         </button>
@@ -729,9 +740,10 @@ function AdminBookInner() {
                                     <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
                                 </select>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
                                 <input className="admin-input" placeholder="ส่วนสูง (ซม.)" value={p.height} onChange={e => { const np = [...participants]; np[i].height = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
                                 <input className="admin-input" placeholder="น้ำหนัก (กก.)" value={p.weight} onChange={e => { const np = [...participants]; np[i].weight = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
+                                <input className="admin-input" placeholder="ไซส์รองเท้า (EU)" value={p.shoeSize} onChange={e => { const np = [...participants]; np[i].shoeSize = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
                                 <input className="admin-input" placeholder="เบอร์โทร" value={p.phone} onChange={e => { const np = [...participants]; np[i].phone = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
                             </div>
                         </div>

@@ -29,6 +29,7 @@ export default function CalendarPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const dateParam = searchParams.get('date')
+    const venueIdParam = searchParams.get('venueId')
     const now = new Date()
     const initDate = dateParam ? new Date(dateParam) : null
     const [viewYear, setViewYear] = useState(initDate ? initDate.getFullYear() : now.getFullYear())
@@ -44,6 +45,8 @@ export default function CalendarPage() {
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
+    // Calendar availability data (from /api/availability/calendar)
+    const [calAvail, setCalAvail] = useState<Record<string, { totalSlots: number; bookedSlots: number; status: string }>>({})
 
     // === New Booking Modal State ===
     const [showBookModal, setShowBookModal] = useState(false)
@@ -120,12 +123,12 @@ export default function CalendarPage() {
             if (data.venues) {
                 const active = data.venues.filter((v: any) => v.isActive)
                 setVenues(active)
-                if (active.length > 0 && !selectedVenueId) setSelectedVenueId(active[0].id)
+                if (active.length > 0 && !selectedVenueId) setSelectedVenueId(venueIdParam || active[0].id)
             }
         }).catch(() => { })
     }, [])
 
-    // Fetch monthly summary
+    // Fetch monthly summary (booking counts)
     useEffect(() => {
         const fetchSummary = async () => {
             try {
@@ -148,6 +151,15 @@ export default function CalendarPage() {
         }
         fetchSummary()
     }, [viewYear, viewMonth])
+
+    // Fetch calendar availability for color coding (Bug 5.2)
+    useEffect(() => {
+        const venueParam = selectedVenueId ? `&venueId=${selectedVenueId}` : ''
+        fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => { if (data.availability) setCalAvail(data.availability) })
+            .catch(() => { })
+    }, [viewYear, viewMonth, selectedVenueId])
 
     // Fetch bookings for selected date
     useEffect(() => {
@@ -356,9 +368,17 @@ export default function CalendarPage() {
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ปฏิทินการจอง</h2>
                     <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ดูภาพรวมการจองรายเดือน</p>
                 </div>
-                <button onClick={() => router.push('/admin/book')} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={18} /> จองให้ลูกค้า
-                </button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {venues.length > 0 && (
+                        <select className="admin-input" style={{ minWidth: '180px', fontSize: '14px', fontWeight: 600 }} value={selectedVenueId} onChange={e => setSelectedVenueId(e.target.value)}>
+                            <option value="">ทุกสาขา</option>
+                            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                    )}
+                    <button onClick={() => router.push('/admin/book')} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Plus size={18} /> จองให้ลูกค้า
+                    </button>
+                </div>
             </div>
 
             {/* Monthly Calendar Grid */}
@@ -398,18 +418,21 @@ export default function CalendarPage() {
                             const summary = daySummaries[dateStr]
                             const bookingCount = summary?.count || 0
                             const hasBookings = bookingCount > 0
+                            const dayAvail = calAvail[dateStr]
 
                             let cellBg = isPast ? '#f9f9f7' : '#fdfcfa'
                             let countColor = 'var(--a-text-muted)'
                             let statusLabel = 'ว่าง'
-                            if (hasBookings && !isPast) {
-                                if (bookingCount >= 8) {
+                            if (!isPast && dayAvail && dayAvail.status !== 'past') {
+                                if (dayAvail.status === 'full') {
                                     cellBg = '#fde4de'; countColor = '#d63031'; statusLabel = 'เต็ม'
-                                } else if (bookingCount >= 4) {
+                                } else if (dayAvail.status === 'almost_full') {
                                     cellBg = '#fff8e1'; countColor = '#f39c12'; statusLabel = 'ใกล้เต็ม'
-                                } else {
+                                } else if (hasBookings) {
                                     cellBg = '#e8f5e9'; countColor = '#00b894'; statusLabel = 'ว่าง'
                                 }
+                            } else if (hasBookings && !isPast) {
+                                cellBg = '#e8f5e9'; countColor = '#00b894'; statusLabel = 'ว่าง'
                             }
                             if (isSelected) cellBg = 'var(--a-primary-light)'
 
@@ -503,6 +526,43 @@ export default function CalendarPage() {
                                 })
                             })
 
+                            // Bug 5.3: Build merge map — consecutive slots from same booking merge into first slot
+                            // mergeInfo[courtId_startTime] = { span: N, totalPrice, endTime } for the first slot
+                            // skipSet contains keys for continuation slots that should be skipped
+                            const mergeInfo: Record<string, { span: number; totalPrice: number; endTime: string }> = {}
+                            const skipSet = new Set<string>()
+
+                            activeBookings.forEach(booking => {
+                                // Group items by courtId
+                                const byCourtLocal: Record<string, Booking['bookingItems']> = {}
+                                booking.bookingItems.forEach(item => {
+                                    if (!byCourtLocal[item.courtId]) byCourtLocal[item.courtId] = []
+                                    byCourtLocal[item.courtId].push(item)
+                                })
+                                Object.values(byCourtLocal).forEach(items => {
+                                    // Sort by startTime
+                                    const sorted = [...items].sort((a, b) => a.startTime.localeCompare(b.startTime))
+                                    let i = 0
+                                    while (i < sorted.length) {
+                                        let j = i + 1
+                                        let totalPrice = sorted[i].price
+                                        while (j < sorted.length && sorted[j].startTime === sorted[j - 1].endTime) {
+                                            totalPrice += sorted[j].price
+                                            j++
+                                        }
+                                        const span = j - i
+                                        if (span > 1) {
+                                            const firstKey = `${sorted[i].courtId}_${sorted[i].startTime}`
+                                            mergeInfo[firstKey] = { span, totalPrice, endTime: sorted[j - 1].endTime }
+                                            for (let k = i + 1; k < j; k++) {
+                                                skipSet.add(`${sorted[k].courtId}_${sorted[k].startTime}`)
+                                            }
+                                        }
+                                        i = j
+                                    }
+                                })
+                            })
+
                             // Get courts that have bookings or from the courts list
                             const courtIds = new Set<string>()
                             activeBookings.forEach(b => b.bookingItems.forEach(item => courtIds.add(item.courtId)))
@@ -584,6 +644,12 @@ export default function CalendarPage() {
                                             {/* Court cells */}
                                             {gridCourts.map(court => {
                                                 const key = `${court.id}_${time}`
+
+                                                // Bug 5.3: skip continuation slots
+                                                if (skipSet.has(key)) {
+                                                    return <div key={key} style={{ display: 'none' }} />
+                                                }
+
                                                 const data = slotMap[key]
 
                                                 if (!data) {
@@ -601,12 +667,16 @@ export default function CalendarPage() {
                                                 const isPaid = booking.status === 'CONFIRMED'
                                                 const sportTypes = booking.participants.map(p => p.sportType).filter(Boolean)
                                                 const sportLabel = sportTypes[0] || ''
+                                                const merge = mergeInfo[key]
+                                                const slotSpan = merge?.span || 1
+                                                const displayPrice = merge?.totalPrice ?? item.price
+                                                const displayEndTime = merge?.endTime || item.endTime
 
                                                 return (
                                                     <div key={key}
                                                         onClick={() => openBookingModal(booking)}
                                                         style={{
-                                                            minHeight: '70px', borderRadius: '6px',
+                                                            minHeight: `${70 * slotSpan + (slotSpan - 1) * 4}px`, borderRadius: '6px',
                                                             padding: '10px 12px', cursor: 'pointer',
                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                             color: '#fff', transition: 'all 0.15s',
@@ -614,6 +684,7 @@ export default function CalendarPage() {
                                                             justifyContent: 'space-between', gap: '4px',
                                                             boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
                                                             position: 'relative', overflow: 'hidden',
+                                                            gridRow: slotSpan > 1 ? `span ${slotSpan}` : undefined,
                                                         }}
                                                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
                                                         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
@@ -622,6 +693,12 @@ export default function CalendarPage() {
                                                         <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
                                                             {booking.user?.lineDisplayName || booking.user?.name || '-'}
                                                         </div>
+                                                        {/* Time range for merged slots */}
+                                                        {slotSpan > 1 && (
+                                                            <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.9 }}>
+                                                                🕐 {item.startTime}–{displayEndTime} ({slotSpan} ชม.)
+                                                            </div>
+                                                        )}
                                                         {/* Sport type */}
                                                         {sportLabel && (
                                                             <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -640,7 +717,7 @@ export default function CalendarPage() {
                                                                 background: 'rgba(255,255,255,0.2)', padding: '2px 8px',
                                                                 borderRadius: '6px', fontSize: '13px', fontWeight: 800,
                                                             }}>
-                                                                ฿ {item.price.toLocaleString()}
+                                                                ฿ {displayPrice.toLocaleString()}
                                                             </span>
                                                             <span style={{
                                                                 background: isPaid ? '#4caf50' : '#ff9800',

@@ -95,8 +95,28 @@ export async function POST(req: NextRequest) {
 
         // Admin can create bookings on behalf of customers
         let bookingUserId = user.id
-        if (body.userId && body.createdByAdmin && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
-            bookingUserId = body.userId
+        if (body.createdByAdmin && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
+            if (body.userId) {
+                // Existing customer selected
+                bookingUserId = body.userId
+            } else if (body.guestName) {
+                // New customer — create or find by phone
+                let customer = body.guestPhone
+                    ? await prisma.user.findFirst({ where: { phone: body.guestPhone, role: 'CUSTOMER' } })
+                    : null
+                if (!customer) {
+                    customer = await prisma.user.create({
+                        data: {
+                            name: body.guestName.trim(),
+                            email: `guest-${Date.now()}@skibkk.local`,
+                            phone: body.guestPhone?.trim() || `guest-${Date.now()}`,
+                            role: 'CUSTOMER',
+                            lineUserId: body.guestLineId?.trim() || null,
+                        },
+                    })
+                }
+                bookingUserId = customer.id
+            }
         }
 
         const bookingNumber = generateBookingNumber()
