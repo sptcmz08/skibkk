@@ -10,6 +10,10 @@ export async function POST(req: NextRequest) {
 
         const { bookingId, method, amount, slipData, manualReview } = body
 
+        if (!bookingId || !amount || amount <= 0) {
+            return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 })
+        }
+
         // Verify booking exists and belongs to user
         const booking = await prisma.booking.findUnique({
             where: { id: bookingId },
@@ -17,6 +21,14 @@ export async function POST(req: NextRequest) {
 
         if (!booking) {
             return NextResponse.json({ error: 'ไม่พบข้อมูลการจอง' }, { status: 404 })
+        }
+
+        if (booking.status === 'CANCELLED') {
+            return NextResponse.json({ error: 'การจองนี้ถูกยกเลิกแล้ว' }, { status: 400 })
+        }
+
+        if (booking.status === 'CONFIRMED') {
+            return NextResponse.json({ error: 'การจองนี้ชำระเงินแล้ว' }, { status: 400 })
         }
 
         if (booking.userId !== user.id && !['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {

@@ -55,7 +55,7 @@ export default function BookingsManagement() {
             const params = new URLSearchParams()
             if (search) params.set('search', search)
             if (statusFilter) params.set('status', statusFilter)
-            const res = await fetch(`/api/bookings?${params.toString()}`, { cache: 'no-store' })
+            const res = await fetch(`/api/bookings?take=500&${params.toString()}`, { cache: 'no-store' })
             const data = await res.json()
             let list: Booking[] = data.bookings || []
             if (sourceFilter === 'admin') list = list.filter(b => b.createdByAdmin)

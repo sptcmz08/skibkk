@@ -97,6 +97,10 @@ export async function GET(req: NextRequest) {
         })
 
         if (user) {
+            // Check if user is deactivated
+            if (!user.isActive) {
+                return NextResponse.redirect(`${BASE_URL}/login?error=account_disabled`)
+            }
             // Existing LINE user — update profile and login
             await prisma.user.update({
                 where: { id: user.id },
@@ -109,6 +113,9 @@ export async function GET(req: NextRequest) {
             // Check if email already exists (link LINE to existing account)
             const existingByEmail = await prisma.user.findUnique({ where: { email } })
             if (existingByEmail) {
+                if (!existingByEmail.isActive) {
+                    return NextResponse.redirect(`${BASE_URL}/login?error=account_disabled`)
+                }
                 user = await prisma.user.update({
                     where: { id: existingByEmail.id },
                     data: {

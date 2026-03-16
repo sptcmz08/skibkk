@@ -26,7 +26,7 @@ export default function CustomersPage() {
     const [loadingBookings, setLoadingBookings] = useState(false)
 
     useEffect(() => {
-        fetch('/api/bookings', { cache: 'no-store' })
+        fetch('/api/bookings?take=500', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
                 if (data.bookings) {
