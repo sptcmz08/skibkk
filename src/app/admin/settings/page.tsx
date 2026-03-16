@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
@@ -22,6 +23,7 @@ export default function AdminSettingsPage() {
     const [qrReceiver, setQrReceiver] = useState<{ name: string; account: string; learnedAt: string | null; autoLearned: boolean } | null>(null)
     const [qrStatus, setQrStatus] = useState<'ready' | 'learning' | 'no_qr'>('no_qr')
     const [qrUploading, setQrUploading] = useState(false)
+    const [showResetConfirm, setShowResetConfirm] = useState(false)
 
     useEffect(() => {
         fetch('/api/settings', { cache: 'no-store' })
@@ -282,17 +284,7 @@ export default function AdminSettingsPage() {
                                 <button
                                     className="btn-admin"
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e17055' }}
-                                    onClick={async () => {
-                                        if (!confirm('รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป')) return
-                                        await fetch('/api/admin/qr-settings', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
-                                        })
-                                        setQrStatus('learning')
-                                        setQrReceiver(null)
-                                        toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
-                                    }}
+                                    onClick={() => setShowResetConfirm(true)}
                                 >
                                     <RefreshCw size={16} /> รีเซ็ตผู้รับ (เรียนรู้ใหม่)
                                 </button>
@@ -430,6 +422,27 @@ export default function AdminSettingsPage() {
                     }}>บันทึก</button>
                 </div>
             </div>
+
+            <ConfirmModal
+                open={showResetConfirm}
+                title="รีเซ็ตผู้รับ"
+                message="รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป"
+                confirmText="รีเซ็ต"
+                type="warning"
+                icon="🔄"
+                onConfirm={async () => {
+                    await fetch('/api/admin/qr-settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
+                    })
+                    setQrStatus('learning')
+                    setQrReceiver(null)
+                    setShowResetConfirm(false)
+                    toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
+                }}
+                onCancel={() => setShowResetConfirm(false)}
+            />
         </div></FadeIn>
     )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2 } from 'lucide-react'
@@ -38,6 +39,8 @@ export default function PackagesPage() {
     const [selectedCustomer, setSelectedCustomer] = useState<CustomerResult | null>(null)
     const [selectedPkgId, setSelectedPkgId] = useState<string>('')
     const [assigning, setAssigning] = useState(false)
+    const [pendingDeletePkg, setPendingDeletePkg] = useState<string | null>(null)
+    const [pendingDeleteUserPkg, setPendingDeleteUserPkg] = useState<string | null>(null)
 
     const fetchData = async () => {
         setLoading(true)
@@ -72,12 +75,12 @@ export default function PackagesPage() {
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('ลบแพ็คเกจนี้?')) return
         const res = await fetch('/api/packages', {
             method: 'DELETE', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id }),
         })
         if (res.ok) { toast.success('ลบแล้ว'); fetchData() } else { toast.error('ลบไม่สำเร็จ') }
+        setPendingDeletePkg(null)
     }
 
     const openEdit = (pkg: PackageItem) => {
@@ -125,12 +128,12 @@ export default function PackagesPage() {
     }
 
     const handleDeleteUserPkg = async (id: string) => {
-        if (!confirm('ยกเลิกแพ็คเกจนี้?')) return
         const res = await fetch('/api/admin/user-packages', {
             method: 'DELETE', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id }),
         })
         if (res.ok) { toast.success('ยกเลิกแล้ว'); fetchData() } else { toast.error('เกิดข้อผิดพลาด') }
+        setPendingDeleteUserPkg(null)
     }
 
     const isExpired = (d: string) => new Date(d) < new Date()
@@ -189,7 +192,7 @@ export default function PackagesPage() {
                                     </div>
                                     <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                                         <button onClick={() => openEdit(pkg)} style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--a-text-secondary)', cursor: 'pointer', borderRadius: '6px' }}><Edit2 size={15} /></button>
-                                        <button onClick={() => handleDelete(pkg.id)} style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer', borderRadius: '6px' }}><Trash2 size={15} /></button>
+                                        <button onClick={() => setPendingDeletePkg(pkg.id)} style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer', borderRadius: '6px' }}><Trash2 size={15} /></button>
                                     </div>
                                 </div>
                             </div>
@@ -267,7 +270,7 @@ export default function PackagesPage() {
                                                 )}
                                             </td>
                                             <td>
-                                                <button onClick={() => handleDeleteUserPkg(up.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-danger)' }}><Trash2 size={14} /></button>
+                                                <button onClick={() => setPendingDeleteUserPkg(up.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-danger)' }}><Trash2 size={14} /></button>
                                             </td>
                                         </tr>
                                     )
@@ -384,6 +387,28 @@ export default function PackagesPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDeletePkg}
+                title="ลบแพ็คเกจ"
+                message="ลบแพ็คเกจนี้ออกจากระบบ?"
+                confirmText="ลบ"
+                type="danger"
+                icon="📦"
+                onConfirm={() => pendingDeletePkg && handleDelete(pendingDeletePkg)}
+                onCancel={() => setPendingDeletePkg(null)}
+            />
+
+            <ConfirmModal
+                open={!!pendingDeleteUserPkg}
+                title="ยกเลิกแพ็คเกจ"
+                message="ยกเลิกแพ็คเกจนี้จากลูกค้า?"
+                confirmText="ยกเลิก"
+                type="warning"
+                icon="📦"
+                onConfirm={() => pendingDeleteUserPkg && handleDeleteUserPkg(pendingDeleteUserPkg)}
+                onCancel={() => setPendingDeleteUserPkg(null)}
+            />
         </div></FadeIn>
     )
 }

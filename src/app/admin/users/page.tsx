@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { Shield, Plus, Trash2, X, Save, RefreshCw, Edit2 } from 'lucide-react'
@@ -23,6 +24,7 @@ export default function UsersPage() {
     const [showModal, setShowModal] = useState(false)
     const [editingUser, setEditingUser] = useState<SystemUser | null>(null)
     const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'STAFF', isActive: true })
+    const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
 
     const fetchUsers = async () => {
         setLoading(true)
@@ -93,8 +95,7 @@ export default function UsersPage() {
         fetchUsers()
     }
 
-    const deleteUser = async (userId: string, userName: string) => {
-        if (!confirm(`ต้องการลบ "${userName}" ออกจากระบบใช่ไหม? การกระทำนี้ไม่สามารถย้อนกลับได้`)) return
+    const deleteUser = async (userId: string) => {
         try {
             const res = await fetch(`/api/users?id=${userId}`, { method: 'DELETE' })
             const data = await res.json()
@@ -105,6 +106,7 @@ export default function UsersPage() {
                 toast.error(data.error || 'ลบไม่สำเร็จ')
             }
         } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setPendingDelete(null) }
     }
 
     const roleColor = (role: string) => {
@@ -171,7 +173,7 @@ export default function UsersPage() {
                                                 <button onClick={() => openEditModal(u)} style={{ padding: '4px 8px', background: 'var(--a-primary-light)', border: 'none', borderRadius: '6px', color: 'var(--a-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600 }}>
                                                     <Edit2 size={13} /> แก้ไข
                                                 </button>
-                                                <button onClick={() => deleteUser(u.id, u.name)} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                                                <button onClick={() => setPendingDelete({ id: u.id, name: u.name })} style={{ padding: '4px', background: 'none', border: 'none', color: 'var(--a-danger)', cursor: 'pointer' }}><Trash2 size={14} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -227,6 +229,17 @@ export default function UsersPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDelete}
+                title="ลบผู้ใช้งาน"
+                message={`ต้องการลบ "${pendingDelete?.name || ''}" ออกจากระบบใช่ไหม?\nการกระทำนี้ไม่สามารถย้อนกลับได้`}
+                confirmText="ลบผู้ใช้"
+                type="danger"
+                icon="⚠️"
+                onConfirm={() => pendingDelete && deleteUser(pendingDelete.id)}
+                onCancel={() => setPendingDelete(null)}
+            />
         </div></FadeIn>
     )
 }

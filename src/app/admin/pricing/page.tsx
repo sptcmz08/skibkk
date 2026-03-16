@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { DollarSign, Plus, Edit2, Trash2, Save, X } from 'lucide-react'
@@ -59,6 +60,7 @@ export default function PricingPage() {
     const [showModal, setShowModal] = useState(false)
     const [editRule, setEditRule] = useState<PricingRule | null>(null)
     const [form, setForm] = useState({ courtId: '' as string, daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
     const openModal = (rule?: PricingRule) => {
         if (rule) {
@@ -118,7 +120,6 @@ export default function PricingPage() {
     }
 
     const deleteRule = async (id: string) => {
-        if (!confirm('ยืนยันการลบราคา?')) return
 
         try {
             const res = await fetch('/api/pricing-rules', {
@@ -134,7 +135,7 @@ export default function PricingPage() {
             }
         } catch (error) {
             toast.error('เกิดข้อผิดพลาด')
-        }
+        } finally { setPendingDeleteId(null) }
     }
 
     const getDayLabels = (days: string[]) => days.map(d => DAYS.find(dd => dd.key === d)?.label).join(', ')
@@ -194,7 +195,7 @@ export default function PricingPage() {
                                     <td>
                                         <div style={{ display: 'flex', gap: '6px' }}>
                                             <button onClick={() => openModal(rule)} className="btn-admin-outline" style={{ padding: '4px 10px' }}><Edit2 size={14} /></button>
-                                            <button onClick={() => deleteRule(rule.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-danger)', color: 'var(--a-danger)', background: 'white', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                                            <button onClick={() => setPendingDeleteId(rule.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-danger)', color: 'var(--a-danger)', background: 'white', cursor: 'pointer' }}><Trash2 size={14} /></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -262,6 +263,17 @@ export default function PricingPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDeleteId}
+                title="ลบราคา"
+                message="ยืนยันการลบราคานี้?"
+                confirmText="ลบราคา"
+                type="danger"
+                icon="💰"
+                onConfirm={() => pendingDeleteId && deleteRule(pendingDeleteId)}
+                onCancel={() => setPendingDeleteId(null)}
+            />
         </div></FadeIn >
     )
 }

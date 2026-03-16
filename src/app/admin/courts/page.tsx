@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { MapPin, Plus, Edit2, Trash2, Clock, Save, X } from 'lucide-react'
@@ -29,6 +30,7 @@ export default function CourtsManagement() {
     const [form, setForm] = useState({ name: '', description: '', sportType: '', sortOrder: 0, status: 'ACTIVE', venueId: '' })
     const [hours, setHours] = useState(DAYS.map(d => ({ dayOfWeek: d.key, openTime: '08:00', closeTime: '23:00', isClosed: false })))
     const [selectedFilter, setSelectedFilter] = useState<string | null>(null) // null = all, venueId string
+    const [pendingDeleteCourt, setPendingDeleteCourt] = useState<Court | null>(null)
 
     useEffect(() => {
         fetchCourts()
@@ -90,7 +92,6 @@ export default function CourtsManagement() {
     }
 
     const deleteCourt = async (court: Court) => {
-        if (!confirm(`ต้องการลบ "${court.name}" ใช่ไหม?\nข้อมูลเวลาเปิด-ปิดจะถูกลบไปด้วย`)) return
         try {
             const res = await fetch('/api/courts', {
                 method: 'DELETE',
@@ -105,6 +106,7 @@ export default function CourtsManagement() {
                 toast.error(data.error || 'ลบไม่สำเร็จ')
             }
         } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setPendingDeleteCourt(null) }
     }
 
     const filteredCourts = selectedFilter
@@ -135,7 +137,7 @@ export default function CourtsManagement() {
                         <button onClick={() => openModal(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text-secondary)' }}>
                             <Edit2 size={14} />
                         </button>
-                        <button onClick={() => deleteCourt(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c' }}>
+                        <button onClick={() => setPendingDeleteCourt(court)} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c' }}>
                             <Trash2 size={14} />
                         </button>
                     </div>
@@ -364,6 +366,17 @@ export default function CourtsManagement() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDeleteCourt}
+                title="ลบสนาม"
+                message={`ต้องการลบ "${pendingDeleteCourt?.name || ''}" ใช่ไหม?\nข้อมูลเวลาเปิด-ปิดจะถูกลบไปด้วย`}
+                confirmText="ลบสนาม"
+                type="danger"
+                icon="🗑️"
+                onConfirm={() => pendingDeleteCourt && deleteCourt(pendingDeleteCourt)}
+                onCancel={() => setPendingDeleteCourt(null)}
+            />
         </div></FadeIn>
     )
 }

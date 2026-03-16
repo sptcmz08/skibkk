@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react'
@@ -29,6 +30,7 @@ export default function SportTypesPage() {
     const [showModal, setShowModal] = useState(false)
     const [editing, setEditing] = useState<SportType | null>(null)
     const [form, setForm] = useState({ name: '', icon: '🏟️', color: '#f59e0b' })
+    const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
 
     const fetchData = async () => {
         setLoading(true)
@@ -73,13 +75,13 @@ export default function SportTypesPage() {
         } catch { toast.error('เกิดข้อผิดพลาด') }
     }
 
-    const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`ลบประเภท "${name}" ใช่ไหม?`)) return
+    const handleDelete = async (id: string) => {
         try {
             const res = await fetch(`/api/sport-types?id=${id}`, { method: 'DELETE' })
             if (res.ok) { toast.success('ลบสำเร็จ'); fetchData() }
             else toast.error('ลบไม่สำเร็จ')
         } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setPendingDelete(null) }
     }
 
     const toggleActive = async (st: SportType) => {
@@ -154,7 +156,7 @@ export default function SportTypesPage() {
                                             <button onClick={() => openModal(st)} className="btn-admin-outline" style={{ padding: '6px 10px' }}>
                                                 <Edit2 size={14} />
                                             </button>
-                                            <button onClick={() => handleDelete(st.id, st.name)}
+                                            <button onClick={() => setPendingDelete({ id: st.id, name: st.name })}
                                                 style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fff5f5', color: '#ef4444', cursor: 'pointer' }}>
                                                 <Trash2 size={14} />
                                             </button>
@@ -238,6 +240,17 @@ export default function SportTypesPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDelete}
+                title="ลบประเภทกีฬา"
+                message={`ลบประเภท "${pendingDelete?.name || ''}" ออกจากระบบ?`}
+                confirmText="ลบ"
+                type="danger"
+                icon="🗑️"
+                onConfirm={() => pendingDelete && handleDelete(pendingDelete.id)}
+                onCancel={() => setPendingDelete(null)}
+            />
         </div></FadeIn>
     )
 }

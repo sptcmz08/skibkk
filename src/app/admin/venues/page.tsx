@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { MapPin, Plus, Edit2, Trash2, Save, X, Image, ArrowUp, ArrowDown } from 'lucide-react'
@@ -16,6 +17,7 @@ export default function VenuesManagement() {
     const [showModal, setShowModal] = useState(false)
     const [editing, setEditing] = useState<Venue | null>(null)
     const [form, setForm] = useState({ name: '', image: '', description: '', isActive: true })
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
     useEffect(() => { fetchVenues() }, [])
 
@@ -60,12 +62,12 @@ export default function VenuesManagement() {
     }
 
     const deleteVenue = async (id: string) => {
-        if (!confirm('ยืนยันลบสถานที่นี้?')) return
         try {
             const res = await fetch(`/api/venues?id=${id}`, { method: 'DELETE' })
             if (res.ok) { toast.success('ลบสำเร็จ'); fetchVenues() }
             else toast.error('ลบไม่สำเร็จ')
         } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setPendingDeleteId(null) }
     }
 
     const handleImageUpload = async (file: File) => {
@@ -123,7 +125,7 @@ export default function VenuesManagement() {
                                     <button onClick={() => openModal(v)} style={{ flex: 1, padding: '6px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                                         <Edit2 size={13} /> แก้ไข
                                     </button>
-                                    <button onClick={() => deleteVenue(v.id)} style={{ padding: '6px 10px', background: '#fde8e8', color: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                                    <button onClick={() => setPendingDeleteId(v.id)} style={{ padding: '6px 10px', background: '#fde8e8', color: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
                                         <Trash2 size={13} />
                                     </button>
                                 </div>
@@ -187,6 +189,17 @@ export default function VenuesManagement() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingDeleteId}
+                title="ลบสถานที่"
+                message={`ยืนยันลบสถานที่ "${venues.find(v => v.id === pendingDeleteId)?.name || ''}" ออกจากระบบ?`}
+                confirmText="ลบ"
+                type="danger"
+                icon="🗑️"
+                onConfirm={() => pendingDeleteId && deleteVenue(pendingDeleteId)}
+                onCancel={() => setPendingDeleteId(null)}
+            />
         </div></FadeIn>
     )
 }

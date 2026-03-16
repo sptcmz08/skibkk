@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
@@ -67,6 +68,7 @@ export default function CalendarPage() {
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [venues, setVenues] = useState<Venue[]>([])
     const [selectedVenueId, setSelectedVenueId] = useState<string>('')
+    const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -816,8 +818,7 @@ export default function CalendarPage() {
                                     <>
                                         {editBookingItems.length > 1 && (
                                             <button onClick={() => {
-                                                if (!confirm('ต้องการลบรายการจองนี้ออกใช่ไหม?')) return
-                                                setEditBookingItems(editBookingItems.filter((_, j) => j !== i))
+                                                setPendingCalendarAction({ message: 'ต้องการลบรายการจองนี้ออกใช่ไหม?', action: () => setEditBookingItems(editBookingItems.filter((_, j) => j !== i)) })
                                             }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
                                                 🗑️ ลบ
                                             </button>
@@ -897,8 +898,7 @@ export default function CalendarPage() {
                                     <>
                                         {editParticipants.length > 1 && (
                                             <button onClick={() => {
-                                                if (!confirm('ต้องการลบผู้เรียนคนนี้ออกใช่ไหม?')) return
-                                                setEditParticipants(editParticipants.filter((_, j) => j !== i))
+                                                setPendingCalendarAction({ message: 'ต้องการลบผู้เรียนคนนี้ออกใช่ไหม?', action: () => setEditParticipants(editParticipants.filter((_, j) => j !== i)) })
                                             }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
                                                 🗑️ ลบ
                                             </button>
@@ -1189,6 +1189,17 @@ export default function CalendarPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                open={!!pendingCalendarAction}
+                title="ยืนยันลบ"
+                message={pendingCalendarAction?.message || ''}
+                confirmText="ลบ"
+                type="danger"
+                icon="🗑️"
+                onConfirm={() => { pendingCalendarAction?.action(); setPendingCalendarAction(null) }}
+                onCancel={() => setPendingCalendarAction(null)}
+            />
         </div></FadeIn>
     )
 }
