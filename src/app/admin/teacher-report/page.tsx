@@ -26,7 +26,7 @@ export default function TeacherReportPage() {
     useEffect(() => {
         Promise.all([
             fetch('/api/teachers').then(r => r.json()),
-            fetch('/api/bookings', { cache: 'no-store' }).then(r => r.json()),
+            fetch('/api/bookings?take=500', { cache: 'no-store' }).then(r => r.json()),
         ]).then(([tData, bData]) => {
             setTeachers(tData.teachers || [])
             setBookings(bData.bookings || [])
