@@ -971,7 +971,13 @@ export default function CalendarPage() {
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: '6px', alignItems: 'center' }}>
                                             <select value={(item as any).startTime} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: e.target.value }; setEditBookingItems(u)
+                                                const newStart = e.target.value
+                                                const end = (item as any).endTime
+                                                const startH = parseInt(newStart.split(':')[0])
+                                                const endH = parseInt(end.split(':')[0])
+                                                const hours = endH > startH ? endH - startH : 1
+                                                const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: newStart, price: hours * perHour }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 {Array.from({ length: 15 }, (_, h) => h + 8).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
@@ -980,16 +986,30 @@ export default function CalendarPage() {
                                             </select>
                                             <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', fontWeight: 600 }}>ถึง</div>
                                             <select value={(item as any).endTime} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], endTime: e.target.value }; setEditBookingItems(u)
+                                                const newEnd = e.target.value
+                                                const start = (item as any).startTime
+                                                const startH = parseInt(start.split(':')[0])
+                                                const endH = parseInt(newEnd.split(':')[0])
+                                                const hours = endH > startH ? endH - startH : 1
+                                                const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], endTime: newEnd, price: hours * perHour }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 {Array.from({ length: 15 }, (_, h) => h + 9).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
                                                     return <option key={t} value={t}>{t}</option>
                                                 })}
                                             </select>
-                                            <input type="number" value={(item as any).price} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
-                                            }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
+                                            <div style={{ position: 'relative' }}>
+                                                <input type="number" value={(item as any).price} onChange={e => {
+                                                    const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
+                                                }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
+                                                {(() => {
+                                                    const s = parseInt(((item as any).startTime || '09:00').split(':')[0])
+                                                    const e = parseInt(((item as any).endTime || '10:00').split(':')[0])
+                                                    const h = e > s ? e - s : 1
+                                                    return h > 1 ? <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', color: 'var(--a-primary)', fontWeight: 700, pointerEvents: 'none' }}>({h} ชม.)</span> : null
+                                                })()}
+                                            </div>
                                         </div>
                                         {/* Teacher selection */}
                                         <div style={{ marginTop: '6px' }}>
