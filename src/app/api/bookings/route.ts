@@ -263,13 +263,14 @@ export async function PATCH(req: NextRequest) {
         if (updateData.bookingItems && Array.isArray(updateData.bookingItems)) {
             await prisma.bookingItem.deleteMany({ where: { bookingId } })
             await prisma.bookingItem.createMany({
-                data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number }) => ({
+                data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }) => ({
                     bookingId,
                     courtId: item.courtId,
                     date: new Date(item.date + 'T00:00:00'),
                     startTime: item.startTime,
                     endTime: item.endTime,
                     price: item.price || 0,
+                    teacherId: item.teacherId || null,
                 })),
             })
         }

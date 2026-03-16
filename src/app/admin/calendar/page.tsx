@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
-    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
+    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
     payments: Array<{ method: string; status: string; amount: number }>
 }
@@ -28,6 +28,7 @@ interface Court {
 }
 interface Venue { id: string; name: string }
 interface Customer { id: string; name: string; email: string; phone: string }
+interface Teacher { id: string; name: string; specialty: string | null; isActive: boolean; workStatus: string }
 
 export default function CalendarPage() {
     const router = useRouter()
@@ -45,7 +46,7 @@ export default function CalendarPage() {
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string }>>([])
-    const [editBookingItems, setEditBookingItems] = useState<Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number }>>([])
+    const [editBookingItems, setEditBookingItems] = useState<Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
@@ -71,13 +72,14 @@ export default function CalendarPage() {
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [venues, setVenues] = useState<Venue[]>([])
     const [selectedVenueId, setSelectedVenueId] = useState<string>('')
+    const [teachers, setTeachers] = useState<Teacher[]>([])
     const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
         setEditMode(false)
         setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
-        setEditBookingItems(booking.bookingItems.map(item => ({ courtId: item.courtId, date: item.date.split('T')[0], startTime: item.startTime, endTime: item.endTime, price: item.price })))
+        setEditBookingItems(booking.bookingItems.map(item => ({ courtId: item.courtId, date: item.date.split('T')[0], startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null })))
         setEditStatus(booking.status)
         setEditAmount(booking.totalAmount)
     }
@@ -124,6 +126,7 @@ export default function CalendarPage() {
     // Fetch courts for edit dropdown
     useEffect(() => {
         fetch('/api/courts?admin=1', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
+        fetch('/api/teachers', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.teachers) setTeachers(data.teachers) }).catch(() => { })
         fetch('/api/venues', { cache: 'no-store' }).then(r => r.json()).then(data => {
             if (data.venues) {
                 const active = data.venues.filter((v: any) => v.isActive)
@@ -877,6 +880,17 @@ export default function CalendarPage() {
                                             <input type="number" value={(item as any).price} onChange={e => {
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
                                             }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
+                                        </div>
+                                        {/* Teacher selection */}
+                                        <div style={{ marginTop: '6px' }}>
+                                            <select value={(item as any).teacherId || ''} onChange={e => {
+                                                const u = [...editBookingItems]; u[i] = { ...u[i], teacherId: e.target.value || null }; setEditBookingItems(u)
+                                            }} className="admin-input" style={{ fontSize: '13px' }}>
+                                                <option value="">🎓 ไม่มีครูผู้สอน</option>
+                                                {teachers.filter(t => t.isActive && t.workStatus === 'ACTIVE').map(t => (
+                                                    <option key={t.id} value={t.id}>🎓 {t.name}{t.specialty ? ` (${t.specialty})` : ''}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         {/* Show original data */}
                                         {viewBooking.bookingItems[i] && (
