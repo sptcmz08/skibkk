@@ -119,6 +119,7 @@ function AdminBookInner() {
     const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
     const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
     const [availability, setAvailability] = useState<CourtData[]>([])
+    const [sportTypes, setSportTypes] = useState<Array<{ id: string; name: string; icon: string }>>([]);
     const [selectedCourt, setSelectedCourt] = useState<string | null>(null)
     const [cart, setCart] = useState<CartItem[]>([])
     const [loading, setLoading] = useState(false)
@@ -167,6 +168,9 @@ function AdminBookInner() {
             } catch { /* ignore */ } finally { setLoadingVenues(false) }
         }
         fetchVenues()
+        // Fetch sport types from DB
+        fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json())
+            .then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => {})
     }, [])
 
     // Fetch availability when date selected (no session lock for admin)
@@ -736,8 +740,9 @@ function AdminBookInner() {
                                 <input className="admin-input" placeholder="ชื่อ-นามสกุล *" value={p.name} onChange={e => { const np = [...participants]; np[i].name = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }} />
                                 <select className="admin-input" value={p.sportType} onChange={e => { const np = [...participants]; np[i].sportType = e.target.value; setParticipants(np) }} style={{ fontSize: '13px' }}>
                                     <option value="">ประเภทกีฬา</option>
-                                    <option value="สกี้">⛷️ สกี้</option>
-                                    <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                                    {sportTypes.map(st => (
+                                        <option key={st.id} value={st.name}>{st.icon || '🏟️'} {st.name}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
