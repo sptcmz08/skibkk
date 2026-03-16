@@ -143,10 +143,16 @@ export default function CalendarPage() {
                 const res = await fetch(`/api/bookings?month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
                 const data = await res.json()
                 if (data.bookings) {
+                    // Get court IDs for the selected venue to filter
+                    const venueCourtIds = selectedVenueId
+                        ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
+                        : null
                     const summaries: Record<string, DaySummary> = {}
                     data.bookings.forEach((b: Booking) => {
                         if (b.status === 'CANCELLED') return
                         b.bookingItems.forEach(item => {
+                            // Filter by venue if selected
+                            if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
                             const d = item.date.split('T')[0]
                             if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
                             summaries[d].count++
@@ -158,7 +164,7 @@ export default function CalendarPage() {
             } catch { /* ignore */ }
         }
         fetchSummary()
-    }, [viewYear, viewMonth])
+    }, [viewYear, viewMonth, selectedVenueId, courts])
 
     // Fetch calendar availability for color coding (Bug 5.2)
     useEffect(() => {
