@@ -785,11 +785,14 @@ export default function CalendarPage() {
                                                             })
 
                                                             return courtBookings.map(cb => {
-                                                                const startH = parseInt(cb.startTime.split(':')[0])
-                                                                const endH = parseInt(cb.endTime.split(':')[0]) || 24
-                                                                const topOffset = (startH - minHour) * ROW_H
-                                                                const blockHeight = (endH - startH) * ROW_H
-                                                                const hours = endH - startH
+                                                                const startParts = cb.startTime.split(':')
+                                                                const endParts = cb.endTime.split(':')
+                                                                const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || '0')
+                                                                const endMinutes = cb.endTime === '00:00' ? 24 * 60 : (parseInt(endParts[0]) * 60 + parseInt(endParts[1] || '0'))
+                                                                const minMinutes = minHour * 60
+                                                                const topOffset = ((startMinutes - minMinutes) / 60) * ROW_H
+                                                                const blockHeight = ((endMinutes - startMinutes) / 60) * ROW_H
+                                                                const hours = Math.round((endMinutes - startMinutes) / 60 * 10) / 10
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
