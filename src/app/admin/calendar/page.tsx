@@ -498,7 +498,7 @@ export default function CalendarPage() {
                                 </select>
                             )}
                             <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
-                            <button onClick={() => router.push(`/admin/book?date=${selectedDate}`)} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button onClick={() => router.push(`/admin/book?date=${selectedDate}${selectedVenueId ? `&venueId=${selectedVenueId}` : ''}`)} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Plus size={14} /> จอง
                             </button>
                         </div>

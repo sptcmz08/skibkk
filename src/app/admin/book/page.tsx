@@ -111,6 +111,7 @@ function AdminBookInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const dateParam = searchParams.get('date')
+    const venueIdParam = searchParams.get('venueId')
 
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
     const [venues, setVenues] = useState<Array<{ id: string; name: string; image: string | null; description: string | null }>>([])
@@ -163,6 +164,14 @@ function AdminBookInner() {
                 if (data.venues) {
                     const active = data.venues.filter((v: any) => v.isActive)
                     setVenues(active)
+                    // Auto-select venue from URL param
+                    if (venueIdParam) {
+                        const matched = active.find((v: any) => v.id === venueIdParam)
+                        if (matched) {
+                            setSelectedVenue(matched)
+                            setStep(2) // Skip to date selection
+                        }
+                    }
                     if (active.length === 0) setStep(2)
                 }
             } catch { /* ignore */ } finally { setLoadingVenues(false) }
