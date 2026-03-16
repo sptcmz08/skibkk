@@ -3,8 +3,8 @@
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 
-import { useState, useEffect } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -36,6 +36,7 @@ export default function CalendarPage() {
     const dateParam = searchParams.get('date')
     const venueIdParam = searchParams.get('venueId')
     const now = new Date()
+    const bookingGridRef = useRef<HTMLDivElement>(null)
     const initDate = dateParam ? new Date(dateParam) : null
     const [viewYear, setViewYear] = useState(initDate ? initDate.getFullYear() : now.getFullYear())
     const [viewMonth, setViewMonth] = useState(initDate ? initDate.getMonth() : now.getMonth())
@@ -465,7 +466,7 @@ export default function CalendarPage() {
 
                             return (
                                 <div key={dateStr}
-                                    onClick={() => setSelectedDate(dateStr)}
+                                    onClick={() => { setSelectedDate(dateStr); setTimeout(() => bookingGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100) }}
                                     style={{
                                         padding: '8px 4px',
                                         borderRadius: '10px',
@@ -511,12 +512,26 @@ export default function CalendarPage() {
 
             {/* Bookings Grid for selected date */}
             {selectedDate && (
-                <div className="admin-card">
+                <div className="admin-card" ref={bookingGridRef}>
                     <div className="admin-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Calendar size={18} style={{ color: 'var(--a-primary)' }} />
-                            {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; setSelectedDate(ds) }}
+                                className="btn-admin-outline" style={{ padding: '4px 8px', fontSize: '12px', display: 'flex', alignItems: 'center' }}>
+                                <ArrowLeft size={14} />
+                            </button>
+                            <button onClick={() => setSelectedDate(todayStr)}
+                                className="btn-admin-outline" style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600 }}>
+                                วันนี้
+                            </button>
+                            <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; setSelectedDate(ds) }}
+                                className="btn-admin-outline" style={{ padding: '4px 8px', fontSize: '12px', display: 'flex', alignItems: 'center' }}>
+                                <ArrowRight size={14} />
+                            </button>
+                            <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                <Calendar size={18} style={{ color: 'var(--a-primary)' }} />
+                                {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                            </h3>
+                        </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {venues.length > 1 && (
                                 <select className="admin-input" style={{ minWidth: '160px', fontSize: '13px' }} value={selectedVenueId} onChange={e => setSelectedVenueId(e.target.value)}>
