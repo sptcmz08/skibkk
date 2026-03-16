@@ -28,10 +28,16 @@ export async function DELETE(
             return NextResponse.json({ error: 'ไม่สามารถลบการจองที่ยืนยันแล้ว' }, { status: 400 })
         }
 
-        // Delete in order: payments → booking items → participants → booking
+        // Delete in order: usedSlips → payments → booking items → participants → booking
+        const payments = await prisma.payment.findMany({ where: { bookingId: id }, select: { slipHash: true } })
+        const slipHashes = payments.map(p => p.slipHash).filter((h): h is string => !!h)
+        if (slipHashes.length > 0) {
+            await prisma.usedSlip.deleteMany({ where: { slipHash: { in: slipHashes } } })
+        }
         await prisma.payment.deleteMany({ where: { bookingId: id } })
         await prisma.bookingItem.deleteMany({ where: { bookingId: id } })
         await prisma.participant.deleteMany({ where: { bookingId: id } })
+        await prisma.teacherEvaluation.deleteMany({ where: { bookingId: id } })
         await prisma.booking.delete({ where: { id } })
 
         return NextResponse.json({ success: true })

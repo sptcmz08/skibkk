@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import generatePayload from 'promptpay-qr'
 import QRCode from 'qrcode'
+import { requireAuth } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
     try {
+        await requireAuth()
         const { amount } = await req.json()
 
         // Get PromptPay number from env or use default

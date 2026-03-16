@@ -22,7 +22,7 @@ export default function ReportsPage() {
     const [searchBy, setSearchBy] = useState<'booking' | 'payment'>('booking')
 
     useEffect(() => {
-        fetch('/api/bookings', { cache: 'no-store' })
+        fetch('/api/bookings?take=500', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => setBookings(data.bookings || []))
             .catch(() => toast.error('โหลดไม่สำเร็จ'))
