@@ -140,6 +140,7 @@ function AdminBookInner() {
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
+    const [showConfirmModal, setShowConfirmModal] = useState(false)
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -286,16 +287,18 @@ function AdminBookInner() {
     const hasCustomer = bookCustomer || (isNewCustomer && newBookerName.trim())
 
     // Submit booking
-    const submitBooking = async () => {
+    const handleBookingClick = () => {
         if (!hasCustomer) { toast.error('กรุณากรอกชื่อผู้จอง'); return }
         if (cart.length === 0) { toast.error('กรุณาเลือกเวลา'); return }
         const validParts = participants.filter(p => p.name.trim())
         if (validParts.length === 0) { toast.error('กรุณากรอกชื่อผู้เรียนอย่างน้อย 1 คน'); return }
+        setShowConfirmModal(true)
+    }
 
-        // Confirmation popup (Bug 6.7)
+    const submitBooking = async () => {
+        setShowConfirmModal(false)
+        const validParts = participants.filter(p => p.name.trim())
         const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
-        const confirmMsg = `ยืนยันการจอง ${cart.length} รายการ\nยอดรวม ฿${totalAmount.toLocaleString()}\n\nต้องการดำเนินการต่อหรือไม่?`
-        if (!confirm(confirmMsg)) return
 
         setSubmitting(true)
         try {
@@ -811,12 +814,130 @@ function AdminBookInner() {
 
                 {/* Submit */}
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={submitBooking} disabled={submitting || !hasCustomer}
+                    onClick={handleBookingClick} disabled={submitting || !hasCustomer}
                     className="btn-admin"
                     style={{ width: '100%', padding: '16px', fontSize: '17px', fontWeight: 700, marginBottom: '40px' }}>
                     {submitting ? 'กำลังจอง...' : `ยืนยันการจอง (${cart.length} รายการ · ฿${total.toLocaleString()})`}
                 </motion.button>
             </motion.div>
+
+            {/* Confirmation Modal */}
+            {showConfirmModal && (() => {
+                const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
+                const courtNames = [...new Set(cart.map(c => c.courtName))]
+                const bookerName = bookCustomer?.name || newBookerName || '-'
+                const validParts = participants.filter(p => p.name.trim())
+                const dateStr = selectedDate ? formatDateTH(selectedDate) : '-'
+                const timeSlots = cart.map(c => `${c.startTime}–${c.endTime}`).join(', ')
+
+                return (
+                    <div onClick={() => setShowConfirmModal(false)} style={{
+                        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px',
+                    }}>
+                        <motion.div onClick={e => e.stopPropagation()}
+                            initial={{ scale: 0.85, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                            style={{
+                                background: '#fff', borderRadius: '20px', width: '100%', maxWidth: '440px',
+                                boxShadow: '0 25px 60px rgba(0,0,0,0.25)', overflow: 'hidden',
+                            }}>
+                            {/* Header */}
+                            <div style={{
+                                background: 'linear-gradient(135deg, #f5a623 0%, #e8961e 100%)', padding: '24px 28px',
+                                textAlign: 'center', color: '#fff',
+                            }}>
+                                <div style={{ fontSize: '36px', marginBottom: '8px' }}>📋</div>
+                                <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px' }}>ยืนยันการจอง</div>
+                                <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>กรุณาตรวจสอบข้อมูลก่อนดำเนินการ</div>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ padding: '24px 28px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    {/* Venue */}
+                                    {selectedVenue && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(245,166,35,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📍</div>
+                                            <div>
+                                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>สถานที่</div>
+                                                <div style={{ fontSize: '15px', fontWeight: 700 }}>{selectedVenue.name}</div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Court */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(52,152,219,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>🏟️</div>
+                                        <div>
+                                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>สนาม</div>
+                                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{courtNames.join(', ')}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Date & Time */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(155,89,182,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📅</div>
+                                        <div>
+                                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>วันที่ / เวลา</div>
+                                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{dateStr}</div>
+                                            <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '2px' }}>⏰ {timeSlots}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Customer */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(39,174,96,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>👤</div>
+                                        <div>
+                                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>ผู้จอง</div>
+                                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{bookerName}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ผู้เรียน {validParts.length} คน</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Payment + Total */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: bookStatus === 'CONFIRMED' ? 'rgba(39,174,96,0.1)' : 'rgba(245,166,35,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>{bookStatus === 'CONFIRMED' ? '✅' : '🟡'}</div>
+                                        <div>
+                                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>สถานะชำระ</div>
+                                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'ยังไม่จ่าย'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Total */}
+                                <div style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(245,166,35,0.08), rgba(245,166,35,0.18))', border: '1px solid rgba(245,166,35,0.2)', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '12px', color: '#b07d18', fontWeight: 600, marginBottom: '4px' }}>ยอดรวมทั้งหมด</div>
+                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#f5a623', letterSpacing: '-1px' }}>฿{totalAmount.toLocaleString()}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '2px' }}>{cart.length} รายการ</div>
+                                </div>
+                            </div>
+
+                            {/* Footer buttons */}
+                            <div style={{ padding: '0 28px 24px 28px', display: 'flex', gap: '12px' }}>
+                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                                    onClick={() => setShowConfirmModal(false)}
+                                    style={{
+                                        flex: 1, padding: '14px', borderRadius: '12px', fontSize: '15px', fontWeight: 700,
+                                        border: '2px solid #e0e0e0', background: '#fff', color: 'var(--a-text)', cursor: 'pointer', fontFamily: 'inherit',
+                                    }}>
+                                    ยกเลิก
+                                </motion.button>
+                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                                    onClick={submitBooking}
+                                    style={{
+                                        flex: 2, padding: '14px', borderRadius: '12px', fontSize: '15px', fontWeight: 700,
+                                        border: 'none', background: 'linear-gradient(135deg, #f5a623 0%, #e8961e 100%)', color: '#fff', cursor: 'pointer',
+                                        fontFamily: 'inherit', boxShadow: '0 4px 12px rgba(245,166,35,0.3)',
+                                    }}>
+                                    ✅ ยืนยันการจอง
+                                </motion.button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )
+            })()}
         </div>
     )
 }
