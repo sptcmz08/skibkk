@@ -52,6 +52,11 @@ export async function DELETE(req: NextRequest) {
         const id = searchParams.get('id')
         if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+        const courtCount = await prisma.court.count({ where: { venueId: id } })
+        if (courtCount > 0) {
+            return NextResponse.json({ error: `ลบไม่ได้ สถานที่นี้มี ${courtCount} สนาม กรุณาย้ายสนามก่อน` }, { status: 400 })
+        }
+
         await prisma.venue.delete({ where: { id } })
         return NextResponse.json({ success: true })
     } catch (error) {

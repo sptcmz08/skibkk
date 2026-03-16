@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
         // Admin: get all evaluations
         const user = await requireAuth()
-        if (!['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
         // Create evaluation link (admin)
         const user = await requireAuth()
-        if (!['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 

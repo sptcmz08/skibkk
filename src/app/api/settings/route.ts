@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,7 @@ export async function GET() {
 // PUT /api/settings — upsert a setting by key (admin only)
 export async function PUT(req: NextRequest) {
     try {
+        await requireAdmin()
         const { key, value } = await req.json()
 
         if (!key || value === undefined) {

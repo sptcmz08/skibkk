@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
-        if (!['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
         const { date, reason } = await req.json()
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
     try {
         const user = await requireAuth()
-        if (!['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
         const { id } = await req.json()

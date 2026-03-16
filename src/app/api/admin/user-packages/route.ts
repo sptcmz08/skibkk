@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 // GET — list all user-packages (admin view)
 export async function GET(req: NextRequest) {
     try {
+        await requireAdmin()
         const { searchParams } = new URL(req.url)
         const userId = searchParams.get('userId')
 
@@ -30,6 +32,7 @@ export async function GET(req: NextRequest) {
 // POST — assign a package to a customer
 export async function POST(req: NextRequest) {
     try {
+        await requireAdmin()
         const { userId, packageId } = await req.json()
         if (!userId || !packageId) {
             return NextResponse.json({ error: 'ต้องระบุ userId และ packageId' }, { status: 400 })
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest) {
 // DELETE — remove a user-package
 export async function DELETE(req: NextRequest) {
     try {
+        await requireAdmin()
         const { id } = await req.json()
         if (!id) return NextResponse.json({ error: 'ต้องระบุ id' }, { status: 400 })
         await prisma.userPackage.delete({ where: { id } })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ export async function GET() {
 // POST — create a new package
 export async function POST(req: NextRequest) {
     try {
+        await requireAdmin()
         const { name, description, totalHours, price, validDays, validFrom, validTo, isActive } = await req.json()
         if (!name || !totalHours || !price) {
             return NextResponse.json({ error: 'กรุณากรอกข้อมูลให้ครบ' }, { status: 400 })
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
 // PUT — update a package
 export async function PUT(req: NextRequest) {
     try {
+        await requireAdmin()
         const { id, name, description, totalHours, price, validDays, validFrom, validTo, isActive } = await req.json()
         if (!id) return NextResponse.json({ error: 'ต้องระบุ id' }, { status: 400 })
         const pkg = await prisma.package.update({
@@ -73,6 +76,7 @@ export async function PUT(req: NextRequest) {
 // DELETE — delete a package
 export async function DELETE(req: NextRequest) {
     try {
+        await requireAdmin()
         const { id } = await req.json()
         if (!id) return NextResponse.json({ error: 'ต้องระบุ id' }, { status: 400 })
         await prisma.package.delete({ where: { id } })

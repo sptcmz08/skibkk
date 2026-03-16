@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
     try {
         const user = await requireAuth()
-        if (!['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 
