@@ -38,6 +38,7 @@ export async function DELETE(
         await prisma.bookingItem.deleteMany({ where: { bookingId: id } })
         await prisma.participant.deleteMany({ where: { bookingId: id } })
         await prisma.teacherEvaluation.deleteMany({ where: { bookingId: id } })
+        await prisma.invoice.deleteMany({ where: { bookingId: id } })
         await prisma.booking.delete({ where: { id } })
 
         return NextResponse.json({ success: true })
