@@ -13,7 +13,7 @@ interface Booking {
     user: { name: string; email: string; phone: string }
     bookingItems: BookingItem[]
     participants: Array<{ name: string; sportType: string }>
-    payments: Array<{ method: string; status: string; amount: number }>
+    payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
 }
 
 type DocType = 'full' | 'short'
@@ -285,7 +285,15 @@ export default function InvoicesPage() {
             qty: 1,
             unitPrice: item.price,
         })))
-        setPaymentNote(b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์ • ชำระเงินเรียบร้อยแล้ว' : 'โอนเงินผ่านธนาคาร • ชำระเงินเรียบร้อยแล้ว')
+        const pm = b.payments[0]
+        let payNote = 'ชำระเงินเรียบร้อยแล้ว'
+        if (pm) {
+            if (pm.method === 'CASH') payNote = 'เงินสด • ชำระเงินเรียบร้อยแล้ว'
+            else if (pm.method === 'BANK_TRANSFER') payNote = `โอนเงินผ่านธนาคาร${pm.bankName ? ' (' + pm.bankName + ')' : ''} • ชำระเงินเรียบร้อยแล้ว`
+            else if (pm.method === 'CREDIT_CARD') payNote = 'บัตรเครดิต • ชำระเงินเรียบร้อยแล้ว'
+            else if (pm.method === 'PROMPTPAY') payNote = 'พร้อมเพย์ • ชำระเงินเรียบร้อยแล้ว'
+        }
+        setPaymentNote(payNote)
         setPayerName('')
         setPayerDate('')
         setReceiverName('')

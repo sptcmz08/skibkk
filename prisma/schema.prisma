@@ -24,6 +24,7 @@ enum PaymentMethod {
   BANK_TRANSFER
   PACKAGE
   CASH
+  CREDIT_CARD
   ADMIN_OVERRIDE
 }
 
@@ -232,6 +233,7 @@ model Payment {
   amount     Float
   slipUrl    String?
   slipHash   String? // for duplicate detection
+  bankName   String? // ชื่อธนาคารเมื่อเลือก BANK_TRANSFER
   status     PaymentStatus @default(PENDING)
   verifiedAt DateTime?
   verifiedBy String?

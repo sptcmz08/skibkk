@@ -13,7 +13,7 @@ interface Booking {
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
-    payments: Array<{ method: string; status: string; amount: number }>
+    payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
 }
 
 interface DaySummary {
@@ -900,6 +900,14 @@ export default function CalendarPage() {
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email?.endsWith('@line.local') ? <span style={{ color: '#999' }}>ไม่มี (LINE)</span> : viewBooking.user?.email}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH')}</div>
+                                {viewBooking.payments[0] && (
+                                    <div><strong>วิธีชำระ:</strong> {
+                                        viewBooking.payments[0].method === 'CASH' ? '💵 เงินสด'
+                                        : viewBooking.payments[0].method === 'BANK_TRANSFER' ? `🏦 ธนาคาร${viewBooking.payments[0].bankName ? ' (' + viewBooking.payments[0].bankName + ')' : ''}`
+                                        : viewBooking.payments[0].method === 'CREDIT_CARD' ? '💳 บัตรเครดิต'
+                                        : viewBooking.payments[0].method === 'PROMPTPAY' ? '📱 พร้อมเพย์' : viewBooking.payments[0].method
+                                    }</div>
+                                )}
                                 {editMode && (
                                     <div style={{ gridColumn: '1 / -1' }}>
                                         <strong>สถานะ:</strong>{' '}

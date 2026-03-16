@@ -47,6 +47,14 @@ const SPORT_ICONS: Record<string, string> = {
 const MONTH_TH = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
 const DAY_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 
+const THAI_BANKS = [
+    'ธนาคารกรุงเทพ', 'ธนาคารกสิกรไทย', 'ธนาคารกรุงไทย', 'ธนาคารไทยพาณิชย์',
+    'ธนาคารกรุงศรีอยุธยา', 'ธนาคารทหารไทยธนชาต', 'ธนาคารซีไอเอ็มบีไทย',
+    'ธนาคารยูโอบี', 'ธนาคารแลนด์ แอนด์ เฮ้าส์', 'ธนาคารเกียรตินาคินภัทร',
+    'ธนาคารทิสโก้', 'ธนาคารออมสิน', 'ธนาคารอาคารสงเคราะห์',
+    'ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร', 'ธนาคารอิสลามแห่งประเทศไทย',
+]
+
 // Step wizard — identical to customer page
 function StepWizard({ step }: { step: number }) {
     const steps = [
@@ -138,6 +146,8 @@ function AdminBookInner() {
     const [newBookerLineId, setNewBookerLineId] = useState('')
     const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string; shoeSize: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '', shoeSize: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CREDIT_CARD'>('CASH')
+    const [bankName, setBankName] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
     const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -352,6 +362,8 @@ function AdminBookInner() {
                     isBooker: i === 0,
                 })),
                 createdByAdmin: true,
+                paymentMethod,
+                bankName: paymentMethod === 'BANK_TRANSFER' ? bankName : null,
             }
             if (bookCustomer) body.userId = bookCustomer.id
             else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim(); body.guestLineId = newBookerLineId.trim() || null }
@@ -833,6 +845,35 @@ function AdminBookInner() {
                             </div>
                         </div>
                     ))}
+                </div>
+
+                {/* Payment Method */}
+                <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '12px' }}>💳 วิธีการชำระเงิน</h3>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: paymentMethod === 'BANK_TRANSFER' ? '12px' : '0' }}>
+                        {([
+                            { key: 'CASH' as const, label: '💵 เงินสด', color: '#27ae60' },
+                            { key: 'BANK_TRANSFER' as const, label: '🏦 ธนาคาร', color: '#2196F3' },
+                            { key: 'CREDIT_CARD' as const, label: '💳 บัตรเครดิต', color: '#9b59b6' },
+                        ]).map(m => (
+                            <button key={m.key} onClick={() => setPaymentMethod(m.key)} style={{
+                                flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '13px',
+                                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                border: paymentMethod === m.key ? `2px solid ${m.color}` : '1px solid var(--a-border)',
+                                background: paymentMethod === m.key ? `${m.color}10` : 'white',
+                                color: paymentMethod === m.key ? m.color : 'var(--a-text)',
+                            }}>
+                                {m.label}
+                            </button>
+                        ))}
+                    </div>
+                    {paymentMethod === 'BANK_TRANSFER' && (
+                        <select className="admin-input" value={bankName} onChange={e => setBankName(e.target.value)}
+                            style={{ width: '100%', padding: '10px 12px', fontSize: '14px' }}>
+                            <option value="">-- เลือกธนาคาร --</option>
+                            {THAI_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                    )}
                 </div>
 
                 {/* Payment Status */}

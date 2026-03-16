@@ -180,7 +180,21 @@ export async function POST(req: NextRequest) {
             },
         })
 
-        // Create audit log
+        // Create payment record with selected method (admin bookings)
+        if (body.paymentMethod) {
+            await prisma.payment.create({
+                data: {
+                    bookingId: booking.id,
+                    userId: bookingUserId,
+                    method: body.paymentMethod, // CASH, BANK_TRANSFER, CREDIT_CARD
+                    amount: body.totalAmount,
+                    bankName: body.bankName || null,
+                    status: 'VERIFIED',
+                    verifiedAt: new Date(),
+                    verifiedBy: user.id,
+                },
+            })
+        }
         await prisma.auditLog.create({
             data: {
                 userId: user.id,
