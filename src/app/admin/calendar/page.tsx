@@ -549,7 +549,7 @@ export default function CalendarPage() {
                             // Build lookup: courtId_startTime -> { booking, item, participants }
                             const slotMap: Record<string, { booking: Booking; item: Booking['bookingItems'][0] }> = {}
                             activeBookings.forEach(booking => {
-                                booking.bookingItems.filter(item => item.date.startsWith(selectedDate!)).forEach(item => {
+                                booking.bookingItems.forEach(item => {
                                     const key = `${item.courtId}_${item.startTime}`
                                     slotMap[key] = { booking, item }
                                     // For items spanning multiple hours, also register intermediate hours
@@ -571,7 +571,7 @@ export default function CalendarPage() {
                             activeBookings.forEach(booking => {
                                 // Group items by courtId — only items for this date
                                 const byCourtLocal: Record<string, Booking['bookingItems']> = {}
-                                booking.bookingItems.filter(item => item.date.startsWith(selectedDate!)).forEach(item => {
+                                booking.bookingItems.forEach(item => {
                                     if (!byCourtLocal[item.courtId]) byCourtLocal[item.courtId] = []
                                     byCourtLocal[item.courtId].push(item)
                                 })
