@@ -22,7 +22,10 @@ interface DaySummary {
     totalAmount: number
 }
 
-interface Court { id: string; name: string; sportType: string; venueId: string | null }
+interface Court {
+    id: string; name: string; sportType: string; venueId: string | null
+    operatingHours?: Array<{ dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
+}
 interface Venue { id: string; name: string }
 interface Customer { id: string; name: string; email: string; phone: string }
 
@@ -582,20 +585,33 @@ export default function CalendarPage() {
                                 }
                             }))
 
-                            // Determine time range from bookings (default 8:00-18:00 if no bookings)
-                            let minHour = 8, maxHour = 18
-                            if (activeBookings.length > 0) {
-                                minHour = 23; maxHour = 0
-                                activeBookings.forEach(b => b.bookingItems.forEach(item => {
-                                    const h = parseInt(item.startTime.split(':')[0])
-                                    const eh = parseInt(item.endTime.split(':')[0])
-                                    if (h < minHour) minHour = h
-                                    if (eh > maxHour) maxHour = eh
-                                }))
-                                // Pad 1 hour before/after
-                                minHour = Math.max(0, minHour - 1)
-                                maxHour = Math.min(24, maxHour + 1)
-                            }
+                            // Determine time range from courts' operating hours for the selected day
+                            const DAYS_MAP: Record<number, string> = { 0: 'SUNDAY', 1: 'MONDAY', 2: 'TUESDAY', 3: 'WEDNESDAY', 4: 'THURSDAY', 5: 'FRIDAY', 6: 'SATURDAY' }
+                            const selectedDayOfWeek = selectedDate ? DAYS_MAP[new Date(selectedDate).getDay()] : ''
+                            let minHour = 24, maxHour = 0
+                            // Get operating hours from grid courts for this day
+                            gridCourts.forEach(c => {
+                                if (!c.operatingHours) return
+                                const dayHours = c.operatingHours.find(oh => oh.dayOfWeek === selectedDayOfWeek)
+                                if (dayHours && !dayHours.isClosed) {
+                                    const openH = parseInt(dayHours.openTime.split(':')[0])
+                                    const closeH = parseInt(dayHours.closeTime.split(':')[0])
+                                    const closeM = parseInt(dayHours.closeTime.split(':')[1] || '0')
+                                    const effectiveClose = closeH === 0 ? 24 : (closeM > 0 ? closeH + 1 : closeH)
+                                    if (openH < minHour) minHour = openH
+                                    if (effectiveClose > maxHour) maxHour = effectiveClose
+                                }
+                            })
+                            // Also include hours from any bookings that fall outside operating hours
+                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                                const h = parseInt(item.startTime.split(':')[0])
+                                const eh = parseInt(item.endTime.split(':')[0])
+                                const effectiveEnd = eh === 0 ? 24 : eh
+                                if (h < minHour) minHour = h
+                                if (effectiveEnd > maxHour) maxHour = effectiveEnd
+                            }))
+                            // Fallback if nothing found
+                            if (minHour >= maxHour) { minHour = 8; maxHour = 23 }
                             const gridTimes: string[] = []
                             for (let h = minHour; h < maxHour; h++) {
                                 gridTimes.push(`${h.toString().padStart(2, '0')}:00`)
