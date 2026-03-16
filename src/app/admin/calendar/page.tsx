@@ -412,6 +412,19 @@ export default function CalendarPage() {
                 </div>
 
                 <div style={{ padding: '16px' }}>
+                    {/* Venue filter for monthly view */}
+                    {venues.length > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                            <select
+                                className="admin-input"
+                                style={{ minWidth: '200px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
+                                value={selectedVenueId}
+                                onChange={e => setSelectedVenueId(e.target.value)}
+                            >
+                                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
+                        </div>
+                    )}
                     {/* Day headers */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '4px' }}>
                         {dayHeaders.map(d => (
