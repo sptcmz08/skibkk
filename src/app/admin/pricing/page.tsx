@@ -255,26 +255,46 @@ export default function PricingPage() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
                                     <Clock size={14} style={{ color: '#f5a623' }} />
                                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#f5a623' }}>
-                                        ข้อมูลจากสนาม (อัตโนมัติ)
+                                        เลือกวันที่ต้องการกำหนดราคา
                                     </span>
                                 </div>
 
-                                {/* Days from operating hours */}
+                                {/* Days — clickable toggles */}
                                 <div style={{ marginBottom: '10px' }}>
-                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginRight: '8px' }}>วันเปิด:</span>
-                                    <div style={{ display: 'inline-flex', gap: '4px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginRight: '8px', display: 'block', marginBottom: '6px' }}>
+                                        กดเลือก/ยกเลิกวันที่ต้องการ:
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                         {DAYS.map(d => {
                                             const isOpen = openDays.includes(d.key)
+                                            const isSelected = form.daysOfWeek.includes(d.key)
                                             return (
-                                                <span key={d.key} style={{
-                                                    padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                                                    background: isOpen ? 'var(--a-primary)' : '#e9ecef',
-                                                    color: isOpen ? 'white' : '#999',
-                                                }}>
-                                                    {d.label}
-                                                </span>
+                                                <button key={d.key}
+                                                    onClick={() => {
+                                                        if (!isOpen) return // Can't select closed days
+                                                        setForm(f => ({
+                                                            ...f,
+                                                            daysOfWeek: isSelected
+                                                                ? f.daysOfWeek.filter(dd => dd !== d.key)
+                                                                : [...f.daysOfWeek, d.key],
+                                                        }))
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                                                        border: 'none', cursor: isOpen ? 'pointer' : 'not-allowed',
+                                                        background: !isOpen ? '#e9ecef' : isSelected ? 'var(--a-primary)' : 'rgba(245,166,35,0.15)',
+                                                        color: !isOpen ? '#bbb' : isSelected ? 'white' : 'var(--a-primary)',
+                                                        transition: 'all 0.15s', fontFamily: 'inherit',
+                                                        opacity: !isOpen ? 0.5 : 1,
+                                                    }}
+                                                >
+                                                    {d.label} {isSelected && '✓'}
+                                                </button>
                                             )
                                         })}
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '8px' }}>
+                                        💡 เลือกบางวัน แล้วเพิ่มอีก rule สำหรับวันอื่นในราคาต่างกันได้
                                     </div>
                                 </div>
 
