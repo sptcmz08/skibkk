@@ -555,7 +555,7 @@ export default function BookingPage() {
                         </button>
                         <button onClick={() => {
                             if (showTerms && !termsAccepted) {
-                                // Show terms popup first
+                                toast.error('กรุณายอมรับข้อกำหนดและเงื่อนไขก่อนดำเนินการต่อ')
                                 return
                             }
                             setStep(2)

@@ -1,9 +1,9 @@
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'crypto'
 
 export function generateBookingNumber(): string {
     const date = new Date()
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '')
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0')
     return `BK${dateStr}${random}`
 }
 
@@ -11,7 +11,7 @@ export function generateInvoiceNumber(): string {
     const date = new Date()
     const year = date.getFullYear()
     const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0')
     return `INV${year}${month}${random}`
 }
 
@@ -98,7 +98,7 @@ export function cn(...classes: (string | undefined | false | null)[]): string {
 }
 
 export function getUUID(): string {
-    return uuidv4()
+    return crypto.randomUUID()
 }
 
 export function calculateVat(amount: number, includesVat: boolean): { base: number; vat: number; total: number } {

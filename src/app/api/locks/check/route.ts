@@ -10,11 +10,8 @@ export async function GET(req: NextRequest) {
         const sessionId = req.nextUrl.searchParams.get('sessionId')
         if (!sessionId) return NextResponse.json({ active: false })
 
-        // Cleanup expired first
-        await prisma.slotLock.deleteMany({ where: { expiresAt: { lt: new Date() } } })
-
         const locks = await prisma.slotLock.findMany({
-            where: { sessionId },
+            where: { sessionId, expiresAt: { gt: new Date() } },
             orderBy: { expiresAt: 'asc' },
         })
 

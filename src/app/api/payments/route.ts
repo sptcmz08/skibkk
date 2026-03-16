@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'ไม่พบข้อมูลการจอง' }, { status: 404 })
         }
 
-        if (booking.userId !== user.id && !['ADMIN', 'SUPERUSER'].includes(user.role)) {
+        if (booking.userId !== user.id && !['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 

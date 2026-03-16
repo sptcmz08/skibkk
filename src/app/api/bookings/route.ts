@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                     payments: true,
                 },
                 orderBy: { createdAt: 'desc' },
-                take: 100,
+                take: parseInt(searchParams.get('take') || '100'),
             })
             return NextResponse.json({ bookings }, {
                 headers: {
@@ -213,6 +213,9 @@ export async function POST(req: NextRequest) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         }
+        if ((error as any).code === 'P2002') {
+            return NextResponse.json({ error: 'สนามเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น' }, { status: 409 })
+        }
         console.error('Bookings POST error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }
@@ -261,6 +264,31 @@ export async function PATCH(req: NextRequest) {
 
         // Update bookingItems if provided (admin can change court, date, time, price)
         if (updateData.bookingItems && Array.isArray(updateData.bookingItems)) {
+            // Conflict check: verify no other booking occupies these slots
+            for (const item of updateData.bookingItems) {
+                const startH = parseInt(item.startTime.split(':')[0])
+                const endH = parseInt(item.endTime.split(':')[0]) || 24
+                for (let h = startH; h < endH; h++) {
+                    const slotTime = `${String(h).padStart(2, '0')}:00`
+                    const existing = await prisma.bookingItem.findUnique({
+                        where: {
+                            courtId_date_startTime: {
+                                courtId: item.courtId,
+                                date: new Date(item.date + 'T00:00:00'),
+                                startTime: slotTime,
+                            },
+                        },
+                        include: { booking: true },
+                    })
+                    if (existing && existing.bookingId !== bookingId && existing.booking.status !== 'CANCELLED') {
+                        return NextResponse.json(
+                            { error: `สนามเวลา ${slotTime} วันที่ ${item.date} ถูกจองแล้ว` },
+                            { status: 409 }
+                        )
+                    }
+                }
+            }
+
             await prisma.bookingItem.deleteMany({ where: { bookingId } })
             await prisma.bookingItem.createMany({
                 data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }) => ({
@@ -294,6 +322,10 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ booking: updated })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
+        // Handle unique constraint violation (race condition)
+        if ((error as any).code === 'P2002') {
+            return NextResponse.json({ error: 'สนามเวลานี้ถูกจองแล้ว กรุณาลองใหม่' }, { status: 409 })
+        }
         console.error('Bookings PATCH error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }

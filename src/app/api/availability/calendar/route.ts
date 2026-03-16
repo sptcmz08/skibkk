@@ -64,14 +64,22 @@ export async function GET(req: NextRequest) {
         // Calculate availability per day
         const availability: Record<string, { totalSlots: number; bookedSlots: number; status: 'available' | 'almost_full' | 'full' | 'closed' | 'past' }> = {}
 
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        // Use Bangkok timezone for today comparison
+        const nowBkk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+        const todayBkk = new Date(nowBkk.getFullYear(), nowBkk.getMonth(), nowBkk.getDate())
+
+        // Group opHours by courtId for per-court slot calculation
+        const opHoursByCourtId: Record<string, typeof opHours> = {}
+        opHours.forEach(o => {
+            if (!opHoursByCourtId[o.courtId]) opHoursByCourtId[o.courtId] = []
+            opHoursByCourtId[o.courtId].push(o)
+        })
 
         for (let d = 1; d <= endDate.getDate(); d++) {
             const date = new Date(year, month - 1, d)
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
-            if (date < today) {
+            if (date < todayBkk) {
                 availability[dateStr] = { totalSlots: 0, bookedSlots: 0, status: 'past' }
                 continue
             }
@@ -81,21 +89,23 @@ export async function GET(req: NextRequest) {
                 continue
             }
 
-            // Find operating hours for this day
+            // Find operating hours for this day — per court
             const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
             const dayOfWeek = dayNames[date.getDay()]
-            const dayOp = opHours.find(o => o.dayOfWeek === dayOfWeek)
 
-            if (!dayOp || dayOp.isClosed) {
+            let totalSlots = 0
+            for (const cid of courtIds) {
+                const courtOp = opHoursByCourtId[cid]?.find(o => o.dayOfWeek === dayOfWeek)
+                if (!courtOp || courtOp.isClosed) continue
+                const startHour = parseInt(courtOp.openTime.split(':')[0])
+                const endHour = parseInt(courtOp.closeTime.split(':')[0]) || 24
+                totalSlots += Math.max(0, endHour - startHour)
+            }
+
+            if (totalSlots === 0) {
                 availability[dateStr] = { totalSlots: 0, bookedSlots: 0, status: 'closed' }
                 continue
             }
-
-            // Count total slots (1-hour each per court)
-            const startHour = parseInt(dayOp.openTime.split(':')[0])
-            const endHour = parseInt(dayOp.closeTime.split(':')[0])
-            const slotsPerCourt = Math.max(0, endHour - startHour)
-            const totalSlots = slotsPerCourt * courtIds.length
 
             // Count booked + locked slots
             const bookedCount = bookedItems.filter(b => {
