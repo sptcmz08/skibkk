@@ -301,6 +301,15 @@ export async function PATCH(req: NextRequest) {
                     teacherId: item.teacherId || null,
                 })),
             })
+
+            // Sync teacherId to participants — use the first bookingItem's teacherId
+            const assignedTeacherId = updateData.bookingItems.find((item: { teacherId?: string | null }) => item.teacherId)?.teacherId || null
+            if (assignedTeacherId) {
+                await prisma.participant.updateMany({
+                    where: { bookingId },
+                    data: { teacherId: assignedTeacherId },
+                })
+            }
         }
 
         const updated = await prisma.booking.update({

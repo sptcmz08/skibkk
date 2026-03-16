@@ -56,6 +56,14 @@ export async function PATCH(req: NextRequest) {
             include: { booking: { include: { user: true } } },
         })
 
+        // Sync teacherId to booking items as well (link with calendar edit)
+        if (teacherId) {
+            await prisma.bookingItem.updateMany({
+                where: { bookingId: participant.bookingId },
+                data: { teacherId },
+            })
+        }
+
         // Auto-create evaluation link for this teacher+booking
         const existingEval = await prisma.teacherEvaluation.findFirst({
             where: { teacherId, bookingId: participant.bookingId },
