@@ -202,6 +202,15 @@ function AdminBookInner() {
         finally { if (!silent) setLoading(false) }
     }, [selectedVenue])
 
+    // Auto-refresh availability every 30 seconds for real-time lock/booking updates
+    useEffect(() => {
+        if (!selectedDate || step !== 3) return
+        const interval = setInterval(() => {
+            fetchAvailability(selectedDate, true)
+        }, 30000)
+        return () => clearInterval(interval)
+    }, [selectedDate, step, fetchAvailability])
+
     // Auto-initialize from URL date param (from calendar page)
     useEffect(() => {
         if (dateParam && !dateInitialized && venues.length > 0) {
@@ -555,32 +564,51 @@ function AdminBookInner() {
                             {currentCourt.slots.map(slot => {
                                 const inCart = selectedDate ? isInCart(currentCourt.courtId, selectedDate, slot.startTime) : false
                                 const isPast = slot.status === 'past'
-                                const isBooked = !slot.available && !inCart
-                                const isDisabled = isBooked || isPast
+                                const isLocked = slot.lockedByOther && !inCart
+                                const isBooked = slot.status === 'booked' && !inCart
+                                const isDisabled = isBooked || isPast || isLocked
+                                const lockMins = isLocked ? Math.ceil(slot.secondsLeft / 60) : 0
+                                const lockSecs = isLocked ? slot.secondsLeft % 60 : 0
 
                                 return (
                                     <motion.button key={slot.startTime}
                                         whileHover={!isDisabled ? { scale: 1.04 } : undefined}
                                         whileTap={!isDisabled ? { scale: 0.96 } : undefined}
-                                        onClick={() => !isDisabled && toggleSlot(currentCourt, slot)}
-                                        disabled={isDisabled}
+                                        onClick={() => {
+                                            if (isLocked) {
+                                                toast(`🔒 ช่วงเวลา ${slot.startTime}–${slot.endTime} กำลังมีลูกค้าจองอยู่\nรอดำเนินการอีก ${lockMins} นาที ${lockSecs} วินาที`, {
+                                                    duration: 5000,
+                                                    icon: '⏳',
+                                                    style: { background: '#fff3e0', border: '2px solid #ff9800', color: '#e65100', fontWeight: 600, fontSize: '14px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center' },
+                                                })
+                                                return
+                                            }
+                                            if (!isDisabled) toggleSlot(currentCourt, slot)
+                                        }}
+                                        disabled={isBooked || isPast}
                                         style={{
                                             padding: '14px 8px', borderRadius: '12px',
-                                            cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                            border: inCart ? '2px solid #f5a623' : isPast ? '2px solid #eee' : isBooked ? '2px solid #eee' : '2px solid #e9ecef',
-                                            background: inCart ? 'rgba(245,166,35,0.15)' : isPast ? '#f8f8f8' : isBooked ? 'rgba(225,112,85,0.04)' : '#fff',
-                                            color: isPast ? '#b2bec3' : isBooked ? 'var(--a-text-muted)' : inCart ? '#f5a623' : 'var(--a-text)',
+                                            cursor: isLocked ? 'pointer' : isDisabled ? 'not-allowed' : 'pointer',
+                                            border: inCart ? '2px solid #f5a623' : isLocked ? '2px solid #ff9800' : isPast ? '2px solid #eee' : isBooked ? '2px solid #eee' : '2px solid #e9ecef',
+                                            background: inCart ? 'rgba(245,166,35,0.15)' : isLocked ? 'rgba(255,152,0,0.08)' : isPast ? '#f8f8f8' : isBooked ? 'rgba(225,112,85,0.04)' : '#fff',
+                                            color: isPast ? '#b2bec3' : isLocked ? '#e65100' : isBooked ? 'var(--a-text-muted)' : inCart ? '#f5a623' : 'var(--a-text)',
                                             fontFamily: "'Inter', sans-serif", textAlign: 'center',
-                                            opacity: isBooked ? 0.35 : isPast ? 0.5 : 1, transition: 'all 0.15s',
+                                            opacity: isBooked ? 0.35 : isPast ? 0.5 : isLocked ? 0.85 : 1, transition: 'all 0.15s',
                                             textDecoration: isPast ? 'line-through' : 'none',
+                                            position: 'relative',
                                         }}>
                                         <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.3px' }}>
                                             {slot.startTime}–{slot.endTime}
                                         </div>
                                         {isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: '#e17055', fontWeight: 700 }}>⛔ เลยเวลา</div>}
                                         {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--a-text-muted)' }}>จองแล้ว</div>}
+                                        {isLocked && !isPast && (
+                                            <div style={{ fontSize: '10px', marginTop: '5px', color: '#e65100', fontWeight: 700 }}>
+                                                🔒 ลูกค้ากำลังจอง ({lockMins}:{lockSecs.toString().padStart(2, '0')} นาที)
+                                            </div>
+                                        )}
                                         {inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: '#f5a623', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
-                                        {!isBooked && !inCart && !isPast && (
+                                        {!isBooked && !inCart && !isPast && !isLocked && (
                                             <div style={{ fontSize: '11px', marginTop: '5px', color: 'var(--a-text-muted)' }}>
                                                 ฿{slot.price.toLocaleString()}
                                             </div>
