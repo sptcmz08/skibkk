@@ -552,12 +552,19 @@ export default function CalendarPage() {
                                 booking.bookingItems.forEach(item => {
                                     const key = `${item.courtId}_${item.startTime}`
                                     slotMap[key] = { booking, item }
+                                    // For items spanning multiple hours, also register intermediate hours
+                                    const startH = parseInt(item.startTime.split(':')[0])
+                                    const endH = parseInt(item.endTime.split(':')[0]) || 24
+                                    for (let h = startH + 1; h < endH; h++) {
+                                        const intermediateKey = `${item.courtId}_${String(h).padStart(2, '0')}:00`
+                                        slotMap[intermediateKey] = { booking, item }
+                                    }
                                 })
                             })
 
-                            // Bug 5.3: Build merge map — consecutive slots from same booking merge into first slot
-                            // mergeInfo[courtId_startTime] = { span: N, totalPrice, endTime } for the first slot
-                            // skipSet contains keys for continuation slots that should be skipped
+                            // Build merge map — handle both:
+                            // 1. Single items spanning multiple hours (e.g., 21:00-23:00)
+                            // 2. Consecutive separate items from same booking
                             const mergeInfo: Record<string, { span: number; totalPrice: number; endTime: string }> = {}
                             const skipSet = new Set<string>()
 
@@ -573,18 +580,35 @@ export default function CalendarPage() {
                                     const sorted = [...items].sort((a, b) => a.startTime.localeCompare(b.startTime))
                                     let i = 0
                                     while (i < sorted.length) {
+                                        // Calculate span for THIS item (single multi-hour item)
+                                        const startH = parseInt(sorted[i].startTime.split(':')[0])
+                                        const endH = parseInt(sorted[i].endTime.split(':')[0]) || 24
+                                        const itemSpan = endH - startH
+
+                                        // Then check for consecutive items from the same booking
                                         let j = i + 1
                                         let totalPrice = sorted[i].price
-                                        while (j < sorted.length && sorted[j].startTime === sorted[j - 1].endTime) {
+                                        let lastEndTime = sorted[i].endTime
+                                        while (j < sorted.length && sorted[j].startTime === lastEndTime) {
                                             totalPrice += sorted[j].price
+                                            lastEndTime = sorted[j].endTime
                                             j++
                                         }
-                                        const span = j - i
-                                        if (span > 1) {
+
+                                        // Total span = sum of all hours across merged items
+                                        let totalSpan = itemSpan
+                                        for (let k = i + 1; k < j; k++) {
+                                            const kStartH = parseInt(sorted[k].startTime.split(':')[0])
+                                            const kEndH = parseInt(sorted[k].endTime.split(':')[0]) || 24
+                                            totalSpan += (kEndH - kStartH)
+                                        }
+
+                                        if (totalSpan > 1) {
                                             const firstKey = `${sorted[i].courtId}_${sorted[i].startTime}`
-                                            mergeInfo[firstKey] = { span, totalPrice, endTime: sorted[j - 1].endTime }
-                                            for (let k = i + 1; k < j; k++) {
-                                                skipSet.add(`${sorted[k].courtId}_${sorted[k].startTime}`)
+                                            mergeInfo[firstKey] = { span: totalSpan, totalPrice, endTime: lastEndTime }
+                                            // Mark all intermediate slots as skip
+                                            for (let h = startH + 1; h < startH + totalSpan; h++) {
+                                                skipSet.add(`${sorted[i].courtId}_${String(h).padStart(2, '0')}:00`)
                                             }
                                         }
                                         i = j
