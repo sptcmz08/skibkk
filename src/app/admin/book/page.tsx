@@ -141,6 +141,7 @@ function AdminBookInner() {
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
     const [showConfirmModal, setShowConfirmModal] = useState(false)
+    const [lockCountdowns, setLockCountdowns] = useState<Record<string, number>>({})
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -192,6 +193,16 @@ function AdminBookInner() {
             const data = await res.json()
             if (data.availability) {
                 setAvailability(data.availability)
+                // Initialize lock countdowns from API data
+                const newCountdowns: Record<string, number> = {}
+                for (const court of data.availability) {
+                    for (const slot of court.slots) {
+                        if (slot.lockedByOther && slot.secondsLeft > 0) {
+                            newCountdowns[`${court.courtId}:${slot.startTime}`] = Math.floor(slot.secondsLeft)
+                        }
+                    }
+                }
+                setLockCountdowns(newCountdowns)
                 if (data.availability.length > 0) {
                     setSelectedCourt(c => {
                         const exists = data.availability.find((f: CourtData) => f.courtId === c)
@@ -211,6 +222,33 @@ function AdminBookInner() {
         }, 30000)
         return () => clearInterval(interval)
     }, [selectedDate, step, fetchAvailability])
+
+    // Real-time 1-second countdown for locked slots
+    useEffect(() => {
+        if (step !== 3) return
+        const hasLocks = Object.values(lockCountdowns).some(v => v > 0)
+        if (!hasLocks) return
+        const timer = setInterval(() => {
+            setLockCountdowns(prev => {
+                const next: Record<string, number> = {}
+                let anyExpired = false
+                for (const [key, secs] of Object.entries(prev)) {
+                    const newVal = secs - 1
+                    if (newVal > 0) {
+                        next[key] = newVal
+                    } else {
+                        anyExpired = true
+                    }
+                }
+                // Auto-refresh when a lock expires
+                if (anyExpired && selectedDate) {
+                    setTimeout(() => fetchAvailability(selectedDate, true), 500)
+                }
+                return next
+            })
+        }, 1000)
+        return () => clearInterval(timer)
+    }, [step, lockCountdowns, selectedDate, fetchAvailability])
 
     // Auto-initialize from URL date param (from calendar page)
     useEffect(() => {
@@ -570,7 +608,8 @@ function AdminBookInner() {
                                 const isLocked = slot.lockedByOther && !inCart
                                 const isBooked = slot.status === 'booked' && !inCart
                                 const isDisabled = isBooked || isPast || isLocked
-                                const totalSecs = isLocked ? Math.floor(slot.secondsLeft) : 0
+                                const liveSeconds = lockCountdowns[`${currentCourt.courtId}:${slot.startTime}`] ?? 0
+                                const totalSecs = isLocked ? liveSeconds : 0
                                 const lockMins = Math.floor(totalSecs / 60)
                                 const lockSecs = totalSecs % 60
 
