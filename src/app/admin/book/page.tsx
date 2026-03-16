@@ -570,8 +570,9 @@ function AdminBookInner() {
                                 const isLocked = slot.lockedByOther && !inCart
                                 const isBooked = slot.status === 'booked' && !inCart
                                 const isDisabled = isBooked || isPast || isLocked
-                                const lockMins = isLocked ? Math.ceil(slot.secondsLeft / 60) : 0
-                                const lockSecs = isLocked ? slot.secondsLeft % 60 : 0
+                                const totalSecs = isLocked ? Math.floor(slot.secondsLeft) : 0
+                                const lockMins = Math.floor(totalSecs / 60)
+                                const lockSecs = totalSecs % 60
 
                                 return (
                                     <motion.button key={slot.startTime}
