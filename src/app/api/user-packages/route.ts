@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
         const user = await requireAuth()
         const { userPackageId, hoursToDeduct, bookingId } = await req.json()
 
+        if (!userPackageId || !hoursToDeduct || hoursToDeduct <= 0 || !Number.isInteger(hoursToDeduct)) {
+            return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 })
+        }
         const userPkg = await prisma.userPackage.findUnique({
             where: { id: userPackageId },
             include: { package: true },

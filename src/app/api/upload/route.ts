@@ -31,10 +31,11 @@ export async function POST(req: NextRequest) {
             await mkdir(UPLOAD_DIR, { recursive: true })
         }
 
-        // Generate unique filename
-        const ext = file.name.split('.').pop() || 'png'
+        // Generate unique filename — sanitize original extension
+        const rawExt = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '')
+        const ext = rawExt.slice(0, 5) // max 5 chars for extension
         const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const filepath = path.join(UPLOAD_DIR, filename)
+        const filepath = path.join(UPLOAD_DIR, path.basename(filename))
 
         // Write file
         const buffer = Buffer.from(await file.arrayBuffer())

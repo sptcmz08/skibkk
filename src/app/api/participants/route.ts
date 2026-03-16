@@ -20,7 +20,7 @@ export async function GET() {
                 },
             },
             orderBy: { createdAt: 'desc' },
-            take: 100,
+            take: 500,
         })
 
         const teachers = await prisma.teacher.findMany({
