@@ -508,11 +508,13 @@ export default function CalendarPage() {
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                         ) : (() => {
                             const activeBookings = bookings.filter(b => b.status !== 'CANCELLED')
-                            if (activeBookings.length === 0) {
+                            // Show grid with all courts even when no bookings (empty white cells)
+                            const venueCourtsCheck = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
+                            if (activeBookings.length === 0 && venueCourtsCheck.length === 0) {
                                 return (
                                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
                                         <Calendar size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
-                                        <p>ไม่มีการจองในวันนี้</p>
+                                        <p>ไม่มีสนามในสาขานี้</p>
                                     </div>
                                 )
                             }
@@ -563,13 +565,14 @@ export default function CalendarPage() {
                                 })
                             })
 
-                            // Get courts that have bookings or from the courts list
+                            // Show ALL courts for the selected venue (not just those with bookings)
                             const courtIds = new Set<string>()
                             activeBookings.forEach(b => b.bookingItems.forEach(item => courtIds.add(item.courtId)))
                             // Filter courts by selected venue
                             const venueCourts = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
                             const venueCourtIds = new Set(venueCourts.map(c => c.id))
-                            const gridCourts = venueCourts.filter(c => courtIds.has(c.id))
+                            // Show ALL venue courts, not just booked ones
+                            const gridCourts = [...venueCourts]
                             // If courts not in master list, add from booking data (respecting venue filter)
                             activeBookings.forEach(b => b.bookingItems.forEach(item => {
                                 if (!gridCourts.find(c => c.id === item.courtId) && (!selectedVenueId || venueCourtIds.has(item.courtId))) {
@@ -577,17 +580,20 @@ export default function CalendarPage() {
                                 }
                             }))
 
-                            // Determine time range from bookings
-                            let minHour = 23, maxHour = 0
-                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
-                                const h = parseInt(item.startTime.split(':')[0])
-                                const eh = parseInt(item.endTime.split(':')[0])
-                                if (h < minHour) minHour = h
-                                if (eh > maxHour) maxHour = eh
-                            }))
-                            // Pad 1 hour before/after
-                            minHour = Math.max(0, minHour - 1)
-                            maxHour = Math.min(24, maxHour + 1)
+                            // Determine time range from bookings (default 8:00-18:00 if no bookings)
+                            let minHour = 8, maxHour = 18
+                            if (activeBookings.length > 0) {
+                                minHour = 23; maxHour = 0
+                                activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                                    const h = parseInt(item.startTime.split(':')[0])
+                                    const eh = parseInt(item.endTime.split(':')[0])
+                                    if (h < minHour) minHour = h
+                                    if (eh > maxHour) maxHour = eh
+                                }))
+                                // Pad 1 hour before/after
+                                minHour = Math.max(0, minHour - 1)
+                                maxHour = Math.min(24, maxHour + 1)
+                            }
                             const gridTimes: string[] = []
                             for (let h = minHour; h < maxHour; h++) {
                                 gridTimes.push(`${h.toString().padStart(2, '0')}:00`)
