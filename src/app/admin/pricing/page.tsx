@@ -4,7 +4,7 @@ import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 
 import { useState, useEffect } from 'react'
-import { DollarSign, Plus, Edit2, Trash2, Save, X } from 'lucide-react'
+import { DollarSign, Plus, Edit2, Trash2, Save, X, Clock, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const DAYS = [
@@ -14,8 +14,15 @@ const DAYS = [
     { key: 'SUNDAY', label: 'อา.' },
 ]
 
+interface OperatingHour {
+    dayOfWeek: string
+    openTime: string
+    closeTime: string
+    isClosed: boolean
+}
+
 interface Court {
-    id: string; name: string; venue?: { name: string }
+    id: string; name: string; venue?: { name: string }; operatingHours?: OperatingHour[]
 }
 
 interface PricingRule {
@@ -49,7 +56,7 @@ export default function PricingPage() {
 
     const fetchCourts = async () => {
         try {
-            const res = await fetch('/api/courts', { cache: 'no-store' })
+            const res = await fetch('/api/courts?admin=1', { cache: 'no-store' })
             if (res.ok) {
                 const data = await res.json()
                 setCourts(data.courts || [])
@@ -62,6 +69,13 @@ export default function PricingPage() {
     const [form, setForm] = useState({ courtId: '' as string, daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
+    // Get operating hours for selected court
+    const selectedCourt = courts.find(c => c.id === form.courtId)
+    const courtHours = selectedCourt?.operatingHours || []
+    const openDays = courtHours.filter(h => !h.isClosed).map(h => h.dayOfWeek)
+    // Get the common open/close time from operating hours
+    const firstOpenHour = courtHours.find(h => !h.isClosed)
+
     const openModal = (rule?: PricingRule) => {
         if (rule) {
             setEditRule(rule)
@@ -73,13 +87,23 @@ export default function PricingPage() {
         setShowModal(true)
     }
 
-    const toggleDay = (day: string) => {
-        setForm(f => ({
-            ...f,
-            daysOfWeek: f.daysOfWeek.includes(day)
-                ? f.daysOfWeek.filter(d => d !== day)
-                : [...f.daysOfWeek, day],
-        }))
+    // Auto-fill days and times when court changes
+    const handleCourtChange = (courtId: string) => {
+        const court = courts.find(c => c.id === courtId)
+        if (court && court.operatingHours) {
+            const hours = court.operatingHours.filter(h => !h.isClosed)
+            const days = hours.map(h => h.dayOfWeek)
+            const first = hours[0]
+            setForm(f => ({
+                ...f,
+                courtId,
+                daysOfWeek: days,
+                startTime: first?.openTime || '09:00',
+                endTime: first?.closeTime || '00:00',
+            }))
+        } else {
+            setForm(f => ({ ...f, courtId, daysOfWeek: [], startTime: '09:00', endTime: '00:00' }))
+        }
     }
 
     const saveRule = async () => {
@@ -138,14 +162,12 @@ export default function PricingPage() {
         } finally { setPendingDeleteId(null) }
     }
 
-    const getDayLabels = (days: string[]) => days.map(d => DAYS.find(dd => dd.key === d)?.label).join(', ')
-
     return (
         <FadeIn><div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>กำหนดราคา</h2>
-                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ตั้งราคาแยกตามวันและช่วงเวลา</p>
+                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ราคาเชื่อมกับวัน-เวลาเปิดปิดสนามอัตโนมัติ</p>
                 </div>
                 <button onClick={() => openModal()} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Plus size={18} /> เพิ่มราคา
@@ -215,8 +237,8 @@ export default function PricingPage() {
 
                         {/* Court selector */}
                         <div className="input-group" style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>สนาม</label>
-                            <select className="admin-input" value={form.courtId} onChange={e => setForm({ ...form, courtId: e.target.value })}>
+                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>เลือกสนาม</label>
+                            <select className="admin-input" value={form.courtId} onChange={e => handleCourtChange(e.target.value)}>
                                 <option value="">ทุกสนาม (ราคาเดียวกัน)</option>
                                 {courts.map(c => (
                                     <option key={c.id} value={c.id}>{c.venue?.name ? c.venue.name + ' / ' : ''}{c.name}</option>
@@ -224,31 +246,53 @@ export default function PricingPage() {
                             </select>
                         </div>
 
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>เลือกวัน</label>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                {DAYS.map(d => (
-                                    <button key={d.key} onClick={() => toggleDay(d.key)}
-                                        style={{
-                                            padding: '8px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer',
-                                            background: form.daysOfWeek.includes(d.key) ? 'var(--a-primary)' : '#f0f0f0',
-                                            color: form.daysOfWeek.includes(d.key) ? 'white' : 'var(--a-text)',
-                                            border: 'none', transition: 'all 0.2s', fontFamily: 'inherit',
-                                        }}>
-                                        {d.label}
-                                    </button>
-                                ))}
+                        {/* Auto-linked operating hours info */}
+                        {form.courtId && selectedCourt && (
+                            <div style={{
+                                background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.2)',
+                                borderRadius: '12px', padding: '16px', marginBottom: '20px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                                    <Clock size={14} style={{ color: '#f5a623' }} />
+                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f5a623' }}>
+                                        ข้อมูลจากสนาม (อัตโนมัติ)
+                                    </span>
+                                </div>
+
+                                {/* Days from operating hours */}
+                                <div style={{ marginBottom: '10px' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginRight: '8px' }}>วันเปิด:</span>
+                                    <div style={{ display: 'inline-flex', gap: '4px', flexWrap: 'wrap' }}>
+                                        {DAYS.map(d => {
+                                            const isOpen = openDays.includes(d.key)
+                                            return (
+                                                <span key={d.key} style={{
+                                                    padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                                                    background: isOpen ? 'var(--a-primary)' : '#e9ecef',
+                                                    color: isOpen ? 'white' : '#999',
+                                                }}>
+                                                    {d.label}
+                                                </span>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Time from operating hours */}
+                                <div>
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginRight: '8px' }}>เวลา:</span>
+                                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--a-text)' }}>
+                                        {firstOpenHour ? `${firstOpenHour.openTime} - ${firstOpenHour.closeTime}` : '-'}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>เวลาเริ่ม</label><input type="time" className="admin-input" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} /></div>
-                            <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>เวลาสิ้นสุด</label><input type="time" className="admin-input" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} /></div>
-                        </div>
-
+                        {/* Price only */}
                         <div className="input-group" style={{ marginBottom: '16px' }}>
-                            <label style={{ color: 'var(--a-text-secondary)' }}>ราคา (บาท/ชั่วโมง)</label>
-                            <input type="number" className="admin-input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="0" />
+                            <label style={{ color: 'var(--a-text-secondary)', fontWeight: 600, fontSize: '14px' }}>ราคา (บาท/ชั่วโมง)</label>
+                            <input type="number" className="admin-input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="0"
+                                style={{ fontSize: '20px', fontWeight: 700, textAlign: 'center', padding: '14px' }} />
                         </div>
 
                         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', cursor: 'pointer' }}>
