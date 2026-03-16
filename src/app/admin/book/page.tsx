@@ -619,7 +619,7 @@ function AdminBookInner() {
                                         whileTap={!isDisabled ? { scale: 0.96 } : undefined}
                                         onClick={() => {
                                             if (isLocked) {
-                                                toast(`🔒 ช่วงเวลา ${slot.startTime}–${slot.endTime} กำลังมีลูกค้าจองอยู่\nรอดำเนินการอีก ${lockMins} นาที ${lockSecs} วินาที`, {
+                                                toast(`🔒 ช่วงเวลา ${slot.startTime}–${slot.endTime} กำลังมีลูกค้าจองอยู่\nรอดำเนินการอีก ${totalSecs} วินาที`, {
                                                     duration: 5000,
                                                     icon: '⏳',
                                                     style: { background: '#fff3e0', border: '2px solid #ff9800', color: '#e65100', fontWeight: 600, fontSize: '14px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center' },
@@ -647,7 +647,7 @@ function AdminBookInner() {
                                         {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--a-text-muted)' }}>จองแล้ว</div>}
                                         {isLocked && !isPast && (
                                             <div style={{ fontSize: '10px', marginTop: '5px', color: '#e65100', fontWeight: 700 }}>
-                                                🔒 ลูกค้ากำลังจอง ({lockMins}:{lockSecs.toString().padStart(2, '0')} นาที)
+                                                🔒 ลูกค้ากำลังจอง ({totalSecs} วินาที)
                                             </div>
                                         )}
                                         {inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: '#f5a623', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
