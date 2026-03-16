@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2 } from 'lucide-react'
+import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -46,6 +46,10 @@ export default function BookingsManagement() {
     const [sourceFilter, setSourceFilter] = useState<string>('')
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [viewSlip, setViewSlip] = useState<string | null>(null)
+    const [editMode, setEditMode] = useState(false)
+    const [editStatus, setEditStatus] = useState('')
+    const [editAmount, setEditAmount] = useState(0)
+    const [saving, setSaving] = useState(false)
     const [page, setPage] = useState(0)
     const pageSize = 20
 
@@ -84,6 +88,29 @@ export default function BookingsManagement() {
                 fetchBookings()
             } else { toast.error('ไม่สามารถยืนยันได้') }
         } catch { toast.error('เกิดข้อผิดพลาด') }
+    }
+
+    const handleSaveEdit = async () => {
+        if (!viewBooking) return
+        setSaving(true)
+        try {
+            const res = await fetch('/api/bookings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bookingId: viewBooking.id,
+                    status: editStatus,
+                    totalAmount: editAmount,
+                }),
+            })
+            if (res.ok) {
+                toast.success('บันทึกการแก้ไขสำเร็จ')
+                setEditMode(false)
+                setViewBooking(null)
+                fetchBookings()
+            } else { toast.error('บันทึกไม่สำเร็จ') }
+        } catch { toast.error('เกิดข้อผิดพลาด') }
+        finally { setSaving(false) }
     }
 
     const handleCancel = async (bookingId: string) => {
@@ -286,12 +313,23 @@ export default function BookingsManagement() {
                                 ) : (
                                     <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>🌐 เว็บ</span>
                                 )}
-                                <button onClick={() => {
-                                    const firstDate = viewBooking.bookingItems[0]?.date?.split('T')[0]
-                                    router.push(`/admin/calendar${firstDate ? `?date=${firstDate}` : ''}`)
-                                }} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    <Edit2 size={12} /> แก้ไข
-                                </button>
+                                {editMode ? (
+                                    <>
+                                        <button onClick={handleSaveEdit} disabled={saving}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid #27ae60', background: '#e8f5e9', color: '#27ae60', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                            <Save size={12} /> {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+                                        </button>
+                                        <button onClick={() => setEditMode(false)}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-border)', background: 'white', color: 'var(--a-text-muted)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                            ยกเลิก
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button onClick={() => { setEditMode(true); setEditStatus(viewBooking.status); setEditAmount(viewBooking.totalAmount) }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        <Edit2 size={12} /> แก้ไข
+                                    </button>
+                                )}
                                 <button onClick={() => setViewBooking(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                             </div>
                         </div>
@@ -303,6 +341,22 @@ export default function BookingsManagement() {
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone || '-'}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email || '-'}</div>
                                 <div><strong>วันที่สร้าง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                {editMode && (
+                                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                        <div style={{ flex: 1, minWidth: '140px' }}>
+                                            <strong style={{ fontSize: '13px' }}>สถานะ:</strong>
+                                            <select className="admin-input" value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ marginTop: '4px', padding: '6px 10px' }}>
+                                                <option value="PENDING">🟡 รอชำระเงิน</option>
+                                                <option value="CONFIRMED">✅ ชำระเงินแล้ว</option>
+                                                <option value="CANCELLED">❌ ยกเลิก</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: '140px' }}>
+                                            <strong style={{ fontSize: '13px' }}>ยอดรวม (฿):</strong>
+                                            <input className="admin-input" type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} style={{ marginTop: '4px', padding: '6px 10px' }} />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
