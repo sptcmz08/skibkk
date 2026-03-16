@@ -695,42 +695,47 @@ export default function CalendarPage() {
                                         ))}
                                     </div>
 
-                                    {/* Time rows */}
-                                    {gridTimes.map(time => (
-                                        <div key={time} style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`,
-                                            gap: '4px', marginBottom: '4px',
-                                        }}>
-                                            {/* Time label */}
-                                            <div style={{
-                                                display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-                                                paddingTop: '10px', fontWeight: 700, fontSize: '14px',
-                                                color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
-                                            }}>
-                                                {time}
-                                            </div>
+                                    {/* Time rows — single unified grid for proper row spanning */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`,
+                                        gridTemplateRows: `repeat(${gridTimes.length}, minmax(70px, auto))`,
+                                        gap: '4px',
+                                    }}>
+                                        {gridTimes.map((time, rowIdx) => {
+                                            const cells: React.ReactNode[] = []
+                                            // Time label
+                                            cells.push(
+                                                <div key={`time-${time}`} style={{
+                                                    display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                                                    paddingTop: '10px', fontWeight: 700, fontSize: '14px',
+                                                    color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
+                                                    gridRow: rowIdx + 1, gridColumn: 1,
+                                                }}>
+                                                    {time}
+                                                </div>
+                                            )
 
-                                            {/* Court cells */}
-                                            {gridCourts.map(court => {
+                                            // Court cells
+                                            gridCourts.forEach((court, colIdx) => {
                                                 const key = `${court.id}_${time}`
 
-                                                // Bug 5.3: skip continuation slots
-                                                if (skipSet.has(key)) {
-                                                    return <div key={key} style={{ display: 'none' }} />
-                                                }
+                                                // Skip continuation slots (they are covered by the spanning block)
+                                                if (skipSet.has(key)) return
 
                                                 const data = slotMap[key]
 
                                                 if (!data) {
                                                     // Empty slot
-                                                    return (
+                                                    cells.push(
                                                         <div key={key} style={{
                                                             minHeight: '70px', borderRadius: '6px',
                                                             border: '1px solid var(--a-border)',
                                                             background: '#fafafa',
+                                                            gridRow: rowIdx + 1, gridColumn: colIdx + 2,
                                                         }} />
                                                     )
+                                                    return
                                                 }
 
                                                 const { booking, item } = data
@@ -742,19 +747,20 @@ export default function CalendarPage() {
                                                 const displayPrice = merge?.totalPrice ?? item.price
                                                 const displayEndTime = merge?.endTime || item.endTime
 
-                                                return (
+                                                cells.push(
                                                     <div key={key}
                                                         onClick={() => openBookingModal(booking)}
                                                         style={{
-                                                            minHeight: `${70 * slotSpan + (slotSpan - 1) * 4}px`, borderRadius: '6px',
+                                                            borderRadius: '6px',
                                                             padding: '10px 12px', cursor: 'pointer',
                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                             color: '#fff', transition: 'all 0.15s',
                                                             display: 'flex', flexDirection: 'column',
                                                             justifyContent: 'space-between', gap: '4px',
                                                             boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
-                                                            position: 'relative', overflow: 'hidden',
-                                                            gridRow: slotSpan > 1 ? `span ${slotSpan}` : undefined,
+                                                            overflow: 'hidden',
+                                                            gridRow: `${rowIdx + 1} / span ${slotSpan}`,
+                                                            gridColumn: colIdx + 2,
                                                         }}
                                                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
                                                         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
@@ -763,12 +769,10 @@ export default function CalendarPage() {
                                                         <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
                                                             {booking.user?.lineDisplayName || booking.user?.name || '-'}
                                                         </div>
-                                                        {/* Time range for merged slots */}
-                                                        {slotSpan > 1 && (
-                                                            <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.9 }}>
-                                                                🕐 {item.startTime}–{displayEndTime} ({slotSpan} ชม.)
-                                                            </div>
-                                                        )}
+                                                        {/* Time range */}
+                                                        <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.9 }}>
+                                                            🕐 {item.startTime}–{displayEndTime} ({slotSpan} ชม.)
+                                                        </div>
                                                         {/* Sport type */}
                                                         {sportLabel && (
                                                             <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -805,9 +809,11 @@ export default function CalendarPage() {
                                                         )}
                                                     </div>
                                                 )
-                                            })}
-                                        </div>
-                                    ))}
+
+                                            })
+                                            return cells
+                                        })}
+                                    </div>
                                 </div>
                             )
                         })()}
