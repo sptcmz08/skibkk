@@ -725,12 +725,21 @@ export default function CalendarPage() {
                                                 {gridTimes.map((time, idx) => (
                                                     <div key={`time-${time}`} style={{
                                                         gridColumn: 1, gridRow: idx + 1,
-                                                        display: 'flex', alignItems: 'flex-start',
-                                                        justifyContent: 'center', paddingTop: '6px',
-                                                        fontWeight: 700, fontSize: '14px',
-                                                        color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
+                                                        position: 'relative' // relative to the grid cell
                                                     }}>
-                                                        {time}
+                                                        {/* Center on the TOP border of the grid cell to align with block boundaries */}
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: 0, left: 0, right: 0,
+                                                            transform: 'translateY(-50%)',
+                                                            textAlign: 'center',
+                                                            fontWeight: 700, fontSize: '13px',
+                                                            color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
+                                                            zIndex: 10,
+                                                            background: '#fff', // cover row borders slightly for cleaner look
+                                                        }}>
+                                                            {time}
+                                                        </div>
                                                     </div>
                                                 ))}
 
