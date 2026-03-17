@@ -840,14 +840,17 @@ export default function CalendarPage() {
                                                                 const startH = parseInt(cb.startTime.split(':')[0])
                                                                 const endH = parseInt(cb.endTime.split(':')[0]) || 24
                                                                 const topPx = (startH - minHour) * ROW_H
-                                                                const heightPx = (endH - startH) * ROW_H
+                                                                // User explicitly wants 1 logical hour (e.g. 9:00-10:00) to visually cover 
+                                                                // both the 9:00 block and the 10:00 block (+1 hour visual footprint)
+                                                                const visualEndH = endH + 1
+                                                                const heightPx = (visualEndH - startH) * ROW_H
                                                                 const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
                                                                 const teacherItem = cb.booking.bookingItems.find(item => item.courtId === court.id && item.teacher)
 
-                                                                if (heightPx <= 0) return null
+                                                                if (hours <= 0) return null
 
                                                                 const widthPercent = 100 / maxCols
                                                                 const leftPercent = col * widthPercent
@@ -860,10 +863,10 @@ export default function CalendarPage() {
                                                                             left: `calc(${leftPercent}% + 2px)`,
                                                                             width: `calc(${widthPercent}% - 4px)`,
                                                                             top: `${topPx}px`,
-                                                                            height: `${heightPx - 2}px`,
-                                                                            maxHeight: `${heightPx - 2}px`,
+                                                                            height: `${heightPx - 3}px`,
+                                                                            maxHeight: `${heightPx - 3}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: '4px 6px', cursor: 'pointer',
+                                                                            padding: '6px 8px', cursor: 'pointer',
                                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
