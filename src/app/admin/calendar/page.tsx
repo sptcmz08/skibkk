@@ -778,7 +778,52 @@ export default function CalendarPage() {
                                                                 }
                                                             })
 
-                                                            return courtBookings.map(cb => {
+                                                            // Process overlaps to display side-by-side
+                                                            const bookingBlocks: Array<{
+                                                                cb: typeof courtBookings[0],
+                                                                col: number,
+                                                                maxCols: number
+                                                            }> = []
+
+                                                            if (courtBookings.length > 0) {
+                                                                // Sort by start time, then end time
+                                                                const sorted = [...courtBookings].sort((a, b) => {
+                                                                    if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime)
+                                                                    return a.endTime.localeCompare(b.endTime)
+                                                                })
+
+                                                                const columns: typeof sorted[] = []
+                                                                sorted.forEach(block => {
+                                                                    // Find first column where the last block ends <= this block's start
+                                                                    let placed = false
+                                                                    for (let i = 0; i < columns.length; i++) {
+                                                                        const lastInCol = columns[i][columns[i].length - 1]
+                                                                        if (lastInCol.endTime <= block.startTime) {
+                                                                            columns[i].push(block)
+                                                                            placed = true
+                                                                            break
+                                                                        }
+                                                                    }
+                                                                    if (!placed) {
+                                                                        columns.push([block])
+                                                                    }
+                                                                })
+
+                                                                // Assign col and maxCols
+                                                                for (let c = 0; c < columns.length; c++) {
+                                                                    columns[c].forEach(block => {
+                                                                        // Count how many total columns overlap with this block
+                                                                        let overlappingCols = 0
+                                                                        for (let i = 0; i < columns.length; i++) {
+                                                                            const over = columns[i].some(b => b.startTime < block.endTime && b.endTime > block.startTime)
+                                                                            if (over) overlappingCols++
+                                                                        }
+                                                                        bookingBlocks.push({ cb: block, col: c, maxCols: Math.max(1, overlappingCols) })
+                                                                    })
+                                                                }
+                                                            }
+
+                                                            return bookingBlocks.map(({ cb, col, maxCols }) => {
                                                                 const startH = parseInt(cb.startTime.split(':')[0])
                                                                 const endH = parseInt(cb.endTime.split(':')[0]) || 24
                                                                 const topPx = (startH - minHour) * ROW_H
@@ -791,16 +836,21 @@ export default function CalendarPage() {
 
                                                                 if (heightPx <= 0) return null
 
+                                                                const widthPercent = 100 / maxCols
+                                                                const leftPercent = col * widthPercent
+
                                                                 return (
                                                                     <div key={`${cb.booking.id}_${cb.startTime}`}
                                                                         onClick={() => openBookingModal(cb.booking)}
                                                                         style={{
-                                                                            position: 'absolute', left: '2px', right: '2px',
+                                                                            position: 'absolute',
+                                                                            left: `calc(${leftPercent}% + 2px)`,
+                                                                            width: `calc(${widthPercent}% - 4px)`,
                                                                             top: `${topPx}px`,
                                                                             height: `${heightPx - 2}px`,
                                                                             maxHeight: `${heightPx - 2}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: '4px 8px', cursor: 'pointer',
+                                                                            padding: '4px 6px', cursor: 'pointer',
                                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
