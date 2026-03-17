@@ -145,8 +145,12 @@ export default function CalendarPage() {
                 const data = await res.json()
                 if (data.bookings) {
                     // Get court IDs for the selected venue to filter
-                    const venueCourtIds = selectedVenueId
-                        ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
+                    // Only filter by venue if courts are loaded (avoid empty Set filtering out everything)
+                    const filteredCourts = selectedVenueId && courts.length > 0
+                        ? courts.filter(c => c.venueId === selectedVenueId).map(c => c.id)
+                        : null
+                    const venueCourtIds = filteredCourts && filteredCourts.length > 0
+                        ? new Set(filteredCourts)
                         : null
                     const summaries: Record<string, DaySummary> = {}
                     data.bookings.forEach((b: Booking) => {
