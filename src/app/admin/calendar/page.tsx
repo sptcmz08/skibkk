@@ -718,10 +718,12 @@ export default function CalendarPage() {
                                         return (
                                             <div style={{ display: 'flex', gap: '4px' }}>
                                                 {/* Time labels column */}
-                                                <div style={{ width: '70px', flexShrink: 0 }}>
-                                                    {gridTimes.map(time => (
+                                                <div style={{ width: '70px', flexShrink: 0, position: 'relative', height: `${totalH}px` }}>
+                                                    {gridTimes.map((time, idx) => (
                                                         <div key={time} style={{
-                                                            height: `${ROW_H}px`, display: 'flex', alignItems: 'flex-start',
+                                                            position: 'absolute', left: 0, right: 0,
+                                                            top: `${idx * ROW_H}px`, height: `${ROW_H}px`,
+                                                            display: 'flex', alignItems: 'flex-start',
                                                             justifyContent: 'center', paddingTop: '6px',
                                                             fontWeight: 700, fontSize: '14px',
                                                             color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
