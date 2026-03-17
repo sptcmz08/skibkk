@@ -618,7 +618,7 @@ export default function BookingPage() {
                     {/* Order summary */}
                     <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>สรุปการจอง</h3>
-                        {cart.map((item, i) => (
+                        {[...cart].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map((item, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < cart.length - 1 ? '1px solid var(--c-border)' : 'none', fontSize: '14px' }}>
                                 <span>{item.courtName} • {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {item.startTime}-{item.endTime}</span>
                                 <span style={{ fontWeight: 600 }}>฿{item.price.toLocaleString()}</span>
