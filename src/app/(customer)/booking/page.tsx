@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
@@ -44,8 +44,10 @@ export default function BookingPage() {
 
     // Lock countdown timer for payment step
     const [lockSecondsLeft, setLockSecondsLeft] = useState<number | null>(null)
+    const lockExpiredRef = useRef(false)
     useEffect(() => {
         if (step !== 2) return
+        lockExpiredRef.current = false
         let expiresAt: Date | null = null
         const check = async () => {
             try {
@@ -64,14 +66,32 @@ export default function BookingPage() {
         }
         check()
         const pollId = setInterval(check, 5000)
-        const tickId = setInterval(() => {
+        const tickId = setInterval(async () => {
             if (expiresAt) {
                 const s = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
                 setLockSecondsLeft(s)
+                // Auto-clear cart when lock expires
+                if (s <= 0 && !lockExpiredRef.current) {
+                    lockExpiredRef.current = true
+                    // Clear cart and release locks
+                    localStorage.setItem('skibkk-cart', '[]')
+                    localStorage.removeItem('skibkk-booking-draft')
+                    window.dispatchEvent(new Event('cart-updated'))
+                    try {
+                        const { getSessionId } = await import('@/lib/session')
+                        await fetch('/api/locks', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId: getSessionId() }),
+                        })
+                    } catch { /* ignore */ }
+                    toast.error('หมดเวลาแล้ว ระบบล้างตะกร้าอัตโนมัติ กรุณาเลือกใหม่', { duration: 5000 })
+                    setTimeout(() => router.push('/courts'), 2000)
+                }
             }
         }, 1000)
         return () => { clearInterval(pollId); clearInterval(tickId) }
-    }, [step])
+    }, [step, router])
 
 
     // Compress image for better EasySlip verification

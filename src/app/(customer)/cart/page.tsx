@@ -88,7 +88,9 @@ export default function CartPage() {
     const CartInlineTimer = () => {
         const [expiresAt, setExpiresAt] = useState<Date | null>(null)
         const [secs, setSecs] = useState<number | null>(null)
+        const expiredRef = useRef(false)
         useEffect(() => {
+            expiredRef.current = false
             const check = async () => {
                 try {
                     const res = await fetch(`/api/locks/check?sessionId=${getSessionId()}`, { cache: 'no-store' })
@@ -103,7 +105,24 @@ export default function CartPage() {
         }, [])
         useEffect(() => {
             if (!expiresAt) { setSecs(null); return }
-            const tick = () => setSecs(Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)))
+            const tick = () => {
+                const s = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
+                setSecs(s)
+                // Auto-clear cart when lock expires
+                if (s <= 0 && !expiredRef.current) {
+                    expiredRef.current = true
+                    localStorage.setItem('skibkk-cart', '[]')
+                    window.dispatchEvent(new Event('cart-updated'))
+                    setCart([])
+                    fetch('/api/locks', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId: getSessionId() }),
+                    }).catch(() => { })
+                    toast.error('หมดเวลาแล้ว ระบบล้างตะกร้าอัตโนมัติ กรุณาเลือกใหม่', { duration: 5000 })
+                    setTimeout(() => router.push('/courts'), 2000)
+                }
+            }
             tick()
             const id = setInterval(tick, 1000)
             return () => clearInterval(id)
