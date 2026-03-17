@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -716,42 +716,35 @@ export default function CalendarPage() {
                                         const totalH = gridTimes.length * ROW_H
 
                                         return (
-                                            <div style={{ display: 'flex', gap: '4px' }}>
-                                                {/* Time labels column */}
-                                                <div style={{ width: '70px', flexShrink: 0, position: 'relative', height: `${totalH}px` }}>
-                                                    {gridTimes.map((time, idx) => (
-                                                        <div key={time} style={{
-                                                            position: 'absolute', left: 0, right: 0,
-                                                            top: `${idx * ROW_H}px`, height: `${ROW_H}px`,
-                                                            display: 'flex', alignItems: 'flex-start',
-                                                            justifyContent: 'center', paddingTop: '6px',
-                                                            fontWeight: 700, fontSize: '14px',
-                                                            color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
-                                                        }}>
-                                                            {time}
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`, gridTemplateRows: `repeat(${gridTimes.length}, ${ROW_H}px)`, gap: '0 4px' }}>
+                                                {/* Time labels - placed in the grid */}
+                                                {gridTimes.map((time, idx) => (
+                                                    <div key={`time-${time}`} style={{
+                                                        gridColumn: 1, gridRow: idx + 1,
+                                                        display: 'flex', alignItems: 'flex-start',
+                                                        justifyContent: 'center', paddingTop: '6px',
+                                                        fontWeight: 700, fontSize: '14px',
+                                                        color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
+                                                    }}>
+                                                        {time}
+                                                    </div>
+                                                ))}
 
                                                 {/* Court columns */}
-                                                {gridCourts.map(court => (
-                                                    <div key={court.id} style={{
-                                                        flex: 1, position: 'relative', height: `${totalH}px`,
-                                                    }}>
+                                                {gridCourts.map((court, colIdx) => (
+                                                    <React.Fragment key={court.id}>
                                                         {/* Empty slot backgrounds */}
                                                         {gridTimes.map((time, idx) => (
-                                                            <div key={`bg-${time}`} style={{
-                                                                position: 'absolute', left: 0, right: 0,
-                                                                top: `${idx * ROW_H}px`, height: `${ROW_H}px`,
+                                                            <div key={`bg-${court.id}-${time}`} style={{
+                                                                gridColumn: colIdx + 2, gridRow: idx + 1,
                                                                 borderRadius: '6px',
                                                                 border: '1px solid var(--a-border)',
                                                                 background: '#fafafa',
                                                             }} />
                                                         ))}
 
-                                                        {/* Booking blocks — positioned absolutely */}
+                                                        {/* Booking blocks - using gridRow span */}
                                                         {(() => {
-                                                            // Find all bookings for this court
                                                             const courtBookings: Array<{ booking: Booking; startTime: string; endTime: string; totalPrice: number }> = []
                                                             const processed = new Set<string>()
 
@@ -760,7 +753,6 @@ export default function CalendarPage() {
                                                                     .filter(item => item.courtId === court.id)
                                                                     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 
-                                                                // Merge consecutive items
                                                                 let i = 0
                                                                 while (i < courtItems.length) {
                                                                     const first = courtItems[i]
@@ -787,58 +779,54 @@ export default function CalendarPage() {
                                                             })
 
                                                             return courtBookings.map(cb => {
-                                                                const startParts = cb.startTime.split(':')
-                                                                const endParts = cb.endTime.split(':')
-                                                                const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || '0')
-                                                                const endMinutes = cb.endTime === '00:00' ? 24 * 60 : (parseInt(endParts[0]) * 60 + parseInt(endParts[1] || '0'))
-                                                                const minMinutes = minHour * 60
-                                                                const topOffset = ((startMinutes - minMinutes) / 60) * ROW_H
-                                                                const blockHeight = ((endMinutes - startMinutes) / 60) * ROW_H
-                                                                const hours = Math.round((endMinutes - startMinutes) / 60 * 10) / 10
+                                                                const startH = parseInt(cb.startTime.split(':')[0])
+                                                                const endH = parseInt(cb.endTime.split(':')[0]) || 24
+                                                                const startRow = startH - minHour + 1
+                                                                const endRow = endH - minHour + 1
+                                                                const spanRows = endRow - startRow
+                                                                const hours = spanRows
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
                                                                 const teacherItem = cb.booking.bookingItems.find(item => item.courtId === court.id && item.teacher)
 
+                                                                if (spanRows <= 0) return null
+
                                                                 return (
                                                                     <div key={`${cb.booking.id}_${cb.startTime}`}
                                                                         onClick={() => openBookingModal(cb.booking)}
                                                                         style={{
-                                                                            position: 'absolute', left: '2px', right: '2px',
-                                                                            top: `${topOffset}px`, height: `${blockHeight - 2}px`,
+                                                                            gridColumn: colIdx + 2,
+                                                                            gridRow: `${startRow} / ${endRow}`,
                                                                             borderRadius: '6px',
-                                                                            padding: '8px 10px', cursor: 'pointer',
+                                                                            padding: '6px 10px', cursor: 'pointer',
                                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
                                                                             justifyContent: 'space-between', gap: '2px',
                                                                             boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
                                                                             overflow: 'hidden', zIndex: 2,
+                                                                            margin: '1px 2px',
                                                                         }}
                                                                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
                                                                         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
                                                                     >
-                                                                        {/* Customer name */}
                                                                         <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
                                                                             {cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'}
                                                                         </div>
-                                                                        {/* Time range */}
                                                                         <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.9 }}>
                                                                             🕐 {cb.startTime}–{cb.endTime} ({hours} ชม.)
                                                                         </div>
-                                                                        {/* Sport type */}
                                                                         {sportLabel && (
                                                                             <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                                 {getSportEmoji(sportLabel)} [{sportLabel}]
                                                                             </div>
                                                                         )}
-                                                                        {/* Phone */}
                                                                         <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85 }}>
                                                                             {cb.booking.user?.phone?.startsWith('LINE-')
                                                                                 ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>🟢 LINE</span>
                                                                                 : (cb.booking.user?.phone || '-')}
                                                                         </div>
-                                                                        {/* Price + Status */}
                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
                                                                             <span style={{
                                                                                 background: 'rgba(255,255,255,0.2)', padding: '2px 8px',
@@ -854,7 +842,6 @@ export default function CalendarPage() {
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {/* Teacher */}
                                                                         {teacherItem?.teacher && (
                                                                             <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
                                                                                 🎓 ครู: {teacherItem.teacher.name}
@@ -864,7 +851,7 @@ export default function CalendarPage() {
                                                                 )
                                                             })
                                                         })()}
-                                                    </div>
+                                                    </React.Fragment>
                                                 ))}
                                             </div>
                                         )
