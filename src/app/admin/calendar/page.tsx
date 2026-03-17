@@ -717,7 +717,7 @@ export default function CalendarPage() {
 
                                         return (
                                             <div style={{ display: 'grid', gridTemplateColumns: `70px repeat(${gridCourts.length}, 1fr)`, gridTemplateRows: `repeat(${gridTimes.length}, ${ROW_H}px)`, gap: '0 4px' }}>
-                                                {/* Time labels - placed in the grid */}
+                                                {/* Time labels - in grid column 1 */}
                                                 {gridTimes.map((time, idx) => (
                                                     <div key={`time-${time}`} style={{
                                                         gridColumn: 1, gridRow: idx + 1,
@@ -730,20 +730,25 @@ export default function CalendarPage() {
                                                     </div>
                                                 ))}
 
-                                                {/* Court columns */}
+                                                {/* Court columns - each spans ALL rows, uses position:relative */}
                                                 {gridCourts.map((court, colIdx) => (
-                                                    <React.Fragment key={court.id}>
-                                                        {/* Empty slot backgrounds */}
+                                                    <div key={court.id} style={{
+                                                        gridColumn: colIdx + 2,
+                                                        gridRow: `1 / ${gridTimes.length + 1}`,
+                                                        position: 'relative',
+                                                    }}>
+                                                        {/* Empty slot backgrounds - absolute */}
                                                         {gridTimes.map((time, idx) => (
-                                                            <div key={`bg-${court.id}-${time}`} style={{
-                                                                gridColumn: colIdx + 2, gridRow: idx + 1,
+                                                            <div key={`bg-${time}`} style={{
+                                                                position: 'absolute', left: 0, right: 0,
+                                                                top: `${idx * ROW_H}px`, height: `${ROW_H}px`,
                                                                 borderRadius: '6px',
                                                                 border: '1px solid var(--a-border)',
                                                                 background: '#fafafa',
                                                             }} />
                                                         ))}
 
-                                                        {/* Booking blocks - using gridRow span */}
+                                                        {/* Booking blocks - absolute, with explicit px height */}
                                                         {(() => {
                                                             const courtBookings: Array<{ booking: Booking; startTime: string; endTime: string; totalPrice: number }> = []
                                                             const processed = new Set<string>()
@@ -767,12 +772,7 @@ export default function CalendarPage() {
                                                                     const mergeKey = `${booking.id}_${court.id}_${first.startTime}`
                                                                     if (!processed.has(mergeKey)) {
                                                                         processed.add(mergeKey)
-                                                                        courtBookings.push({
-                                                                            booking,
-                                                                            startTime: first.startTime,
-                                                                            endTime: lastEnd,
-                                                                            totalPrice,
-                                                                        })
+                                                                        courtBookings.push({ booking, startTime: first.startTime, endTime: lastEnd, totalPrice })
                                                                     }
                                                                     i = j
                                                                 }
@@ -781,77 +781,71 @@ export default function CalendarPage() {
                                                             return courtBookings.map(cb => {
                                                                 const startH = parseInt(cb.startTime.split(':')[0])
                                                                 const endH = parseInt(cb.endTime.split(':')[0]) || 24
-                                                                const startRow = startH - minHour + 1
-                                                                const endRow = endH - minHour + 1
-                                                                const spanRows = endRow - startRow
-                                                                const hours = spanRows
+                                                                const topPx = (startH - minHour) * ROW_H
+                                                                const heightPx = (endH - startH) * ROW_H
+                                                                const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
                                                                 const teacherItem = cb.booking.bookingItems.find(item => item.courtId === court.id && item.teacher)
 
-                                                                if (spanRows <= 0) return null
+                                                                if (heightPx <= 0) return null
 
                                                                 return (
                                                                     <div key={`${cb.booking.id}_${cb.startTime}`}
                                                                         onClick={() => openBookingModal(cb.booking)}
                                                                         style={{
-                                                                            gridColumn: colIdx + 2,
-                                                                            gridRow: `${startRow} / ${endRow}`,
+                                                                            position: 'absolute', left: '2px', right: '2px',
+                                                                            top: `${topPx}px`,
+                                                                            height: `${heightPx - 2}px`,
+                                                                            maxHeight: `${heightPx - 2}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: '6px 10px', cursor: 'pointer',
+                                                                            padding: '4px 8px', cursor: 'pointer',
                                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
-                                                                            justifyContent: 'space-between', gap: '2px',
+                                                                            gap: '1px',
                                                                             boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
                                                                             overflow: 'hidden', zIndex: 2,
-                                                                            margin: '1px 2px',
+                                                                            boxSizing: 'border-box',
                                                                         }}
-                                                                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
-                                                                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
+                                                                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
+                                                                        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
                                                                     >
-                                                                        <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.3 }}>
+                                                                        <div style={{ fontWeight: 800, fontSize: hours >= 2 ? '14px' : '12px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                             {cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'}
                                                                         </div>
-                                                                        <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.9 }}>
+                                                                        <div style={{ fontSize: '11px', fontWeight: 700, opacity: 0.9 }}>
                                                                             🕐 {cb.startTime}–{cb.endTime} ({hours} ชม.)
                                                                         </div>
-                                                                        {sportLabel && (
-                                                                            <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                {getSportEmoji(sportLabel)} [{sportLabel}]
-                                                                            </div>
+                                                                        {hours >= 2 && (
+                                                                            <>
+                                                                                <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                    {cb.booking.user?.phone?.startsWith('LINE-') ? '🟢 LINE' : (cb.booking.user?.phone || '-')}
+                                                                                </div>
+                                                                                {sportLabel && (
+                                                                                    <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9 }}>
+                                                                                        {getSportEmoji(sportLabel)} {sportLabel}
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
                                                                         )}
-                                                                        <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85 }}>
-                                                                            {cb.booking.user?.phone?.startsWith('LINE-')
-                                                                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>🟢 LINE</span>
-                                                                                : (cb.booking.user?.phone || '-')}
-                                                                        </div>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
-                                                                            <span style={{
-                                                                                background: 'rgba(255,255,255,0.2)', padding: '2px 8px',
-                                                                                borderRadius: '6px', fontSize: '13px', fontWeight: 800,
-                                                                            }}>
-                                                                                ฿ {cb.totalPrice.toLocaleString()}
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+                                                                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                                                                                ฿{cb.totalPrice.toLocaleString()}
                                                                             </span>
-                                                                            <span style={{
-                                                                                background: isPaid ? '#4caf50' : '#ff9800',
-                                                                                padding: '2px 8px', borderRadius: '6px',
-                                                                                fontSize: '11px', fontWeight: 700,
-                                                                            }}>
+                                                                            <span style={{ background: isPaid ? '#4caf50' : '#ff9800', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {teacherItem?.teacher && (
-                                                                            <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
-                                                                                🎓 ครู: {teacherItem.teacher.name}
-                                                                            </div>
+                                                                        {hours >= 2 && teacherItem?.teacher && (
+                                                                            <div style={{ fontSize: '10px', opacity: 0.8 }}>🎓 {teacherItem.teacher.name}</div>
                                                                         )}
                                                                     </div>
                                                                 )
                                                             })
                                                         })()}
-                                                    </React.Fragment>
+                                                    </div>
                                                 ))}
                                             </div>
                                         )
