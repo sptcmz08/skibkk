@@ -145,12 +145,8 @@ export default function CalendarPage() {
                 const data = await res.json()
                 if (data.bookings) {
                     // Get court IDs for the selected venue to filter
-                    // Only filter by venue if courts are loaded (avoid empty Set filtering out everything)
-                    const filteredCourts = selectedVenueId && courts.length > 0
-                        ? courts.filter(c => c.venueId === selectedVenueId).map(c => c.id)
-                        : null
-                    const venueCourtIds = filteredCourts && filteredCourts.length > 0
-                        ? new Set(filteredCourts)
+                    const venueCourtIds = selectedVenueId
+                        ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
                         : null
                     const summaries: Record<string, DaySummary> = {}
                     data.bookings.forEach((b: Booking) => {
@@ -180,42 +176,19 @@ export default function CalendarPage() {
             .catch(() => { })
     }, [viewYear, viewMonth, selectedVenueId])
 
-    // Fetch and poll bookings for selected date
+    // Fetch bookings for selected date
     useEffect(() => {
         if (!selectedDate) return
-        
-        const fetchBookings = async (isPoll: boolean = false) => {
-            if (!isPoll) setLoading(true)
+        const fetchBookings = async () => {
+            setLoading(true)
             try {
                 const res = await fetch(`/api/bookings?date=${selectedDate}`, { cache: 'no-store' })
-                if (!res.ok) return
                 const data = await res.json()
-                if (data.bookings) {
-                    setBookings(prev => {
-                        if (isPoll) {
-                            const prevIds = new Set(prev.map((b: any) => b.id))
-                            const newBookings = data.bookings.filter((b: any) => !prevIds.has(b.id))
-                            if (newBookings.length > 0) {
-                                toast.success('มีการจองใหม่เข้ามา!', { duration: 5000, icon: '🔔', style: { border: '1px solid #10b981', padding: '16px', color: '#10b981' } })
-                            }
-                        }
-                        return data.bookings
-                    })
-                }
-            } catch {
-                if (!isPoll) toast.error('โหลดข้อมูลไม่สำเร็จ')
-            } finally {
-                if (!isPoll) setLoading(false)
-            }
+                if (data.bookings) setBookings(data.bookings)
+            } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }
+            finally { setLoading(false) }
         }
-        
         fetchBookings()
-        
-        const intervalId = setInterval(() => {
-            fetchBookings(true)
-        }, 15000) // Poll every 15 seconds
-        
-        return () => clearInterval(intervalId)
     }, [selectedDate])
 
     // Fetch courts for booking modal (duplicate removed - already fetched above)
@@ -516,7 +489,7 @@ export default function CalendarPage() {
                                     {hasBookings ? (
                                         <div>
                                             <div style={{ fontSize: '11px', fontWeight: 700, color: countColor }}>
-                                                {bookingCount} ชม.การจอง
+                                                {bookingCount} จอง
                                             </div>
                                             <div style={{ fontSize: '9px', fontWeight: 600, color: countColor, opacity: 0.8 }}>
                                                 {statusLabel}
@@ -576,18 +549,7 @@ export default function CalendarPage() {
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                         ) : (() => {
-                            const activeBookings = bookings.filter(b => b.status !== 'CANCELLED').map(b => {
-                                const filteredItems = b.bookingItems.filter(item => {
-                                    const d = new Date(item.date)
-                                    const y = d.getFullYear()
-                                    const m = String(d.getMonth() + 1).padStart(2, '0')
-                                    const dy = String(d.getDate()).padStart(2, '0')
-                                    const localDateStr = `${y}-${m}-${dy}`
-                                    return localDateStr === selectedDate || item.date.startsWith(selectedDate)
-                                })
-                                return { ...b, bookingItems: filteredItems }
-                            }).filter(b => b.bookingItems.length > 0)
-                            
+                            const activeBookings = bookings.filter(b => b.status !== 'CANCELLED')
                             // Show grid with all courts even when no bookings (empty white cells)
                             const venueCourtsCheck = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
                             if (activeBookings.length === 0 && venueCourtsCheck.length === 0) {
@@ -759,21 +721,12 @@ export default function CalendarPage() {
                                                 {gridTimes.map((time, idx) => (
                                                     <div key={`time-${time}`} style={{
                                                         gridColumn: 1, gridRow: idx + 1,
-                                                        position: 'relative' // relative to the grid cell
+                                                        display: 'flex', alignItems: 'flex-start',
+                                                        justifyContent: 'center', paddingTop: '6px',
+                                                        fontWeight: 700, fontSize: '14px',
+                                                        color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
                                                     }}>
-                                                        {/* Center on the TOP border of the grid cell to align with block boundaries */}
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            top: 0, left: 0, right: 0,
-                                                            transform: 'translateY(-50%)',
-                                                            textAlign: 'center',
-                                                            fontWeight: 700, fontSize: '13px',
-                                                            color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
-                                                            zIndex: 10,
-                                                            background: '#fff', // cover row borders slightly for cleaner look
-                                                        }}>
-                                                            {time}
-                                                        </div>
+                                                        {time}
                                                     </div>
                                                 ))}
 
@@ -825,56 +778,10 @@ export default function CalendarPage() {
                                                                 }
                                                             })
 
-                                                            // Process overlaps to display side-by-side
-                                                            const bookingBlocks: Array<{
-                                                                cb: typeof courtBookings[0],
-                                                                col: number,
-                                                                maxCols: number
-                                                            }> = []
-
-                                                            if (courtBookings.length > 0) {
-                                                                // Sort by start time, then end time
-                                                                const sorted = [...courtBookings].sort((a, b) => {
-                                                                    if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime)
-                                                                    return a.endTime.localeCompare(b.endTime)
-                                                                })
-
-                                                                const columns: typeof sorted[] = []
-                                                                sorted.forEach(block => {
-                                                                    // Find first column where the last block ends <= this block's start
-                                                                    let placed = false
-                                                                    for (let i = 0; i < columns.length; i++) {
-                                                                        const lastInCol = columns[i][columns[i].length - 1]
-                                                                        if (lastInCol.endTime <= block.startTime) {
-                                                                            columns[i].push(block)
-                                                                            placed = true
-                                                                            break
-                                                                        }
-                                                                    }
-                                                                    if (!placed) {
-                                                                        columns.push([block])
-                                                                    }
-                                                                })
-
-                                                                // Assign col and maxCols
-                                                                for (let c = 0; c < columns.length; c++) {
-                                                                    columns[c].forEach(block => {
-                                                                        // Count how many total columns overlap with this block
-                                                                        let overlappingCols = 0
-                                                                        for (let i = 0; i < columns.length; i++) {
-                                                                            const over = columns[i].some(b => b.startTime < block.endTime && b.endTime > block.startTime)
-                                                                            if (over) overlappingCols++
-                                                                        }
-                                                                        bookingBlocks.push({ cb: block, col: c, maxCols: Math.max(1, overlappingCols) })
-                                                                    })
-                                                                }
-                                                            }
-
-                                                            return bookingBlocks.map(({ cb, col, maxCols }) => {
+                                                            return courtBookings.map(cb => {
                                                                 const startH = parseInt(cb.startTime.split(':')[0])
                                                                 const endH = parseInt(cb.endTime.split(':')[0]) || 24
                                                                 const topPx = (startH - minHour) * ROW_H
-                                                                // Reverted: use exact endH for correct timeline representation
                                                                 const heightPx = (endH - startH) * ROW_H
                                                                 const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
@@ -882,23 +789,18 @@ export default function CalendarPage() {
                                                                 const sportLabel = sportTypes[0] || ''
                                                                 const teacherItem = cb.booking.bookingItems.find(item => item.courtId === court.id && item.teacher)
 
-                                                                if (hours <= 0) return null
-
-                                                                const widthPercent = 100 / maxCols
-                                                                const leftPercent = col * widthPercent
+                                                                if (heightPx <= 0) return null
 
                                                                 return (
                                                                     <div key={`${cb.booking.id}_${cb.startTime}`}
                                                                         onClick={() => openBookingModal(cb.booking)}
                                                                         style={{
-                                                                            position: 'absolute',
-                                                                            left: `calc(${leftPercent}% + 2px)`,
-                                                                            width: `calc(${widthPercent}% - 4px)`,
+                                                                            position: 'absolute', left: '2px', right: '2px',
                                                                             top: `${topPx}px`,
-                                                                            height: `${heightPx - 3}px`,
-                                                                            maxHeight: `${heightPx - 3}px`,
+                                                                            height: `${heightPx - 2}px`,
+                                                                            maxHeight: `${heightPx - 2}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: '6px 8px', cursor: 'pointer',
+                                                                            padding: '4px 8px', cursor: 'pointer',
                                                                             background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',

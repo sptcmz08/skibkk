@@ -571,7 +571,7 @@ export default function CourtsPage() {
                                             : isPast
                                                 ? '2px solid rgba(225,112,85,0.2)'
                                                 : isLockedByOther
-                                                    ? '2px solid rgba(245,158,11,0.4)'
+                                                    ? '2px solid rgba(108,92,231,0.3)'
                                                     : isBooked
                                                         ? '2px solid rgba(0,0,0,0.03)'
                                                         : '2px solid rgba(0,0,0,0.06)',
@@ -580,7 +580,7 @@ export default function CourtsPage() {
                                             : isPast
                                                 ? 'rgba(225,112,85,0.06)'
                                                 : isLockedByOther
-                                                    ? 'rgba(245,158,11,0.08)'
+                                                    ? 'rgba(108,92,231,0.05)'
                                                     : isBooked
                                                         ? 'rgba(0,0,0,0.02)'
                                                         : 'rgba(255,255,255,0.6)',
@@ -591,7 +591,7 @@ export default function CourtsPage() {
                                                 : inCart
                                                     ? 'var(--c-primary)'
                                                     : isLockedByOther
-                                                        ? '#f59e0b'
+                                                        ? '#6c5ce7'
                                                         : 'var(--c-text)',
                                         fontFamily: "'Inter', sans-serif", textAlign: 'center',
                                         opacity: isBooked ? 0.35 : isPast ? 0.5 : 1, transition: 'all 0.15s',
@@ -604,9 +604,9 @@ export default function CourtsPage() {
                                     {isBooked && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-text-muted)' }}>จองแล้ว</div>}
                                     {inCart && !isPast && <div style={{ fontSize: '10px', marginTop: '5px', color: 'var(--c-primary-light)', fontWeight: 700 }}>✓ เลือกแล้ว</div>}
                                     {isLockedByOther && (
-                                        <div style={{ fontSize: '10px', marginTop: '5px', color: '#f59e0b', fontWeight: 700 }}>
+                                        <div style={{ fontSize: '9px', marginTop: '4px', color: '#6c5ce7', fontWeight: 700, lineHeight: 1.2 }}>
                                             <Lock size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: '2px' }} />
-                                            {lockMins}:{String(lockSecs).padStart(2, '0')}
+                                            ลูกค้าท่านอื่น<br/>กำลังทำการจอง
                                         </div>
                                     )}
                                     {!isBooked && !inCart && !isLockedByOther && (
