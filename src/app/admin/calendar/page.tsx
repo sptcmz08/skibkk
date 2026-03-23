@@ -553,7 +553,18 @@ export default function CalendarPage() {
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                         ) : (() => {
-                            const activeBookings = bookings.filter(b => b.status !== 'CANCELLED')
+                            const activeBookings = bookings.filter(b => b.status !== 'CANCELLED').map(b => {
+                                const filteredItems = b.bookingItems.filter(item => {
+                                    const d = new Date(item.date)
+                                    const y = d.getFullYear()
+                                    const m = String(d.getMonth() + 1).padStart(2, '0')
+                                    const dy = String(d.getDate()).padStart(2, '0')
+                                    const localDateStr = `${y}-${m}-${dy}`
+                                    return localDateStr === selectedDate || item.date.startsWith(selectedDate)
+                                })
+                                return { ...b, bookingItems: filteredItems }
+                            }).filter(b => b.bookingItems.length > 0)
+                            
                             // Show grid with all courts even when no bookings (empty white cells)
                             const venueCourtsCheck = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
                             if (activeBookings.length === 0 && venueCourtsCheck.length === 0) {
