@@ -180,9 +180,14 @@ export default function CalendarPage() {
             .catch(() => { })
     }, [viewYear, viewMonth, selectedVenueId])
 
+    const knownBookingIds = useRef<Set<string>>(new Set())
+    
     // Fetch and poll bookings for selected date
     useEffect(() => {
-        if (!selectedDate) return
+        if (!selectedDate) {
+            knownBookingIds.current.clear()
+            return
+        }
         
         const fetchBookings = async (isPoll: boolean = false) => {
             if (!isPoll) setLoading(true)
@@ -191,16 +196,16 @@ export default function CalendarPage() {
                 if (!res.ok) return
                 const data = await res.json()
                 if (data.bookings) {
-                    setBookings(prev => {
-                        if (isPoll) {
-                            const prevIds = new Set(prev.map((b: any) => b.id))
-                            const newBookings = data.bookings.filter((b: any) => !prevIds.has(b.id))
-                            if (newBookings.length > 0) {
-                                toast.success('มีการจองใหม่เข้ามา!', { duration: 5000, icon: '🔔', style: { border: '1px solid #10b981', padding: '16px', color: '#10b981' } })
-                            }
+                    if (isPoll && knownBookingIds.current.size > 0) {
+                        const newBookings = data.bookings.filter((b: any) => !knownBookingIds.current.has(b.id))
+                        if (newBookings.length > 0) {
+                            toast.success('มีการจองใหม่เข้ามา!', { duration: 5000, icon: '🔔', style: { border: '1px solid #10b981', padding: '16px', color: '#10b981' } })
                         }
-                        return data.bookings
-                    })
+                    }
+                    
+                    // Update known IDs
+                    knownBookingIds.current = new Set(data.bookings.map((b: any) => b.id))
+                    setBookings(data.bookings)
                 }
             } catch {
                 if (!isPoll) toast.error('โหลดข้อมูลไม่สำเร็จ')
