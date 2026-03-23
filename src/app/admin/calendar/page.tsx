@@ -840,10 +840,8 @@ export default function CalendarPage() {
                                                                 const startH = parseInt(cb.startTime.split(':')[0])
                                                                 const endH = parseInt(cb.endTime.split(':')[0]) || 24
                                                                 const topPx = (startH - minHour) * ROW_H
-                                                                // User explicitly wants 1 logical hour (e.g. 9:00-10:00) to visually cover 
-                                                                // both the 9:00 block and the 10:00 block (+1 hour visual footprint)
-                                                                const visualEndH = endH + 1
-                                                                const heightPx = (visualEndH - startH) * ROW_H
+                                                                // Reverted: use exact endH for correct timeline representation
+                                                                const heightPx = (endH - startH) * ROW_H
                                                                 const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
