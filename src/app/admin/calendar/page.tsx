@@ -118,7 +118,10 @@ export default function CalendarPage() {
                 toast.success('บันทึกการแก้ไขสำเร็จ')
                 setViewBooking(null)
                 await refetchBookings()
-            } else { toast.error('บันทึกไม่สำเร็จ') }
+            } else {
+                const errData = await res.json().catch(() => ({}))
+                toast.error(errData.error || 'บันทึกไม่สำเร็จ')
+            }
         } catch { toast.error('เกิดข้อผิดพลาด') }
         finally { setSaving(false) }
     }

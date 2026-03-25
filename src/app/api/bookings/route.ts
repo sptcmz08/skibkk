@@ -288,7 +288,7 @@ export async function PATCH(req: NextRequest) {
                         where: {
                             courtId_date_startTime: {
                                 courtId: item.courtId,
-                                date: new Date(item.date + 'T00:00:00'),
+                                date: new Date(item.date.split('T')[0] + 'T00:00:00+07:00'),
                                 startTime: slotTime,
                             },
                         },
@@ -308,7 +308,7 @@ export async function PATCH(req: NextRequest) {
                 data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }) => ({
                     bookingId,
                     courtId: item.courtId,
-                    date: new Date(item.date + 'T00:00:00'),
+                    date: new Date(item.date.split('T')[0] + 'T00:00:00+07:00'),
                     startTime: item.startTime,
                     endTime: item.endTime,
                     price: item.price || 0,
