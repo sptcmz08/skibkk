@@ -711,7 +711,8 @@ export default function CalendarPage() {
 
                             // Determine time range from courts' operating hours for the selected day
                             const DAYS_MAP: Record<number, string> = { 0: 'SUNDAY', 1: 'MONDAY', 2: 'TUESDAY', 3: 'WEDNESDAY', 4: 'THURSDAY', 5: 'FRIDAY', 6: 'SATURDAY' }
-                            const selectedDayOfWeek = selectedDate ? DAYS_MAP[new Date(selectedDate).getDay()] : ''
+                            // Use explicit noon time to avoid UTC midnight timezone shift
+                            const selectedDayOfWeek = selectedDate ? DAYS_MAP[new Date(selectedDate + 'T12:00:00').getDay()] : ''
                             let minHour = 24, maxHour = 0
                             // Get operating hours from grid courts for this day
                             gridCourts.forEach(c => {
