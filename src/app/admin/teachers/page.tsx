@@ -33,6 +33,7 @@ export default function TeachersPage() {
     const [showModal, setShowModal] = useState(false)
     const [editId, setEditId] = useState<string | null>(null)
     const [form, setForm] = useState(emptyForm)
+    const [sportTypes, setSportTypes] = useState<string[]>([])
 
     const loadData = () => {
         fetch('/api/teachers').then(r => r.json())
@@ -40,7 +41,11 @@ export default function TeachersPage() {
             .catch(() => toast.error('โหลดไม่สำเร็จ'))
             .finally(() => setLoading(false))
     }
-    useEffect(loadData, [])
+    useEffect(() => {
+        loadData()
+        fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json())
+            .then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => {})
+    }, [])
 
     const openCreate = () => { setEditId(null); setForm(emptyForm); setShowModal(true) }
     const openEdit = (t: Teacher) => {
@@ -165,7 +170,9 @@ export default function TeachersPage() {
                                     <input className="admin-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                                 <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>ประเภทกีฬา</label>
                                     <select className="admin-input" value={form.specialty} onChange={e => setForm({ ...form, specialty: e.target.value })}>
-                                        <option value="">เลือก</option><option value="สกี">สกี</option><option value="สโนว์บอร์ด">สโนว์บอร์ด</option><option value="ทั้งสองอย่าง">ทั้งสองอย่าง</option>
+                                        <option value="">เลือก</option>
+                                        {sportTypes.map(st => <option key={st} value={st}>{st}</option>)}
+                                        <option value="ทั้งหมด">ทั้งหมด</option>
                                     </select></div>
                             </div>
                             <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>สถานะการทำงาน</label>
