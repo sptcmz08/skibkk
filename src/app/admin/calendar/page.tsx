@@ -75,6 +75,7 @@ export default function CalendarPage() {
     const [selectedVenueId, setSelectedVenueId] = useState<string>('')
     const [teachers, setTeachers] = useState<Teacher[]>([])
     const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
+    const [sportTypes, setSportTypes] = useState<string[]>([])
 
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
@@ -128,6 +129,7 @@ export default function CalendarPage() {
     useEffect(() => {
         fetch('/api/courts?admin=1', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
         fetch('/api/teachers', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.teachers) setTeachers(data.teachers) }).catch(() => { })
+        fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => { })
         fetch('/api/venues', { cache: 'no-store' }).then(r => r.json()).then(data => {
             if (data.venues) {
                 const active = data.venues.filter((v: any) => v.isActive)
@@ -1173,8 +1175,9 @@ export default function CalendarPage() {
                                                 const u = [...editParticipants]; u[i] = { ...u[i], sportType: e.target.value }; setEditParticipants(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 <option value="">ประเภทกีฬา</option>
-                                                <option value="สกี้">⛷️ สกี้</option>
-                                                <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
+                                                {sportTypes.map(st => (
+                                                    <option key={st} value={st}>{st}</option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
