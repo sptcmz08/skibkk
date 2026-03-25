@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Calendar, Clock, MapPin, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight, Search, Plus, UserPlus } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { getSessionId } from '@/lib/session'
 
 interface Slot {
     startTime: string
@@ -194,12 +195,13 @@ function AdminBookInner() {
             .then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => {})
     }, [])
 
-    // Fetch availability when date selected (no session lock for admin)
+    // Fetch availability when date selected
     const fetchAvailability = useCallback(async (dateStr: string, silent = false) => {
         if (!silent) setLoading(true)
         try {
+            const sessionId = getSessionId()
             const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
-            const res = await fetch(`/api/availability?date=${dateStr}${venueParam}`, { cache: 'no-store' })
+            const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}${venueParam}`, { cache: 'no-store' })
             const data = await res.json()
             if (data.availability) {
                 setAvailability(data.availability)
@@ -229,7 +231,7 @@ function AdminBookInner() {
         if (!selectedDate || step !== 3) return
         const interval = setInterval(() => {
             fetchAvailability(selectedDate, true)
-        }, 30000)
+        }, 5000)
         return () => clearInterval(interval)
     }, [selectedDate, step, fetchAvailability])
 
@@ -290,18 +292,44 @@ function AdminBookInner() {
     const isInCart = (courtId: string, date: string, startTime: string) =>
         cart.some(i => i.courtId === courtId && i.date === date && i.startTime === startTime)
 
-    // Toggle slot — no lock needed for admin, direct add/remove
-    const toggleSlot = (court: CourtData, slot: Slot) => {
+    // Toggle slot — admin also locks slots to prevent double booking
+    const toggleSlot = async (court: CourtData, slot: Slot) => {
         if (!selectedDate) return
         if (isInCart(court.courtId, selectedDate, slot.startTime)) {
+            // Remove from cart & release lock
             setCart(cart.filter(i => !(i.courtId === court.courtId && i.date === selectedDate && i.startTime === slot.startTime)))
+            const sessionId = getSessionId()
+            fetch('/api/locks', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, slots: [{ courtId: court.courtId, date: selectedDate, startTime: slot.startTime }] }),
+            }).catch(() => { })
             toast.success('ลบออกจากรายการแล้ว')
         } else {
+            // Try to lock first
+            const sessionId = getSessionId()
+            try {
+                const lockRes = await fetch('/api/locks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, slots: [{ courtId: court.courtId, date: selectedDate, startTime: slot.startTime }] }),
+                })
+                const lockData = await lockRes.json()
+                const result = lockData.results?.[0]
+                if (result?.success === false && result?.reason === 'locked_by_other') {
+                    const m = Math.floor(result.secondsLeft / 60)
+                    const s = result.secondsLeft % 60
+                    toast.error(`สล็อตนี้ถูก Lock โดยคนอื่น (เหลือ ${m}:${String(s).padStart(2, '0')})`, { duration: 4000 })
+                    return
+                }
+            } catch {
+                // If lock fails, still allow admin to add (graceful degradation)
+            }
             setCart([...cart, {
                 courtId: court.courtId, courtName: court.courtName,
                 date: selectedDate, startTime: slot.startTime, endTime: slot.endTime, price: slot.price,
             }])
-            toast.success(`เพิ่ม ${slot.startTime} ลงรายการแล้ว`)
+            toast.success(`เพิ่ม ${slot.startTime} ลงรายการแล้ว — Lock 20 นาที`)
         }
     }
 
@@ -372,6 +400,13 @@ function AdminBookInner() {
             if (res.ok) {
                 const data = await res.json()
                 await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
+                // Release locks after successful booking
+                const sessionId = getSessionId()
+                fetch('/api/locks', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId }),
+                }).catch(() => { })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
                 // Redirect to calendar page with the booked date + venue (Bug 6.8)
                 const bookedDate = cart[0]?.date || selectedDate
