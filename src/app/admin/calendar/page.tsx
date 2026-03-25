@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Booking {
-    id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean
+    id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean; createdByAdmin: boolean
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string } }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
@@ -913,6 +913,17 @@ export default function CalendarPage() {
                                                                 const widthPercent = 100 / maxCols
                                                                 const leftPercent = col * widthPercent
 
+                                                                const isAdminBooking = cb.booking.createdByAdmin
+                                                                const bgGrad = isAdminBooking
+                                                                    ? 'linear-gradient(135deg, #D4A017, #B8860B)'
+                                                                    : 'linear-gradient(135deg, #2196F3, #1976D2)'
+                                                                const shadow = isAdminBooking
+                                                                    ? '0 2px 8px rgba(212, 160, 23, 0.3)'
+                                                                    : '0 2px 8px rgba(33, 150, 243, 0.3)'
+                                                                const shadowHover = isAdminBooking
+                                                                    ? '0 4px 16px rgba(212, 160, 23, 0.4)'
+                                                                    : '0 4px 16px rgba(33, 150, 243, 0.4)'
+
                                                                 return (
                                                                     <div key={`${cb.booking.id}_${cb.startTime}`}
                                                                         onClick={() => openBookingModal(cb.booking)}
@@ -925,16 +936,16 @@ export default function CalendarPage() {
                                                                             maxHeight: `${heightPx - 3}px`,
                                                                             borderRadius: '6px',
                                                                             padding: '6px 8px', cursor: 'pointer',
-                                                                            background: 'linear-gradient(135deg, #2196F3, #1976D2)',
+                                                                            background: bgGrad,
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
                                                                             gap: '1px',
-                                                                            boxShadow: '0 2px 8px rgba(33, 150, 243, 0.3)',
+                                                                            boxShadow: shadow,
                                                                             overflow: 'hidden', zIndex: 2,
                                                                             boxSizing: 'border-box',
                                                                         }}
-                                                                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.4)' }}
-                                                                        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.3)' }}
+                                                                        onMouseEnter={e => { e.currentTarget.style.boxShadow = shadowHover }}
+                                                                        onMouseLeave={e => { e.currentTarget.style.boxShadow = shadow }}
                                                                     >
                                                                         <div style={{ fontWeight: 800, fontSize: hours >= 2 ? '14px' : '12px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                             {cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'}
