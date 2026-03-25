@@ -141,7 +141,7 @@ export default function CalendarPage() {
     useEffect(() => {
         const fetchSummary = async () => {
             try {
-                const res = await fetch(`/api/bookings?month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
+                const res = await fetch(`/api/bookings?take=500&month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
                 const data = await res.json()
                 if (data.bookings) {
                     // Get court IDs for the selected venue to filter
