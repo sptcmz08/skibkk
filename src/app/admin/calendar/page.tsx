@@ -571,7 +571,17 @@ export default function CalendarPage() {
                                     {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                 </select>
                             )}
-                            <span className="badge badge-info">{bookings.filter(b => b.status !== 'CANCELLED').length} การจอง</span>
+                            {(() => {
+                                const venueCourtIdSet = selectedVenueId && courts.length > 0
+                                    ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
+                                    : null
+                                const count = bookings.filter(b => {
+                                    if (b.status === 'CANCELLED') return false
+                                    if (!venueCourtIdSet) return true
+                                    return b.bookingItems.some(item => venueCourtIdSet.has(item.courtId))
+                                }).length
+                                return <span className="badge badge-info">{count} การจอง</span>
+                            })()}
                             <button onClick={() => router.push(`/admin/book?date=${selectedDate}${selectedVenueId ? `&venueId=${selectedVenueId}` : ''}`)} className="btn-admin" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Plus size={14} /> จอง
                             </button>
@@ -581,8 +591,13 @@ export default function CalendarPage() {
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                         ) : (() => {
+                            const venueCourtIdFilter = selectedVenueId && courts.length > 0
+                                ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
+                                : null
                             const activeBookings = bookings.filter(b => b.status !== 'CANCELLED').map(b => {
                                 const filteredItems = b.bookingItems.filter(item => {
+                                    // Filter by venue if selected
+                                    if (venueCourtIdFilter && !venueCourtIdFilter.has(item.courtId)) return false
                                     const d = new Date(item.date)
                                     const y = d.getFullYear()
                                     const m = String(d.getMonth() + 1).padStart(2, '0')
