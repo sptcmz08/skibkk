@@ -944,7 +944,7 @@ function AdminBookInner() {
                 const bookerName = bookCustomer?.name || newBookerName || '-'
                 const validParts = participants.filter(p => p.name.trim())
                 const dateStr = selectedDate ? formatDateTH(selectedDate) : '-'
-                const timeSlots = cart.map(c => `${c.startTime}–${c.endTime}`).join(', ')
+                const timeSlots = [...cart].sort((a, b) => a.startTime.localeCompare(b.startTime)).map(c => `${c.startTime}–${c.endTime}`).join(', ')
 
                 return (
                     <div onClick={() => setShowConfirmModal(false)} style={{
