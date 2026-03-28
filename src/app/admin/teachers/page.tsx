@@ -44,7 +44,7 @@ export default function TeachersPage() {
     useEffect(() => {
         loadData()
         fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json())
-            .then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => {})
+            .then(data => { if (data.sportTypes) setSportTypes(data.sportTypes.map((st: any) => st.name || st)) }).catch(() => {})
     }, [])
 
     const openCreate = () => { setEditId(null); setForm(emptyForm); setShowModal(true) }

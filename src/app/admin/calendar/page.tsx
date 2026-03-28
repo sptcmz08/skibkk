@@ -132,7 +132,7 @@ export default function CalendarPage() {
     useEffect(() => {
         fetch('/api/courts?admin=1', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.courts) setCourts(data.courts) }).catch(() => { })
         fetch('/api/teachers', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.teachers) setTeachers(data.teachers) }).catch(() => { })
-        fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.sportTypes) setSportTypes(data.sportTypes) }).catch(() => { })
+        fetch('/api/sport-types', { cache: 'no-store' }).then(r => r.json()).then(data => { if (data.sportTypes) setSportTypes(data.sportTypes.map((st: any) => st.name || st)) }).catch(() => { })
         fetch('/api/venues', { cache: 'no-store' }).then(r => r.json()).then(data => {
             if (data.venues) {
                 const active = data.venues.filter((v: any) => v.isActive)
