@@ -37,6 +37,11 @@ export default function CalendarPage() {
     const venueIdParam = searchParams.get('venueId')
     const now = new Date()
     const bookingGridRef = useRef<HTMLDivElement>(null)
+    // Helper: convert UTC ISO date string to YYYY-MM-DD in Bangkok timezone
+    const toDateBangkok = (isoDate: string) => {
+        const d = new Date(isoDate)
+        return new Date(d.getTime() + (7 * 60 * 60 * 1000)).toISOString().split('T')[0]
+    }
     const initDate = dateParam ? new Date(dateParam) : null
     const [viewYear, setViewYear] = useState(initDate ? initDate.getFullYear() : now.getFullYear())
     const [viewMonth, setViewMonth] = useState(initDate ? initDate.getMonth() : now.getMonth())
@@ -81,7 +86,10 @@ export default function CalendarPage() {
         setViewBooking(booking)
         setEditMode(false)
         setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
-        setEditBookingItems(booking.bookingItems.map(item => ({ courtId: item.courtId, date: item.date.split('T')[0], startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null })))
+        setEditBookingItems(booking.bookingItems.map(item => {
+            const dateStr = toDateBangkok(item.date)
+            return { courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
+        }))
         setEditStatus(booking.status)
         setEditAmount(booking.totalAmount)
     }
@@ -163,7 +171,7 @@ export default function CalendarPage() {
                         b.bookingItems.forEach(item => {
                             // Filter by venue if selected
                             if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
-                            const d = item.date.split('T')[0]
+                            const d = toDateBangkok(item.date)
                             if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
                             summaries[d].count++
                             summaries[d].totalAmount += item.price
@@ -378,7 +386,7 @@ export default function CalendarPage() {
                     summaryData.bookings.forEach((b: Booking) => {
                         if (b.status === 'CANCELLED') return
                         b.bookingItems.forEach(item => {
-                            const d = item.date.split('T')[0]
+                            const d = toDateBangkok(item.date)
                             if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
                             summaries[d].count++
                             summaries[d].totalAmount += item.price
