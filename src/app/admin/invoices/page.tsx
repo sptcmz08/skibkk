@@ -145,6 +145,7 @@ export default function InvoicesPage() {
             { v: 'วันที่ใบเสร็จ\n(ลำดับ)', s: headerStyle },
             { v: 'เลขที่ใบ/ออเดอร์', s: headerStyle },
             { v: 'รายการ (ชื่อกิจกรรม)', s: headerStyle },
+            { v: 'ชื่อลูกค้า', s: headerStyle },
             { v: 'จำนวนเงิน', s: headerStyle },
             { v: '', s: headerStyle },
             { v: '', s: headerStyle },
@@ -157,6 +158,7 @@ export default function InvoicesPage() {
             { v: 'หมายเหตุ', s: headerStyle },
         ])
         rows.push([
+            { v: '', s: headerStyle },
             { v: '', s: headerStyle },
             { v: '', s: headerStyle },
             { v: '', s: headerStyle },
@@ -189,6 +191,7 @@ export default function InvoicesPage() {
                 { v: formatShortDate(b.createdAt), s: cellCenter },
                 { v: genInvoiceNumber(b.bookingNumber), s: cellStyle },
                 { v: courtNames, s: cellStyle },
+                { v: b.user.name, s: cellStyle },
                 { v: beforeVat, s: numStyle },
                 { v: vatAmt, s: numStyle },
                 { v: b.totalAmount, s: numStyle },
@@ -211,6 +214,7 @@ export default function InvoicesPage() {
             { v: 'รวม', s: totalsLabel },
             { v: '', s: totalsLabel },
             { v: '', s: totalsLabel },
+            { v: '', s: totalsLabel },
             { v: totalBV, s: totalsNum },
             { v: totalV, s: totalsNum },
             { v: totalAll, s: totalsNum },
@@ -227,35 +231,37 @@ export default function InvoicesPage() {
 
         // Column widths
         ws['!cols'] = [
-            { wch: 8 },   // A
-            { wch: 16 },  // B
-            { wch: 22 },  // C
-            { wch: 28 },  // D
-            { wch: 20 },  // E
-            { wch: 18 },  // F
-            { wch: 14 },  // G
-            { wch: 16 },  // H
-            { wch: 16 },  // I
-            { wch: 16 },  // J
-            { wch: 14 },  // K
-            { wch: 14 },  // L
-            { wch: 6 },   // M
-            { wch: 30 },  // N
+            { wch: 8 },   // A - ลำดับ
+            { wch: 16 },  // B - วันที่
+            { wch: 22 },  // C - เลขที่
+            { wch: 28 },  // D - รายการ
+            { wch: 20 },  // E - ชื่อลูกค้า
+            { wch: 20 },  // F - ก่อน VAT
+            { wch: 18 },  // G - VAT
+            { wch: 14 },  // H - รวม
+            { wch: 16 },  // I - วันที่รายการ
+            { wch: 16 },  // J - วันที่ใช้บริการ
+            { wch: 16 },  // K - วันที่ชำระ
+            { wch: 14 },  // L - ธนาคาร
+            { wch: 14 },  // M - จำนวนเงิน
+            { wch: 6 },   // N
+            { wch: 30 },  // O - หมายเหตุ
         ]
 
-        // Merge cells
+        // Merge cells (shifted +1 for new column E)
         ws['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
-            { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
-            { s: { r: 2, c: 4 }, e: { r: 2, c: 6 } },
-            { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } },
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 14 } },
+            { s: { r: 2, c: 5 }, e: { r: 2, c: 7 } },
+            { s: { r: 2, c: 10 }, e: { r: 2, c: 13 } },
             { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },
             { s: { r: 2, c: 1 }, e: { r: 3, c: 1 } },
             { s: { r: 2, c: 2 }, e: { r: 3, c: 2 } },
             { s: { r: 2, c: 3 }, e: { r: 3, c: 3 } },
-            { s: { r: 2, c: 7 }, e: { r: 3, c: 7 } },
+            { s: { r: 2, c: 4 }, e: { r: 3, c: 4 } },
             { s: { r: 2, c: 8 }, e: { r: 3, c: 8 } },
-            { s: { r: 2, c: 13 }, e: { r: 3, c: 13 } },
+            { s: { r: 2, c: 9 }, e: { r: 3, c: 9 } },
+            { s: { r: 2, c: 14 }, e: { r: 3, c: 14 } },
         ]
 
         // Row heights
