@@ -739,14 +739,14 @@ export default function InvoicesPage() {
                     <thead>
                         <tr>
                             <th>เลขที่</th><th>หมายเลขจอง</th><th>ลูกค้า</th>
-                            <th>มูลค่าก่อน VAT</th><th>VAT 7%</th><th>รวมทั้งสิ้น</th><th>วันที่</th><th>จัดการ</th>
+                            <th>มูลค่าก่อน VAT</th><th>VAT 7%</th><th>รวมทั้งสิ้น</th><th>การชำระเงิน</th><th>วันที่</th><th>จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</td></tr>
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</td></tr>
                         ) : filtered.length === 0 ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
                                 <FileText size={40} style={{ marginBottom: '12px', opacity: 0.4, display: 'block', margin: '0 auto 12px' }} />
                                 <p style={{ fontWeight: 600 }}>ยังไม่มีรายการ</p>
                             </td></tr>
@@ -761,6 +761,24 @@ export default function InvoicesPage() {
                                     <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                     <td>฿{v.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                     <td style={{ fontWeight: 700 }}>฿{b.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                    <td>
+                                        {(() => {
+                                            const pm = b.payments[0]
+                                            if (!pm) return <span style={{ color: '#9ca3af' }}>-</span>
+                                            const methodMap: Record<string, { label: string; color: string; bg: string }> = {
+                                                BANK_TRANSFER: { label: 'โอนเงิน', color: '#2563eb', bg: '#eff6ff' },
+                                                PROMPTPAY: { label: 'พร้อมเพย์', color: '#7c3aed', bg: '#f5f3ff' },
+                                                CASH: { label: 'เงินสด', color: '#16a34a', bg: '#f0fdf4' },
+                                                CREDIT_CARD: { label: 'บัตรเครดิต', color: '#ea580c', bg: '#fff7ed' },
+                                            }
+                                            const m = methodMap[pm.method] || { label: pm.method, color: '#6b7280', bg: '#f3f4f6' }
+                                            return (
+                                                <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: m.bg, color: m.color, whiteSpace: 'nowrap' }}>
+                                                    {m.label}
+                                                </span>
+                                            )
+                                        })()}
+                                    </td>
                                     <td>{new Date(b.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '6px' }}>
