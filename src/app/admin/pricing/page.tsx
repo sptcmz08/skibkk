@@ -298,17 +298,95 @@ export default function PricingPage() {
                                     </div>
                                 </div>
 
-                                {/* Time from operating hours */}
-                                <div>
-                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginRight: '8px' }}>เวลา:</span>
-                                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--a-text)' }}>
-                                        {firstOpenHour ? `${firstOpenHour.openTime} - ${firstOpenHour.closeTime}` : '-'}
-                                    </span>
+                                {/* Editable start/end time */}
+                                <div style={{ marginTop: '12px' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', display: 'block', marginBottom: '6px' }}>ช่วงเวลา:</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <select className="admin-input" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })}
+                                            style={{ fontSize: '14px', fontWeight: 700, flex: 1 }}>
+                                            {(() => {
+                                                const openH = firstOpenHour ? parseInt(firstOpenHour.openTime.split(':')[0]) : 0
+                                                const closeH = firstOpenHour ? (parseInt(firstOpenHour.closeTime.split(':')[0]) || 24) : 24
+                                                const opts = []
+                                                for (let h = openH; h < closeH; h++) {
+                                                    const t = `${String(h).padStart(2, '0')}:00`
+                                                    opts.push(<option key={t} value={t}>{t}</option>)
+                                                }
+                                                return opts
+                                            })()}
+                                        </select>
+                                        <span style={{ fontWeight: 700, color: 'var(--a-text-muted)' }}>ถึง</span>
+                                        <select className="admin-input" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })}
+                                            style={{ fontSize: '14px', fontWeight: 700, flex: 1 }}>
+                                            {(() => {
+                                                const startH = parseInt(form.startTime.split(':')[0]) + 1
+                                                const closeH = firstOpenHour ? (parseInt(firstOpenHour.closeTime.split(':')[0]) || 24) : 24
+                                                const opts = []
+                                                for (let h = startH; h <= closeH; h++) {
+                                                    const t = h === 24 ? '00:00' : `${String(h).padStart(2, '0')}:00`
+                                                    opts.push(<option key={t} value={t}>{t === '00:00' ? '00:00 (เที่ยงคืน)' : t}</option>)
+                                                }
+                                                return opts
+                                            })()}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Price only */}
+                        {/* No court selected — manual time input */}
+                        {!form.courtId && (
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>ช่วงเวลา</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <select className="admin-input" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })}
+                                        style={{ fontSize: '14px', fontWeight: 700, flex: 1 }}>
+                                        {Array.from({ length: 24 }, (_, h) => {
+                                            const t = `${String(h).padStart(2, '0')}:00`
+                                            return <option key={t} value={t}>{t}</option>
+                                        })}
+                                    </select>
+                                    <span style={{ fontWeight: 700, color: 'var(--a-text-muted)' }}>ถึง</span>
+                                    <select className="admin-input" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })}
+                                        style={{ fontSize: '14px', fontWeight: 700, flex: 1 }}>
+                                        {Array.from({ length: 24 }, (_, h) => {
+                                            const hr = h + 1
+                                            const t = hr === 24 ? '00:00' : `${String(hr).padStart(2, '0')}:00`
+                                            return <option key={t} value={t}>{t === '00:00' ? '00:00 (เที่ยงคืน)' : t}</option>
+                                        })}
+                                    </select>
+                                </div>
+
+                                {/* Day selector for no court */}
+                                <div style={{ marginTop: '12px' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', display: 'block', marginBottom: '6px' }}>เลือกวัน:</span>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        {DAYS.map(d => {
+                                            const isSelected = form.daysOfWeek.includes(d.key)
+                                            return (
+                                                <button key={d.key}
+                                                    onClick={() => setForm(f => ({
+                                                        ...f,
+                                                        daysOfWeek: isSelected ? f.daysOfWeek.filter(dd => dd !== d.key) : [...f.daysOfWeek, d.key],
+                                                    }))}
+                                                    style={{
+                                                        padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                                                        border: 'none', cursor: 'pointer',
+                                                        background: isSelected ? 'var(--a-primary)' : 'rgba(245,166,35,0.15)',
+                                                        color: isSelected ? 'white' : 'var(--a-primary)',
+                                                        transition: 'all 0.15s', fontFamily: 'inherit',
+                                                    }}
+                                                >
+                                                    {d.label} {isSelected && '✓'}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Price */}
                         <div className="input-group" style={{ marginBottom: '16px' }}>
                             <label style={{ color: 'var(--a-text-secondary)', fontWeight: 600, fontSize: '14px' }}>ราคา (บาท/ชั่วโมง)</label>
                             <input type="number" className="admin-input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="0"
