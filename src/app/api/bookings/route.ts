@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateBookingNumber } from '@/lib/utils'
+
+// Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
+// This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
+const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12:00:00Z')
 import { sendLineBookingConfirmation } from '@/lib/line-messaging'
 
 export const dynamic = 'force-dynamic'
@@ -27,9 +31,9 @@ export async function GET(req: NextRequest) {
                 ]
             }
             if (date) {
-                // Use date range to avoid timezone mismatch with @db.Date fields
-                const startOfDay = new Date(date + 'T00:00:00+07:00')
-                const endOfDay = new Date(date + 'T23:59:59+07:00')
+                // Match @db.Date field — use wide UTC range that covers any timezone
+                const startOfDay = new Date(date + 'T00:00:00Z')
+                const endOfDay = new Date(date + 'T23:59:59Z')
                 where.bookingItems = { some: { date: { gte: startOfDay, lte: endOfDay } } }
             }
 
@@ -38,9 +42,9 @@ export async function GET(req: NextRequest) {
             if (monthParam && !date) {
                 const [y, m] = monthParam.split('-').map(Number)
                 // Use timezone-aware dates to match @db.Date field properly
-                const startDate = new Date(`${y}-${String(m).padStart(2, '0')}-01T00:00:00+07:00`)
+                const startDate = new Date(`${y}-${String(m).padStart(2, '0')}-01T00:00:00Z`)
                 const lastDay = new Date(y, m, 0).getDate()
-                const endDate = new Date(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59+07:00`)
+                const endDate = new Date(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59Z`)
                 where.bookingItems = { some: { date: { gte: startDate, lte: endDate } } }
             }
 
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest) {
                 where: {
                     courtId_date_startTime: {
                         courtId: item.courtId,
-                        date: new Date(item.date),
+                        date: toDateNoonUTC(item.date),
                         startTime: item.startTime,
                     },
                 },
@@ -152,7 +156,7 @@ export async function POST(req: NextRequest) {
                 bookingItems: {
                     create: body.items.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string }) => ({
                         courtId: item.courtId,
-                        date: new Date(item.date),
+                        date: toDateNoonUTC(item.date),
                         startTime: item.startTime,
                         endTime: item.endTime,
                         price: item.price,
@@ -288,7 +292,7 @@ export async function PATCH(req: NextRequest) {
                         where: {
                             courtId_date_startTime: {
                                 courtId: item.courtId,
-                                date: new Date(item.date.split('T')[0] + 'T00:00:00+07:00'),
+                                date: toDateNoonUTC(item.date),
                                 startTime: slotTime,
                             },
                         },
@@ -308,7 +312,7 @@ export async function PATCH(req: NextRequest) {
                 data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }) => ({
                     bookingId,
                     courtId: item.courtId,
-                    date: new Date(item.date.split('T')[0] + 'T00:00:00+07:00'),
+                    date: toDateNoonUTC(item.date),
                     startTime: item.startTime,
                     endTime: item.endTime,
                     price: item.price || 0,
