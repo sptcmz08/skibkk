@@ -9,7 +9,7 @@
     "postinstall": "prisma generate",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
-    "clear-db": "tsx prisma/clear-db.ts"
+    "clear-db": "npx tsx prisma/clear-db.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
