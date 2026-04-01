@@ -282,6 +282,23 @@ export async function PATCH(req: NextRequest) {
 
         // Update bookingItems if provided (admin can change court, date, time, price)
         if (updateData.bookingItems && Array.isArray(updateData.bookingItems)) {
+            // Check for duplicate slots WITHIN the submitted items (same court+date+startTime)
+            const slotKeys = new Set<string>()
+            for (const item of updateData.bookingItems) {
+                const startH = parseInt(item.startTime.split(':')[0])
+                const endH = parseInt(item.endTime.split(':')[0]) || 24
+                for (let h = startH; h < endH; h++) {
+                    const key = `${item.courtId}_${item.date.split('T')[0]}_${String(h).padStart(2, '0')}:00`
+                    if (slotKeys.has(key)) {
+                        return NextResponse.json(
+                            { error: `ไม่สามารถย้ายไปเวลาที่ซ้ำกันได้ (${item.date.split('T')[0]} ${String(h).padStart(2, '0')}:00)` },
+                            { status: 409 }
+                        )
+                    }
+                    slotKeys.add(key)
+                }
+            }
+
             // Conflict check: verify no other booking occupies these slots
             for (const item of updateData.bookingItems) {
                 const startH = parseInt(item.startTime.split(':')[0])

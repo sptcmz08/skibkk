@@ -150,7 +150,7 @@ export default function CalendarPage() {
         }).catch(() => { })
     }, [])
 
-    // Fetch monthly summary (booking counts)
+    // Fetch monthly summary (booking counts) — with polling
     useEffect(() => {
         const fetchSummary = async () => {
             try {
@@ -182,15 +182,22 @@ export default function CalendarPage() {
             } catch { /* ignore */ }
         }
         fetchSummary()
+        const intervalId = setInterval(fetchSummary, 15000)
+        return () => clearInterval(intervalId)
     }, [viewYear, viewMonth, selectedVenueId, courts])
 
-    // Fetch calendar availability for color coding (Bug 5.2)
+    // Fetch calendar availability for color coding (Bug 5.2) — with polling
     useEffect(() => {
-        const venueParam = selectedVenueId ? `&venueId=${selectedVenueId}` : ''
-        fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
-            .then(r => r.json())
-            .then(data => { if (data.availability) setCalAvail(data.availability) })
-            .catch(() => { })
+        const fetchAvail = () => {
+            const venueParam = selectedVenueId ? `&venueId=${selectedVenueId}` : ''
+            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
+                .then(r => r.json())
+                .then(data => { if (data.availability) setCalAvail(data.availability) })
+                .catch(() => { })
+        }
+        fetchAvail()
+        const intervalId = setInterval(fetchAvail, 15000)
+        return () => clearInterval(intervalId)
     }, [viewYear, viewMonth, selectedVenueId])
 
     const knownBookingIds = useRef<Set<string>>(new Set())
