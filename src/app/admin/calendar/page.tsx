@@ -1112,7 +1112,7 @@ export default function CalendarPage() {
                                                 const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], startTime: newStart, price: hours * perHour }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
-                                                {Array.from({ length: 15 }, (_, h) => h + 8).map(h => {
+                                                {Array.from({ length: 24 }, (_, h) => h).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
                                                     return <option key={t} value={t}>{t}</option>
                                                 })}
@@ -1127,7 +1127,7 @@ export default function CalendarPage() {
                                                 const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
                                                 const u = [...editBookingItems]; u[i] = { ...u[i], endTime: newEnd, price: hours * perHour }; setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
-                                                {Array.from({ length: 15 }, (_, h) => h + 9).map(h => {
+                                                {Array.from({ length: 24 }, (_, h) => h + 1).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
                                                     return <option key={t} value={t}>{t}</option>
                                                 })}
