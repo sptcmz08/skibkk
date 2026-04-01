@@ -578,6 +578,17 @@ export default function BookingPage() {
                                 toast.error('กรุณายอมรับข้อกำหนดและเงื่อนไขก่อนดำเนินการต่อ')
                                 return
                             }
+                            // Validate required fields before proceeding
+                            const missingName = participants.some(p => !p.name.trim())
+                            const missingSport = participants.some(p => !p.sportType)
+                            if (missingName) {
+                                toast.error('กรุณากรอกชื่อผู้เรียนให้ครบทุกคน')
+                                return
+                            }
+                            if (missingSport) {
+                                toast.error('กรุณาเลือกประเภทกีฬาให้ครบทุกคน')
+                                return
+                            }
                             setStep(2)
                         }} className="btn btn-primary" style={{ flex: 2 }}>
                             ถัดไป: ชำระเงิน <ArrowRight size={18} />
