@@ -2,6 +2,50 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const user = await requireAuth()
+        const { id } = await params
+
+        const booking = await prisma.booking.findUnique({
+            where: { id },
+            include: {
+                bookingItems: {
+                    include: {
+                        court: { select: { name: true } },
+                        teacher: { select: { id: true, name: true } },
+                    },
+                    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+                },
+                participants: true,
+                payments: { orderBy: { createdAt: 'desc' } },
+                user: { select: { name: true, email: true, phone: true, lineDisplayName: true, lineAvatar: true } },
+                invoice: true,
+            },
+        })
+
+        if (!booking) {
+            return NextResponse.json({ error: 'ไม่พบข้อมูลการจอง' }, { status: 404 })
+        }
+
+        // Only allow access by the booking owner or admin
+        if (booking.userId !== user.id && !['ADMIN', 'SUPERUSER'].includes(user.role)) {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
+
+        return NextResponse.json({ booking })
+    } catch (error) {
+        if ((error as Error).message === 'Unauthorized') {
+            return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
+        }
+        console.error('Booking GET error:', error)
+        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    }
+}
+
 export async function DELETE(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }

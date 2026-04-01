@@ -195,11 +195,15 @@ export default function ProfilePage() {
                             return (
                                 <motion.div key={booking.id}
                                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                                    onClick={() => router.push(`/booking/${booking.id}`)}
                                     style={{
                                         background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
                                         borderRadius: '18px', padding: '22px 24px',
-                                        transition: 'border-color 0.2s',
+                                        transition: 'border-color 0.2s, transform 0.15s',
+                                        cursor: 'pointer',
                                     }}
+                                    whileHover={{ scale: 1.01, borderColor: 'rgba(245,166,35,0.3)' }}
+                                    whileTap={{ scale: 0.98 }}
                                 >
                                     {/* Header */}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -214,12 +218,15 @@ export default function ProfilePage() {
                                                 {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </span>
                                         </div>
-                                        <span style={{
-                                            padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
-                                            background: sc.bg, color: sc.color,
-                                        }}>
-                                            {sc.label}
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{
+                                                padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
+                                                background: sc.bg, color: sc.color,
+                                            }}>
+                                                {sc.label}
+                                            </span>
+                                            <ChevronRight size={16} style={{ color: 'var(--c-text-muted)' }} />
+                                        </div>
                                     </div>
 
                                     {/* Items */}
