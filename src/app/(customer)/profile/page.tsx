@@ -190,7 +190,21 @@ export default function ProfilePage() {
                                 <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '20px' }}>มาสนุกกับกิจกรรมกีฬากัน!</p>
                                 <a href="/courts" className="btn btn-primary btn-sm">จองสนามเลย <ChevronRight size={16} /></a>
                             </div>
-                        ) : bookings.map((booking, i) => {
+                        ) : bookings
+                            .map(b => ({
+                                ...b,
+                                bookingItems: [...b.bookingItems].sort((a, c) => {
+                                    const da = a.date.split('T')[0] + a.startTime
+                                    const dc = c.date.split('T')[0] + c.startTime
+                                    return da.localeCompare(dc)
+                                }),
+                            }))
+                            .sort((a, b) => {
+                                const ea = a.bookingItems[0]?.date.split('T')[0] || ''
+                                const eb = b.bookingItems[0]?.date.split('T')[0] || ''
+                                return ea.localeCompare(eb)
+                            })
+                            .map((booking, i) => {
                             const sc = statusConfig[booking.status] || { bg: 'rgba(245,166,35,0.1)', color: '#f5a623', label: booking.status }
                             return (
                                 <motion.div key={booking.id}
