@@ -188,9 +188,13 @@ export default function CourtsPage() {
                 setAllCourts(data.availability)
                 setAvailability(data.availability)
                 if (data.availability.length > 0) {
+                    const preferredCourtId =
+                        data.availability.find((court: CourtData) => !court.closed && court.slots.length > 0)?.courtId
+                        ?? data.availability[0].courtId
+
                     setSelectedCourt(c => {
                         const exists = data.availability.find((f: CourtData) => f.courtId === c)
-                        return exists ? c : data.availability[0].courtId
+                        return exists ? c : preferredCourtId
                     })
                 }
             }
