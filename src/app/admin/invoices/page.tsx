@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import XLSX from 'xlsx-js-style'
+import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -24,6 +25,8 @@ interface EditableItem {
     qty: number
     unitPrice: number
 }
+
+type ExcelCell = { v: string | number; s: unknown }
 
 // Stable components defined outside InvoicesPage to prevent focus loss on re-render
 function EditField({ value, onChange, style, multiline, inputStyle, editMode }: {
@@ -106,7 +109,10 @@ export default function InvoicesPage() {
 
     const formatThaiDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
     const formatShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    const genInvoiceNumber = (bookingNumber: string) => 'INV-' + bookingNumber.replace('BK', '')
+    const getServiceDatesText = (bookingItems: BookingItem[]) => {
+        const uniqueDates = [...new Set(bookingItems.map(item => item.date.split('T')[0]))].sort()
+        return uniqueDates.length > 0 ? uniqueDates.map(formatShortDate).join(', ') : '-'
+    }
 
     // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
@@ -129,7 +135,7 @@ export default function InvoicesPage() {
         const totalsLabel = { ...headerStyle }
         const totalsNum = { ...numStyle, fill: { fgColor: { rgb: 'FFFFDD' } }, font: { bold: true, sz: 11, name: 'TH SarabunPSK' } }
 
-        const rows: any[][] = []
+        const rows: ExcelCell[][] = []
 
         // Row 0: Company name
         rows.push([{ v: 'บริษัท ขีเอิน เวิดส์ จำกัด', s: titleStyle }])
@@ -179,7 +185,7 @@ export default function InvoicesPage() {
         filtered.forEach((b, idx) => {
             const beforeVat = Math.round((b.totalAmount / 1.07) * 100) / 100
             const vatAmt = Math.round((b.totalAmount - beforeVat) * 100) / 100
-            const serviceDate = b.bookingItems[0] ? formatShortDate(b.bookingItems[0].date) : '-'
+            const serviceDate = getServiceDatesText(b.bookingItems)
             const payMethod = b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (b.payments[0]?.method || '-')
             const payAmount = b.payments[0]?.amount || b.totalAmount
             const uniqueCourts = [...new Set(b.bookingItems.map(i => i.court.name))]
@@ -189,7 +195,7 @@ export default function InvoicesPage() {
             rows.push([
                 { v: idx + 1, s: cellCenter },
                 { v: formatShortDate(b.createdAt), s: cellCenter },
-                { v: genInvoiceNumber(b.bookingNumber), s: cellStyle },
+                { v: formatInvoiceNumberFromBookingNumber(b.bookingNumber), s: cellStyle },
                 { v: courtNames, s: cellStyle },
                 { v: b.user.name, s: cellStyle },
                 { v: beforeVat, s: numStyle },
@@ -240,7 +246,7 @@ export default function InvoicesPage() {
             { wch: 18 },  // G - VAT
             { wch: 14 },  // H - รวม
             { wch: 16 },  // I - วันที่รายการ
-            { wch: 16 },  // J - วันที่ใช้บริการ
+            { wch: 24 },  // J - วันที่ใช้บริการ
             { wch: 16 },  // K - วันที่ชำระ
             { wch: 14 },  // L - ธนาคาร
             { wch: 14 },  // M - จำนวนเงิน
@@ -282,7 +288,7 @@ export default function InvoicesPage() {
         setCustomerName(b.user.name)
         setCustomerEmail(b.user.email)
         setCustomerPhone(b.user.phone && !b.user.phone.startsWith('LINE-') && !b.user.phone.startsWith('temp-') ? b.user.phone : '')
-        setInvoiceNo(genInvoiceNumber(b.bookingNumber))
+        setInvoiceNo(formatInvoiceNumberFromBookingNumber(b.bookingNumber))
         setIssueDate(formatThaiDate(b.createdAt))
         setRefNo(b.bookingNumber)
         setItems(b.bookingItems.map(item => ({
@@ -761,7 +767,7 @@ export default function InvoicesPage() {
                             const v = b.totalAmount - bv
                             return (
                                 <tr key={b.id}>
-                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{genInvoiceNumber(b.bookingNumber)}</td>
+                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{formatInvoiceNumberFromBookingNumber(b.bookingNumber)}</td>
                                     <td>{b.bookingNumber}</td>
                                     <td>{b.user.name}</td>
                                     <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>

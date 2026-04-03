@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
-import { generateBookingNumber } from '@/lib/utils'
+import { generateNextBookingNumber } from '@/lib/document-number-service'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
 // This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
@@ -9,6 +9,17 @@ const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12
 import { sendLineBookingConfirmation } from '@/lib/line-messaging'
 
 export const dynamic = 'force-dynamic'
+
+const hasCode = (error: unknown, code: string): error is { code: string } =>
+    typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === code
+
+const hasTargetField = (error: unknown, field: string) => {
+    if (typeof error !== 'object' || error === null || !('meta' in error)) return false
+    const meta = (error as { meta?: { target?: string[] | string } }).meta
+    const target = meta?.target
+    if (Array.isArray(target)) return target.includes(field)
+    return target === field
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -123,8 +134,6 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const bookingNumber = generateBookingNumber()
-
         // Verify no conflicts
         for (const item of body.items) {
             const existing = await prisma.bookingItem.findUnique({
@@ -145,44 +154,62 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const booking = await prisma.booking.create({
-            data: {
-                userId: bookingUserId,
-                bookingNumber,
-                status: 'PENDING',
-                totalAmount: body.totalAmount,
-                isBookerLearner: body.isBookerLearner || false,
-                createdByAdmin: body.createdByAdmin || false,
-                bookingItems: {
-                    create: body.items.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string }) => ({
-                        courtId: item.courtId,
-                        date: toDateNoonUTC(item.date),
-                        startTime: item.startTime,
-                        endTime: item.endTime,
-                        price: item.price,
-                        teacherId: item.teacherId || null,
-                    })),
-                },
-                participants: body.participants
-                    ? {
-                        create: body.participants.map((p: { name: string; sportType: string; age?: number; shoeSize?: string; weight?: number; height?: number; phone?: string; isBooker?: boolean }) => ({
-                            name: p.name,
-                            sportType: p.sportType,
-                            age: p.age || null,
-                            shoeSize: p.shoeSize || null,
-                            weight: p.weight || null,
-                            height: p.height || null,
-                            phone: p.phone || null,
-                            isBooker: p.isBooker || false,
-                        })),
-                    }
-                    : undefined,
-            },
-            include: {
-                bookingItems: { include: { court: true } },
-                participants: true,
-            },
-        })
+        let bookingNumber = ''
+        let booking = null
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            bookingNumber = await generateNextBookingNumber()
+            try {
+                booking = await prisma.booking.create({
+                    data: {
+                        userId: bookingUserId,
+                        bookingNumber,
+                        status: 'PENDING',
+                        totalAmount: body.totalAmount,
+                        isBookerLearner: body.isBookerLearner || false,
+                        createdByAdmin: body.createdByAdmin || false,
+                        bookingItems: {
+                            create: body.items.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string }) => ({
+                                courtId: item.courtId,
+                                date: toDateNoonUTC(item.date),
+                                startTime: item.startTime,
+                                endTime: item.endTime,
+                                price: item.price,
+                                teacherId: item.teacherId || null,
+                            })),
+                        },
+                        participants: body.participants
+                            ? {
+                                create: body.participants.map((p: { name: string; sportType: string; age?: number; shoeSize?: string; weight?: number; height?: number; phone?: string; isBooker?: boolean }) => ({
+                                    name: p.name,
+                                    sportType: p.sportType,
+                                    age: p.age || null,
+                                    shoeSize: p.shoeSize || null,
+                                    weight: p.weight || null,
+                                    height: p.height || null,
+                                    phone: p.phone || null,
+                                    isBooker: p.isBooker || false,
+                                })),
+                            }
+                            : undefined,
+                    },
+                    include: {
+                        bookingItems: { include: { court: true } },
+                        participants: true,
+                    },
+                })
+                break
+            } catch (error) {
+                if (hasCode(error, 'P2002') && hasTargetField(error, 'bookingNumber') && attempt < 4) {
+                    continue
+                }
+                throw error
+            }
+        }
+
+        if (!booking) {
+            throw new Error('BOOKING_NUMBER_GENERATION_FAILED')
+        }
 
         // Create payment record with selected method (admin bookings)
         if (body.paymentMethod) {
@@ -231,7 +258,7 @@ export async function POST(req: NextRequest) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         }
-        if ((error as any).code === 'P2002') {
+        if (hasCode(error, 'P2002')) {
             return NextResponse.json({ error: 'สนามเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น' }, { status: 409 })
         }
         console.error('Bookings POST error:', error)
@@ -367,7 +394,7 @@ export async function PATCH(req: NextRequest) {
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         // Handle unique constraint violation (race condition)
-        if ((error as any).code === 'P2002') {
+        if (hasCode(error, 'P2002')) {
             return NextResponse.json({ error: 'สนามเวลานี้ถูกจองแล้ว กรุณาลองใหม่' }, { status: 409 })
         }
         console.error('Bookings PATCH error:', error)

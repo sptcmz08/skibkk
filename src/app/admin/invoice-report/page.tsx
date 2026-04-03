@@ -5,6 +5,7 @@ import { FadeIn } from '@/components/Motion'
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Calendar, Download, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -38,7 +39,6 @@ export default function InvoiceReportPage() {
     }, [])
 
     const formatThaiDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
-    const genInvoiceNumber = (bookingNumber: string) => 'INV-' + bookingNumber.replace('BK', '')
 
     // Filter confirmed bookings where booking items fall on the selected date
     const filtered = bookings.filter(b => {
@@ -94,7 +94,7 @@ export default function InvoiceReportPage() {
 
     // Render a single invoice for a booking
     const renderInvoice = (b: Booking) => {
-        const invoiceNo = genInvoiceNumber(b.bookingNumber)
+        const invoiceNo = formatInvoiceNumberFromBookingNumber(b.bookingNumber)
         const items = b.bookingItems.map(item => ({
             description: item.court.name,
             detail: `วันที่ ${formatThaiDate(item.date)} เวลา ${item.startTime} - ${item.endTime}`,
@@ -294,7 +294,7 @@ export default function InvoiceReportPage() {
                             return (
                                 <tr key={b.id}>
                                     <td>{i + 1}</td>
-                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{genInvoiceNumber(b.bookingNumber)}</td>
+                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{formatInvoiceNumberFromBookingNumber(b.bookingNumber)}</td>
                                     <td>{b.user?.name}</td>
                                     <td style={{ fontSize: '12px' }}>
                                         {b.bookingItems.map((item, j) => (
