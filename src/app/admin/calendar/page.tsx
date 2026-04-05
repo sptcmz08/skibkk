@@ -1074,7 +1074,7 @@ export default function CalendarPage() {
                         </div>
 
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
-                        {(editMode ? editBookingItems : viewBooking.bookingItems).map((item, i) => (
+                        {(editMode ? editBookingItems : [...viewBooking.bookingItems].sort((a, b) => a.startTime.localeCompare(b.startTime))).map((item, i) => (
                             <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px', position: 'relative' }}>
                                 {editMode ? (
                                     <>
