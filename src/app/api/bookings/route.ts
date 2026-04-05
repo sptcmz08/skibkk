@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
                 where,
                 include: {
                     user: { select: { id: true, name: true, email: true, phone: true, lineUserId: true, lineDisplayName: true, lineAvatar: true } },
-                    bookingItems: { include: { court: { include: { venue: true } }, teacher: true } },
+                    bookingItems: { include: { court: { include: { venue: true } }, teacher: true, originalCourt: true } },
                     participants: true,
                     payments: true,
                 },
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         const bookings = await prisma.booking.findMany({
             where: { userId: user.id },
             include: {
-                bookingItems: { include: { court: { include: { venue: true } }, teacher: true } },
+                bookingItems: { include: { court: { include: { venue: true } }, teacher: true, originalCourt: true } },
                 participants: true,
                 payments: true,
             },
@@ -351,17 +351,49 @@ export async function PATCH(req: NextRequest) {
                 }
             }
 
+            // Read existing items to preserve original data
+            const existingItems = await prisma.bookingItem.findMany({
+                where: { bookingId },
+                orderBy: { startTime: 'asc' },
+            })
+
             await prisma.bookingItem.deleteMany({ where: { bookingId } })
             await prisma.bookingItem.createMany({
-                data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }) => ({
-                    bookingId,
-                    courtId: item.courtId,
-                    date: toDateNoonUTC(item.date),
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                    price: item.price || 0,
-                    teacherId: item.teacherId || null,
-                })),
+                data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; originalCourtId?: string | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }, idx: number) => {
+                    const oldItem = existingItems[idx]
+                    // Determine original values: keep existing originals if set, otherwise use old item's current values if data changed
+                    let origCourtId = item.originalCourtId || oldItem?.originalCourtId || null
+                    let origDate = item.originalDate ? toDateNoonUTC(item.originalDate) : (oldItem?.originalDate || null)
+                    let origStartTime = item.originalStartTime || oldItem?.originalStartTime || null
+                    let origEndTime = item.originalEndTime || oldItem?.originalEndTime || null
+
+                    // If no originals stored yet and the data actually changed, record the old values
+                    if (oldItem && !origCourtId) {
+                        const oldDateStr = oldItem.date instanceof Date ? oldItem.date.toISOString().split('T')[0] : String(oldItem.date).split('T')[0]
+                        const newDateStr = item.date.split('T')[0]
+                        const changed = oldItem.courtId !== item.courtId || oldDateStr !== newDateStr || oldItem.startTime !== item.startTime || oldItem.endTime !== item.endTime
+                        if (changed) {
+                            origCourtId = oldItem.courtId
+                            origDate = oldItem.date
+                            origStartTime = oldItem.startTime
+                            origEndTime = oldItem.endTime
+                        }
+                    }
+
+                    return {
+                        bookingId,
+                        courtId: item.courtId,
+                        date: toDateNoonUTC(item.date),
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        price: item.price || 0,
+                        teacherId: item.teacherId || null,
+                        originalCourtId: origCourtId,
+                        originalDate: origDate,
+                        originalStartTime: origStartTime,
+                        originalEndTime: origEndTime,
+                    }
+                }),
             })
 
             // Sync teacherId to participants — use the first bookingItem's teacherId
@@ -380,7 +412,7 @@ export async function PATCH(req: NextRequest) {
                 status: updateData.status || undefined,
                 totalAmount: updateData.totalAmount !== undefined ? updateData.totalAmount : undefined,
             },
-            include: { bookingItems: { include: { court: true } }, participants: true, payments: true, user: { select: { name: true } } },
+            include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true } } },
         })
 
         await prisma.auditLog.create({

@@ -81,6 +81,7 @@ model Court {
   venue          Venue?           @relation(fields: [venueId], references: [id])
   operatingHours OperatingHours[]
   bookingItems   BookingItem[]
+  originalBookingItems BookingItem[] @relation("OriginalBookingItems")
   pricingRules   PricingRule[]
 
   @@map("courts")
@@ -188,19 +189,24 @@ model Booking {
 }
 
 model BookingItem {
-  id             String   @id @default(uuid())
-  bookingId      String
-  courtId        String
-  date           DateTime @db.Date
-  startTime      String // "09:00"
-  endTime        String // "10:00"
-  price          Float
-  teacherId      String?
-  evaluationSent Boolean  @default(false)
+  id                String   @id @default(uuid())
+  bookingId         String
+  courtId           String
+  date              DateTime @db.Date
+  startTime         String // "09:00"
+  endTime           String // "10:00"
+  price             Float
+  teacherId         String?
+  evaluationSent    Boolean  @default(false)
+  originalCourtId   String?
+  originalDate      DateTime? @db.Date
+  originalStartTime String?
+  originalEndTime   String?
 
-  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  court   Court    @relation(fields: [courtId], references: [id])
-  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  court         Court    @relation(fields: [courtId], references: [id])
+  teacher       Teacher? @relation(fields: [teacherId], references: [id])
+  originalCourt Court?   @relation("OriginalBookingItems", fields: [originalCourtId], references: [id])
 
   @@unique([courtId, date, startTime])
   @@map("booking_items")
@@ -346,7 +352,9 @@ model Invoice {
   totalAmount   Float
   vatAmount     Float?
   grandTotal    Float
+  customData    Json?
   issuedAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt @default(now())
 
   booking Booking @relation(fields: [bookingId], references: [id])
 

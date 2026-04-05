@@ -84,6 +84,7 @@ export default function InvoicesPage() {
     const [payerDate, setPayerDate] = useState('')
     const [receiverName, setReceiverName] = useState('')
     const [receiverDate, setReceiverDate] = useState('')
+    const [savingInvoice, setSavingInvoice] = useState(false)
 
     useEffect(() => {
         fetch('/api/bookings').then(r => r.json())
@@ -281,10 +282,45 @@ export default function InvoicesPage() {
     }
 
     // Populate editable fields when booking is selected
-    const selectBooking = (b: Booking, type: DocType) => {
+    const selectBooking = async (b: Booking, type: DocType) => {
         setSelectedBooking(b)
         setDocType(type)
         setEditMode(false)
+
+        // Try to load saved invoice data first
+        try {
+            const res = await fetch(`/api/invoices?bookingId=${b.id}`)
+            const data = await res.json()
+            if (data.invoice?.customData) {
+                const cd = data.invoice.customData as Record<string, unknown>
+                setCompanyName((cd.companyName as string) || 'SKI BKK')
+                setCompanyAddress1((cd.companyAddress1 as string) || 'ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
+                setCompanyAddress2((cd.companyAddress2 as string) || 'กรุงเทพมหานคร 10230')
+                setCompanyPhone((cd.companyPhone as string) || 'xxx-xxx-xxxx')
+                setCompanyTaxId((cd.companyTaxId as string) || 'x-xxxx-xxxxx-xx-x')
+                setCustomerName((cd.customerName as string) || b.user.name)
+                setCustomerEmail((cd.customerEmail as string) || b.user.email)
+                setCustomerPhone((cd.customerPhone as string) || '')
+                setInvoiceNo((cd.invoiceNo as string) || formatInvoiceNumberFromBookingNumber(b.bookingNumber))
+                setIssueDate((cd.issueDate as string) || formatThaiDate(b.createdAt))
+                setRefNo((cd.refNo as string) || b.bookingNumber)
+                setItems((cd.items as EditableItem[]) || b.bookingItems.map(item => ({
+                    description: item.court.name,
+                    detail: `วันที่ ${formatThaiDate(item.date)} เวลา ${item.startTime} - ${item.endTime}`,
+                    qty: 1,
+                    unitPrice: item.price,
+                })))
+                setPaymentNote((cd.paymentNote as string) || '')
+                setRemarkNote((cd.remarkNote as string) || 'ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
+                setPayerName((cd.payerName as string) || '')
+                setPayerDate((cd.payerDate as string) || '')
+                setReceiverName((cd.receiverName as string) || '')
+                setReceiverDate((cd.receiverDate as string) || '')
+                return
+            }
+        } catch { /* ignore, fall through to defaults */ }
+
+        // Default: populate from booking data
         setCustomerName(b.user.name)
         setCustomerEmail(b.user.email)
         setCustomerPhone(b.user.phone && !b.user.phone.startsWith('LINE-') && !b.user.phone.startsWith('temp-') ? b.user.phone : '')
@@ -306,10 +342,53 @@ export default function InvoicesPage() {
             else if (pm.method === 'PROMPTPAY') payNote = 'พร้อมเพย์ • ชำระเงินเรียบร้อยแล้ว'
         }
         setPaymentNote(payNote)
+        setCompanyName('SKI BKK')
+        setCompanyAddress1('ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
+        setCompanyAddress2('กรุงเทพมหานคร 10230')
+        setCompanyPhone('xxx-xxx-xxxx')
+        setCompanyTaxId('x-xxxx-xxxxx-xx-x')
+        setRemarkNote('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
         setPayerName('')
         setPayerDate('')
         setReceiverName('')
         setReceiverDate('')
+    }
+
+    // Save invoice data to server
+    const saveInvoiceData = async () => {
+        if (!selectedBooking) return
+        setSavingInvoice(true)
+        try {
+            const customData = {
+                companyName, companyAddress1, companyAddress2, companyPhone, companyTaxId,
+                customerName, customerEmail, customerPhone,
+                invoiceNo, issueDate, refNo,
+                items, paymentNote, remarkNote,
+                payerName, payerDate, receiverName, receiverDate,
+            }
+            const res = await fetch('/api/invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bookingId: selectedBooking.id,
+                    invoiceNumber: invoiceNo,
+                    totalAmount: beforeVat,
+                    vatAmount: vat,
+                    grandTotal: itemTotal,
+                    customData,
+                }),
+            })
+            if (res.ok) {
+                toast.success('บันทึกข้อมูลใบกำกับภาษีสำเร็จ')
+                setEditMode(false)
+            } else {
+                toast.error('บันทึกไม่สำเร็จ')
+            }
+        } catch {
+            toast.error('เกิดข้อผิดพลาดในการบันทึก')
+        } finally {
+            setSavingInvoice(false)
+        }
     }
 
     // Calculate totals from editable items
@@ -402,10 +481,17 @@ export default function InvoicesPage() {
                             </button>
                         </div>
                         {/* Edit toggle */}
-                        <button onClick={() => setEditMode(!editMode)}
+                        <button onClick={() => {
+                            if (editMode) {
+                                saveInvoiceData()
+                            } else {
+                                setEditMode(true)
+                            }
+                        }}
                             className={editMode ? 'btn-admin' : 'btn-admin-outline'}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {editMode ? <><Save size={16} /> บันทึก</> : <><Edit3 size={16} /> แก้ไข</>}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                            disabled={savingInvoice}>
+                            {editMode ? <><Save size={16} /> {savingInvoice ? 'กำลังบันทึก...' : 'บันทึก'}</> : <><Edit3 size={16} /> แก้ไข</>}
                         </button>
                         <button onClick={handlePrint} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Printer size={16} /> พิมพ์

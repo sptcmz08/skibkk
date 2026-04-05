@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean; createdByAdmin: boolean
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
-    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string } }>
+    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
 }
@@ -921,7 +921,7 @@ export default function CalendarPage() {
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
-                                                                const teacherItem = cb.booking.bookingItems.find(item => item.courtId === court.id && item.teacher)
+                                                                const teacherNames = [...new Set(cb.booking.bookingItems.filter(item => item.courtId === court.id && item.teacher).map(item => item.teacher!.name))]
 
                                                                 if (hours <= 0) return null
 
@@ -988,8 +988,8 @@ export default function CalendarPage() {
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {hours >= 2 && teacherItem?.teacher && (
-                                                                            <div style={{ fontSize: '10px', opacity: 0.8 }}>🎓 {teacherItem.teacher.name}</div>
+                                                                        {teacherNames.length > 0 && (
+                                                                            <div style={{ fontSize: '10px', opacity: 0.8 }}>🎓 {teacherNames.join(', ')}</div>
                                                                         )}
                                                                     </div>
                                                                 )
@@ -1156,11 +1156,23 @@ export default function CalendarPage() {
                                             </select>
                                         </div>
                                         {/* Show original data */}
-                                        {viewBooking.bookingItems[i] && (
-                                            <div style={{ fontSize: '11px', color: '#999', marginTop: '4px', padding: '4px 8px', background: '#fafafa', borderRadius: '4px', borderLeft: '3px solid #ddd' }}>
-                                                📌 ข้อมูลเดิม: {(viewBooking.bookingItems[i] as any).court?.name || courts.find(c => c.id === viewBooking.bookingItems[i].courtId)?.name} | {new Date(viewBooking.bookingItems[i].date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {viewBooking.bookingItems[i].startTime}-{viewBooking.bookingItems[i].endTime} | ฿{viewBooking.bookingItems[i].price.toLocaleString()}
-                                            </div>
-                                        )}
+                                        {viewBooking.bookingItems[i] && (() => {
+                                            const orig = viewBooking.bookingItems[i] as any
+                                            const hasOriginal = orig.originalCourtId || orig.originalStartTime
+                                            const origCourtName = hasOriginal
+                                                ? (orig.originalCourt?.name || courts.find(c => c.id === orig.originalCourtId)?.name || orig.court?.name)
+                                                : (orig.court?.name || courts.find(c => c.id === orig.courtId)?.name)
+                                            const origDate = hasOriginal && orig.originalDate
+                                                ? new Date(orig.originalDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+                                                : new Date(orig.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+                                            const origStart = hasOriginal ? (orig.originalStartTime || orig.startTime) : orig.startTime
+                                            const origEnd = hasOriginal ? (orig.originalEndTime || orig.endTime) : orig.endTime
+                                            return (
+                                                <div style={{ fontSize: '11px', color: hasOriginal ? '#e17055' : '#999', marginTop: '4px', padding: '4px 8px', background: hasOriginal ? '#fff5f5' : '#fafafa', borderRadius: '4px', borderLeft: `3px solid ${hasOriginal ? '#e17055' : '#ddd'}` }}>
+                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{orig.price.toLocaleString()}
+                                                </div>
+                                            )
+                                        })()}
                                     </>
                                 ) : (
                                     <>
