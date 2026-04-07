@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateNextBookingNumber } from '@/lib/document-number-service'
+import { publishRealtimeEvent } from '@/lib/realtime-events'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
 // This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
@@ -255,6 +256,17 @@ export async function POST(req: NextRequest) {
             }).catch(err => console.error('Failed to send LINE confirmation:', err))
         }
 
+        publishRealtimeEvent({
+            type: 'booking_created',
+            bookingId: booking.id,
+            bookingNumber,
+            status: booking.status,
+            source: body.createdByAdmin ? 'admin' : 'customer',
+            affectedDates: [...new Set(booking.bookingItems.map(item => item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0]))],
+            courtIds: [...new Set(booking.bookingItems.map(item => item.courtId))],
+            message: 'booking created',
+        })
+
         return NextResponse.json({ booking }, { status: 201 })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
@@ -279,7 +291,10 @@ export async function PATCH(req: NextRequest) {
         const body = await req.json()
         const { bookingId, action, reason, ...updateData } = body
 
-        const booking = await prisma.booking.findUnique({ where: { id: bookingId } })
+        const booking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { bookingItems: true },
+        })
         if (!booking) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
 
         if (action === 'cancel') {
@@ -422,6 +437,17 @@ export async function PATCH(req: NextRequest) {
                 userId: user.id, action: 'BOOKING_UPDATE', entityType: 'booking', entityId: bookingId,
                 details: JSON.stringify({ bookingNumber: booking.bookingNumber, changes: updateData }),
             },
+        })
+
+        publishRealtimeEvent({
+            type: updated.status === 'CANCELLED' ? 'booking_cancelled' : 'booking_updated',
+            bookingId: updated.id,
+            bookingNumber: updated.bookingNumber,
+            status: updated.status,
+            source: 'admin',
+            affectedDates: [...new Set(updated.bookingItems.map(item => item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0]))],
+            courtIds: [...new Set(updated.bookingItems.map(item => item.courtId))],
+            message: updated.status === 'CANCELLED' ? 'booking cancelled' : 'booking updated',
         })
 
         return NextResponse.json({ booking: updated })

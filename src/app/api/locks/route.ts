@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { publishRealtimeEvent } from '@/lib/realtime-events'
 
 const LOCK_DURATION_MS = 20 * 60 * 1000 // 20 minutes
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
 
         const newExpiresAt = new Date(Date.now() + LOCK_DURATION_MS)
         const results = []
+        const changedSlots: { courtId: string; date: string }[] = []
 
         for (const slot of slots) {
             try {
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
                     update: { sessionId, expiresAt: newExpiresAt },
                     create: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime, sessionId, expiresAt: newExpiresAt },
                 })
+                changedSlots.push({ courtId: slot.courtId, date: slot.date })
                 results.push({ ...slot, success: true, expiresAt: newExpiresAt })
             } catch {
                 results.push({ ...slot, success: false, reason: 'error' })
@@ -71,6 +74,17 @@ export async function POST(req: NextRequest) {
             ? expiries.reduce((min, e) => e < min ? e : min, expiries[0])
             : null
 
+        if (changedSlots.length > 0) {
+            publishRealtimeEvent({
+                type: 'lock_changed',
+                source: 'system',
+                sessionId,
+                affectedDates: [...new Set(changedSlots.map(slot => slot.date))],
+                courtIds: [...new Set(changedSlots.map(slot => slot.courtId))],
+                message: 'slot locked',
+            })
+        }
+
         return NextResponse.json({ results, expiresAt: earliestExpiry })
     } catch (error) {
         console.error('POST /api/locks error:', error)
@@ -86,16 +100,35 @@ export async function DELETE(req: NextRequest) {
         }
         if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
 
+        const changedSlots: { courtId: string; date: string }[] = []
+
         if (slots?.length) {
             // Release specific slots
             for (const slot of slots) {
                 await prisma.slotLock.deleteMany({
                     where: { courtId: slot.courtId, date: slot.date, startTime: slot.startTime, sessionId },
                 })
+                changedSlots.push({ courtId: slot.courtId, date: slot.date })
             }
         } else {
             // Release all locks for this session
+            const existingLocks = await prisma.slotLock.findMany({
+                where: { sessionId },
+                select: { courtId: true, date: true },
+            })
             await prisma.slotLock.deleteMany({ where: { sessionId } })
+            changedSlots.push(...existingLocks)
+        }
+
+        if (changedSlots.length > 0) {
+            publishRealtimeEvent({
+                type: 'lock_changed',
+                source: 'system',
+                sessionId,
+                affectedDates: [...new Set(changedSlots.map(slot => slot.date))],
+                courtIds: [...new Set(changedSlots.map(slot => slot.courtId))],
+                message: 'slot released',
+            })
         }
 
         return NextResponse.json({ success: true })

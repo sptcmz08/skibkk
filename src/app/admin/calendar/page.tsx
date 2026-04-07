@@ -3,10 +3,11 @@
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean; createdByAdmin: boolean
@@ -82,6 +83,13 @@ export default function CalendarPage() {
     const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
     const [sportTypes, setSportTypes] = useState<string[]>([])
 
+    const formatDateInputDisplay = (dateStr: string) => {
+        if (!dateStr) return ''
+        const [year, month, day] = dateStr.split('-')
+        if (!year || !month || !day) return dateStr
+        return `${day}/${month}/${year}`
+    }
+
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
         setEditMode(false)
@@ -139,12 +147,12 @@ export default function CalendarPage() {
         syncEditAmount(nextItems)
     }
 
-    const refetchBookings = async () => {
+    const refetchBookings = useCallback(async () => {
         if (!selectedDate) return
         const fetchRes = await fetch(`/api/bookings?date=${selectedDate}`, { cache: 'no-store' })
         const data = await fetchRes.json()
         if (data.bookings) setBookings(data.bookings)
-    }
+    }, [selectedDate])
 
     const saveChanges = async () => {
         if (!viewBooking) return
@@ -179,6 +187,46 @@ export default function CalendarPage() {
         finally { setSaving(false) }
     }
 
+    const fetchMonthlySummary = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/bookings?take=500&month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.bookings) {
+                const filteredCourts = selectedVenueId && courts.length > 0
+                    ? courts.filter(c => c.venueId === selectedVenueId).map(c => c.id)
+                    : null
+                const venueCourtIds = filteredCourts && filteredCourts.length > 0
+                    ? new Set(filteredCourts)
+                    : null
+                const summaries: Record<string, DaySummary> = {}
+                data.bookings.forEach((b: Booking) => {
+                    if (b.status === 'CANCELLED') return
+                    b.bookingItems.forEach(item => {
+                        if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
+                        const d = toDateBangkok(item.date)
+                        if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
+                        summaries[d].count++
+                        summaries[d].totalAmount += item.price
+                    })
+                })
+                setDaySummaries(summaries)
+            }
+        } catch {
+            // ignore realtime refresh errors
+        }
+    }, [viewYear, viewMonth, selectedVenueId, courts])
+
+    const fetchCalendarAvailability = useCallback(async () => {
+        const venueParam = selectedVenueId ? `&venueId=${selectedVenueId}` : ''
+        try {
+            const res = await fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.availability) setCalAvail(data.availability)
+        } catch {
+            // ignore realtime refresh errors
+        }
+    }, [viewYear, viewMonth, selectedVenueId])
+
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
     // Fetch courts for edit dropdown
@@ -197,53 +245,17 @@ export default function CalendarPage() {
 
     // Fetch monthly summary (booking counts) — with polling
     useEffect(() => {
-        const fetchSummary = async () => {
-            try {
-                const res = await fetch(`/api/bookings?take=500&month=${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`, { cache: 'no-store' })
-                const data = await res.json()
-                if (data.bookings) {
-                    // Get court IDs for the selected venue to filter
-                    // Only filter by venue if courts are loaded (avoid empty Set filtering out everything)
-                    const filteredCourts = selectedVenueId && courts.length > 0
-                        ? courts.filter(c => c.venueId === selectedVenueId).map(c => c.id)
-                        : null
-                    const venueCourtIds = filteredCourts && filteredCourts.length > 0
-                        ? new Set(filteredCourts)
-                        : null
-                    const summaries: Record<string, DaySummary> = {}
-                    data.bookings.forEach((b: Booking) => {
-                        if (b.status === 'CANCELLED') return
-                        b.bookingItems.forEach(item => {
-                            // Filter by venue if selected
-                            if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
-                            const d = toDateBangkok(item.date)
-                            if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
-                            summaries[d].count++
-                            summaries[d].totalAmount += item.price
-                        })
-                    })
-                    setDaySummaries(summaries)
-                }
-            } catch { /* ignore */ }
-        }
-        fetchSummary()
-        const intervalId = setInterval(fetchSummary, 15000)
+        fetchMonthlySummary()
+        const intervalId = setInterval(fetchMonthlySummary, 15000)
         return () => clearInterval(intervalId)
-    }, [viewYear, viewMonth, selectedVenueId, courts])
+    }, [fetchMonthlySummary])
 
     // Fetch calendar availability for color coding (Bug 5.2) — with polling
     useEffect(() => {
-        const fetchAvail = () => {
-            const venueParam = selectedVenueId ? `&venueId=${selectedVenueId}` : ''
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
-                .then(r => r.json())
-                .then(data => { if (data.availability) setCalAvail(data.availability) })
-                .catch(() => { })
-        }
-        fetchAvail()
-        const intervalId = setInterval(fetchAvail, 15000)
+        fetchCalendarAvailability()
+        const intervalId = setInterval(fetchCalendarAvailability, 15000)
         return () => clearInterval(intervalId)
-    }, [viewYear, viewMonth, selectedVenueId])
+    }, [fetchCalendarAvailability])
 
     const knownBookingIds = useRef<Set<string>>(new Set())
     
@@ -287,6 +299,30 @@ export default function CalendarPage() {
         
         return () => clearInterval(intervalId)
     }, [selectedDate])
+
+    useRealtimeEvents(useCallback((event) => {
+        const eventDates = event.affectedDates || []
+        const matchesSelectedDate = !!selectedDate && eventDates.includes(selectedDate)
+        const sameMonth = eventDates.some(date => date.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`))
+
+        if (matchesSelectedDate) {
+            refetchBookings()
+        }
+        if (sameMonth) {
+            fetchMonthlySummary()
+            fetchCalendarAvailability()
+        }
+
+        if (event.type === 'booking_created' && matchesSelectedDate) {
+            toast.success('มีการจองใหม่เข้ามาแบบ real-time', { duration: 3500, icon: '🔔', style: { border: '1px solid #10b981', padding: '16px', color: '#10b981' } })
+        }
+        if (event.type === 'booking_updated' && matchesSelectedDate) {
+            toast('มีการแก้ไขรายการจอง ระบบอัปเดตแล้ว', { duration: 3000, icon: '🔄' })
+        }
+        if (event.type === 'booking_cancelled' && matchesSelectedDate) {
+            toast('มีการยกเลิกรายการจอง ระบบอัปเดตแล้ว', { duration: 3000, icon: '🔔' })
+        }
+    }, [selectedDate, viewYear, viewMonth, refetchBookings, fetchMonthlySummary, fetchCalendarAvailability]))
 
     // Fetch courts for booking modal (duplicate removed - already fetched above)
 
@@ -670,8 +706,8 @@ export default function CalendarPage() {
                                     const localDateStr = `${y}-${m}-${dy}`
                                     return localDateStr === selectedDate || item.date.startsWith(selectedDate)
                                 })
-                                return { ...b, bookingItems: filteredItems }
-                            }).filter(b => b.bookingItems.length > 0)
+                                return { booking: b, filteredBookingItems: filteredItems }
+                            }).filter(entry => entry.filteredBookingItems.length > 0)
                             
                             // Show grid with all courts even when no bookings (empty white cells)
                             const venueCourtsCheck = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
@@ -686,8 +722,8 @@ export default function CalendarPage() {
 
                             // Build lookup: courtId_startTime -> { booking, item, participants }
                             const slotMap: Record<string, { booking: Booking; item: Booking['bookingItems'][0] }> = {}
-                            activeBookings.forEach(booking => {
-                                booking.bookingItems.forEach(item => {
+                            activeBookings.forEach(({ booking, filteredBookingItems }) => {
+                                filteredBookingItems.forEach(item => {
                                     const key = `${item.courtId}_${item.startTime}`
                                     slotMap[key] = { booking, item }
                                     // For items spanning multiple hours, also register intermediate hours
@@ -706,10 +742,10 @@ export default function CalendarPage() {
                             const mergeInfo: Record<string, { span: number; totalPrice: number; endTime: string }> = {}
                             const skipSet = new Set<string>()
 
-                            activeBookings.forEach(booking => {
+                            activeBookings.forEach(({ filteredBookingItems }) => {
                                 // Group items by courtId — only items for this date
                                 const byCourtLocal: Record<string, Booking['bookingItems']> = {}
-                                booking.bookingItems.forEach(item => {
+                                filteredBookingItems.forEach(item => {
                                     if (!byCourtLocal[item.courtId]) byCourtLocal[item.courtId] = []
                                     byCourtLocal[item.courtId].push(item)
                                 })
@@ -756,14 +792,14 @@ export default function CalendarPage() {
 
                             // Show ALL courts for the selected venue (not just those with bookings)
                             const courtIds = new Set<string>()
-                            activeBookings.forEach(b => b.bookingItems.forEach(item => courtIds.add(item.courtId)))
+                            activeBookings.forEach(({ filteredBookingItems }) => filteredBookingItems.forEach(item => courtIds.add(item.courtId)))
                             // Filter courts by selected venue
                             const venueCourts = selectedVenueId ? courts.filter(c => c.venueId === selectedVenueId) : courts
                             const venueCourtIds = new Set(venueCourts.map(c => c.id))
                             // Show ALL venue courts, not just booked ones
                             const gridCourts = [...venueCourts]
                             // If courts not in master list, add from booking data (respecting venue filter)
-                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                            activeBookings.forEach(({ filteredBookingItems }) => filteredBookingItems.forEach(item => {
                                 if (!gridCourts.find(c => c.id === item.courtId) && (!selectedVenueId || venueCourtIds.has(item.courtId))) {
                                     gridCourts.push({ id: item.courtId, name: item.court.name, sportType: '', venueId: null })
                                 }
@@ -788,7 +824,7 @@ export default function CalendarPage() {
                                 }
                             })
                             // Also include hours from any bookings that fall outside operating hours
-                            activeBookings.forEach(b => b.bookingItems.forEach(item => {
+                            activeBookings.forEach(({ filteredBookingItems }) => filteredBookingItems.forEach(item => {
                                 const h = parseInt(item.startTime.split(':')[0])
                                 const eh = parseInt(item.endTime.split(':')[0])
                                 const effectiveEnd = eh === 0 ? 24 : eh
@@ -886,8 +922,8 @@ export default function CalendarPage() {
                                                             const courtBookings: Array<{ booking: Booking; startTime: string; endTime: string; totalPrice: number }> = []
                                                             const processed = new Set<string>()
 
-                                                            activeBookings.forEach(booking => {
-                                                                const courtItems = booking.bookingItems
+                                                            activeBookings.forEach(({ booking, filteredBookingItems }) => {
+                                                                const courtItems = filteredBookingItems
                                                                     .filter(item => item.courtId === court.id)
                                                                     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 
@@ -1150,9 +1186,30 @@ export default function CalendarPage() {
                                                     return filtered.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
                                                 })()}
                                             </select>
-                                            <input type="date" lang="en-GB" value={(item as any).date} onChange={async e => {
-                                                await updateEditBookingItem(i, { date: e.target.value }, { recalcPrice: true })
-                                            }} className="admin-input" style={{ fontSize: '13px' }} />
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={formatDateInputDisplay((item as any).date)}
+                                                    className="admin-input"
+                                                    style={{ fontSize: '13px', paddingRight: '34px', background: '#fff', cursor: 'pointer' }}
+                                                />
+                                                <input
+                                                    type="date"
+                                                    value={(item as any).date}
+                                                    onChange={async e => {
+                                                        await updateEditBookingItem(i, { date: e.target.value }, { recalcPrice: true })
+                                                    }}
+                                                    className="admin-input"
+                                                    aria-label="เลือกวันที่"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        inset: 0,
+                                                        opacity: 0,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: '6px', alignItems: 'center' }}>
                                             <select value={(item as any).startTime} onChange={async e => {

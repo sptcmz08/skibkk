@@ -6,6 +6,7 @@ import { Calendar, Clock, MapPin, ArrowRight, ArrowLeft, Check, Trash2, ChevronL
 import { useSearchParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { getSessionId } from '@/lib/session'
+import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Slot {
     startTime: string
@@ -230,6 +231,17 @@ function AdminBookInner() {
         finally { if (!silent) setLoading(false) }
     }, [selectedVenue])
 
+    const fetchCalendarAvailability = useCallback(async () => {
+        const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+        try {
+            const res = await fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.availability) setCalAvail(data.availability)
+        } catch {
+            // ignore realtime refresh errors
+        }
+    }, [selectedVenue, viewYear, viewMonth])
+
     // Auto-refresh availability every 30 seconds for real-time lock/booking updates
     useEffect(() => {
         if (!selectedDate || step !== 3) return
@@ -279,13 +291,32 @@ function AdminBookInner() {
     // Fetch calendar availability for month coloring — same API as customer page
     useEffect(() => {
         if (step === 2) {
-            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
-                .then(r => r.json())
-                .then(data => { if (data.availability) setCalAvail(data.availability) })
-                .catch(() => { })
+            fetchCalendarAvailability()
         }
-    }, [step, viewYear, viewMonth])
+    }, [step, fetchCalendarAvailability])
+
+    useRealtimeEvents(useCallback((event) => {
+        const eventDates = event.affectedDates || []
+        const matchesSelectedDate = !!selectedDate && eventDates.includes(selectedDate)
+        const sameMonth = eventDates.some(date => date.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`))
+
+        if (selectedDate && selectedVenue && matchesSelectedDate) {
+            fetchAvailability(selectedDate, true)
+        }
+        if (sameMonth) {
+            fetchCalendarAvailability()
+        }
+
+        if (matchesSelectedDate && event.type === 'booking_created' && event.source === 'customer') {
+            toast.success('มีการจองใหม่จากหน้าเว็บ ระบบอัปเดตแล้ว', { duration: 2500 })
+        }
+        if (matchesSelectedDate && event.type === 'booking_updated') {
+            toast('มีการแก้ไขรายการจอง ระบบอัปเดตแล้ว', { duration: 2500, icon: '🔄' })
+        }
+        if (matchesSelectedDate && event.type === 'booking_cancelled') {
+            toast('มีการยกเลิกรายการจอง ระบบอัปเดตแล้ว', { duration: 2500, icon: '🔔' })
+        }
+    }, [selectedDate, selectedVenue, viewYear, viewMonth, fetchAvailability, fetchCalendarAvailability]))
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)

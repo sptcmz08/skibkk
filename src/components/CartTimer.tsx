@@ -4,42 +4,48 @@ import { useEffect, useState, useRef } from 'react'
 import { Timer } from 'lucide-react'
 import { getSessionId } from '@/lib/session'
 import toast from 'react-hot-toast'
+import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 export default function CartTimer() {
     const [expiresAt, setExpiresAt] = useState<Date | null>(null)
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
     const toastedRef = useRef(false)
+    const checkLocksRef = useRef<(() => Promise<void>) | null>(null)
 
     // Poll server every 5s for the lock expiry
     useEffect(() => {
-        console.log('[CartTimer] Component mounted')
         const check = async () => {
             const sessionId = getSessionId()
-            console.log('[CartTimer] Checking locks for session:', sessionId)
             if (!sessionId) return
             try {
                 const res = await fetch(`/api/locks/check?sessionId=${sessionId}`)
                 const data = await res.json()
-                console.log('[CartTimer] API response:', data)
                 if (data.active && data.expiresAt) {
                     setExpiresAt(new Date(data.expiresAt))
                     toastedRef.current = false
                 } else {
                     setExpiresAt(null)
+                    setSecondsLeft(null)
                 }
             } catch (err) {
                 console.error('[CartTimer] Error:', err)
             }
         }
+        checkLocksRef.current = check
         check()
         const id = setInterval(check, 5000)
         return () => clearInterval(id)
     }, [])
 
+    useRealtimeEvents((event) => {
+        if (event.type === 'lock_changed' && event.sessionId === getSessionId()) {
+            checkLocksRef.current?.().catch(() => { })
+        }
+    })
+
     // Compute countdown every second from expiresAt
     useEffect(() => {
         if (!expiresAt) {
-            setSecondsLeft(null)
             return
         }
 
@@ -56,6 +62,7 @@ export default function CartTimer() {
                     icon: '🔓',
                 })
                 setExpiresAt(null)
+                setSecondsLeft(null)
             }
         }
 

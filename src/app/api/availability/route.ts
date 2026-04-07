@@ -20,14 +20,14 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'รูปแบบวันที่ไม่ถูกต้อง' }, { status: 400 })
         }
 
-        // Parse as a local date to avoid weekday/date drift from `new Date("YYYY-MM-DD")`.
-        const date = new Date(year, month - 1, day)
-        const nextDate = new Date(year, month - 1, day + 1)
-        const dayOfWeek = getDayOfWeek(date)
+        const selectedDate = new Date(`${dateStr}T12:00:00Z`)
+        const startOfDay = new Date(`${dateStr}T00:00:00Z`)
+        const endOfDay = new Date(`${dateStr}T23:59:59Z`)
+        const dayOfWeek = getDayOfWeek(selectedDate)
 
         // Check special closed dates
         const specialClosed = await prisma.specialClosedDate.findFirst({
-            where: { date: { gte: date, lt: nextDate } },
+            where: { date: { gte: startOfDay, lte: endOfDay } },
         })
         if (specialClosed) {
             return NextResponse.json({
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         // Get existing bookings
         const existingBookings = await prisma.bookingItem.findMany({
             where: {
-                date: { gte: date, lt: nextDate },
+                date: { gte: startOfDay, lte: endOfDay },
                 booking: { status: { not: 'CANCELLED' } },
             },
             select: { courtId: true, startTime: true },

@@ -6,6 +6,7 @@ import { Calendar, Clock, MapPin, ShoppingCart, ArrowRight, ArrowLeft, Check, Tr
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { getSessionId } from '@/lib/session'
+import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Slot {
     startTime: string
@@ -202,6 +203,17 @@ export default function CourtsPage() {
         finally { if (!silent) setLoading(false) }
     }, [selectedVenue])
 
+    const fetchCalendarAvailability = useCallback(async () => {
+        const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
+        try {
+            const res = await fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.availability) setCalAvail(data.availability)
+        } catch {
+            // ignore realtime refresh errors
+        }
+    }, [selectedVenue, viewYear, viewMonth])
+
     // Poll availability every 5s when on step 3
     useEffect(() => {
         if (step === 3 && selectedDate) {
@@ -213,13 +225,32 @@ export default function CourtsPage() {
     // Fetch calendar availability for month coloring
     useEffect(() => {
         if (step === 2) {
-            const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
-            fetch(`/api/availability/calendar?year=${viewYear}&month=${viewMonth + 1}${venueParam}`, { cache: 'no-store' })
-                .then(r => r.json())
-                .then(data => { if (data.availability) setCalAvail(data.availability) })
-                .catch(() => { })
+            fetchCalendarAvailability()
         }
-    }, [step, viewYear, viewMonth, selectedVenue])
+    }, [step, fetchCalendarAvailability])
+
+    useRealtimeEvents(useCallback((event) => {
+        const eventDates = event.affectedDates || []
+        const matchesSelectedDate = !!selectedDate && eventDates.includes(selectedDate)
+        const sameMonth = eventDates.some(date => date.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`))
+
+        if (selectedDate && selectedVenue && matchesSelectedDate) {
+            fetchAvailability(selectedDate, true)
+        }
+        if (sameMonth) {
+            fetchCalendarAvailability()
+        }
+
+        if (matchesSelectedDate && event.type === 'booking_created') {
+            toast.success('มีการจองใหม่ ระบบอัปเดตแล้ว', { duration: 2500 })
+        }
+        if (matchesSelectedDate && event.type === 'booking_updated') {
+            toast('มีการปรับรายการจอง ระบบอัปเดตแล้ว', { duration: 2500, icon: '🔄' })
+        }
+        if (matchesSelectedDate && event.type === 'booking_cancelled') {
+            toast('มีการยกเลิกรายการจอง ระบบอัปเดตแล้ว', { duration: 2500, icon: '🔔' })
+        }
+    }, [selectedDate, selectedVenue, viewYear, viewMonth, fetchAvailability, fetchCalendarAvailability]))
 
     const handleSelectDate = (dateStr: string) => {
         setSelectedDate(dateStr)
