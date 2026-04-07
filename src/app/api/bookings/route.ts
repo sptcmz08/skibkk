@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
                     bookingItems: { include: { court: { include: { venue: true } }, teacher: true, originalCourt: true } },
                     participants: true,
                     payments: true,
+                    invoice: { select: { id: true, invoiceNumber: true, isIssued: true, issuedAt: true } },
                 },
                 orderBy: { createdAt: 'desc' },
                 take: parseInt(searchParams.get('take') || '100'),
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest) {
                 bookingItems: { include: { court: { include: { venue: true } }, teacher: true, originalCourt: true } },
                 participants: true,
                 payments: true,
+                invoice: { select: { id: true, invoiceNumber: true, isIssued: true, issuedAt: true } },
             },
             orderBy: { createdAt: 'desc' },
         })

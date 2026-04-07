@@ -94,6 +94,51 @@ export default function CalendarPage() {
         setEditAmount(booking.totalAmount)
     }
 
+    const syncEditAmount = (items: Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>) => {
+        setEditAmount(items.reduce((sum, bookingItem) => sum + (bookingItem.price || 0), 0))
+    }
+
+    const fetchBookingItemPrice = async (item: { courtId: string; date: string; startTime: string; endTime: string; price: number }) => {
+        if (!item.courtId || !item.date || !item.startTime || !item.endTime) return item.price || 0
+
+        try {
+            const court = courts.find(c => c.id === item.courtId)
+            const venueParam = court?.venueId ? `&venueId=${court.venueId}` : ''
+            const res = await fetch(`/api/availability?date=${item.date}${venueParam}`, { cache: 'no-store' })
+            const data = await res.json()
+            const courtAvailability = data.availability?.find((c: { courtId: string; slots: Array<{ startTime: string; price: number }> }) => c.courtId === item.courtId)
+            const slots = courtAvailability?.slots || []
+
+            const startHour = parseInt(item.startTime.split(':')[0], 10)
+            const endHour = parseInt(item.endTime.split(':')[0], 10)
+            const total = Array.from({ length: Math.max(1, endHour - startHour) }, (_, idx) => {
+                const slotTime = `${String(startHour + idx).padStart(2, '0')}:00`
+                return slots.find((slot: { startTime: string; price: number }) => slot.startTime === slotTime)?.price || 0
+            }).reduce((sum, price) => sum + price, 0)
+
+            return total || item.price || 0
+        } catch {
+            return item.price || 0
+        }
+    }
+
+    const updateEditBookingItem = async (
+        index: number,
+        patch: Partial<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>,
+        opts?: { recalcPrice?: boolean }
+    ) => {
+        const nextItems = [...editBookingItems]
+        const nextItem = { ...nextItems[index], ...patch }
+
+        if (opts?.recalcPrice) {
+            nextItem.price = await fetchBookingItemPrice(nextItem)
+        }
+
+        nextItems[index] = nextItem
+        setEditBookingItems(nextItems)
+        syncEditAmount(nextItems)
+    }
+
     const refetchBookings = async () => {
         if (!selectedDate) return
         const fetchRes = await fetch(`/api/bookings?date=${selectedDate}`, { cache: 'no-store' })
@@ -1080,14 +1125,21 @@ export default function CalendarPage() {
                                     <>
                                         {editBookingItems.length > 1 && (
                                             <button onClick={() => {
-                                                setPendingCalendarAction({ message: 'ต้องการลบรายการจองนี้ออกใช่ไหม?', action: () => setEditBookingItems(editBookingItems.filter((_, j) => j !== i)) })
+                                                setPendingCalendarAction({
+                                                    message: 'ต้องการลบรายการจองนี้ออกใช่ไหม?',
+                                                    action: () => {
+                                                        const nextItems = editBookingItems.filter((_, j) => j !== i)
+                                                        setEditBookingItems(nextItems)
+                                                        syncEditAmount(nextItems)
+                                                    }
+                                                })
                                             }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
                                                 🗑️ ลบ
                                             </button>
                                         )}
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
-                                            <select value={(item as any).courtId} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], courtId: e.target.value }; setEditBookingItems(u)
+                                            <select value={(item as any).courtId} onChange={async e => {
+                                                await updateEditBookingItem(i, { courtId: e.target.value }, { recalcPrice: true })
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 <option value="">เลือกสนาม</option>
                                                 {(() => {
@@ -1098,19 +1150,13 @@ export default function CalendarPage() {
                                                     return filtered.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
                                                 })()}
                                             </select>
-                                            <input type="date" value={(item as any).date} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], date: e.target.value }; setEditBookingItems(u)
+                                            <input type="date" lang="en-GB" value={(item as any).date} onChange={async e => {
+                                                await updateEditBookingItem(i, { date: e.target.value }, { recalcPrice: true })
                                             }} className="admin-input" style={{ fontSize: '13px' }} />
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: '6px', alignItems: 'center' }}>
-                                            <select value={(item as any).startTime} onChange={e => {
-                                                const newStart = e.target.value
-                                                const end = (item as any).endTime
-                                                const startH = parseInt(newStart.split(':')[0])
-                                                const endH = parseInt(end.split(':')[0])
-                                                const hours = endH > startH ? endH - startH : 1
-                                                const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], startTime: newStart, price: hours * perHour }; setEditBookingItems(u)
+                                            <select value={(item as any).startTime} onChange={async e => {
+                                                await updateEditBookingItem(i, { startTime: e.target.value }, { recalcPrice: true })
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 {Array.from({ length: 24 }, (_, h) => h).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
@@ -1118,14 +1164,8 @@ export default function CalendarPage() {
                                                 })}
                                             </select>
                                             <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', fontWeight: 600 }}>ถึง</div>
-                                            <select value={(item as any).endTime} onChange={e => {
-                                                const newEnd = e.target.value
-                                                const start = (item as any).startTime
-                                                const startH = parseInt(start.split(':')[0])
-                                                const endH = parseInt(newEnd.split(':')[0])
-                                                const hours = endH > startH ? endH - startH : 1
-                                                const perHour = viewBooking.bookingItems[0]?.price || (item as any).price
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], endTime: newEnd, price: hours * perHour }; setEditBookingItems(u)
+                                            <select value={(item as any).endTime} onChange={async e => {
+                                                await updateEditBookingItem(i, { endTime: e.target.value }, { recalcPrice: true })
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 {Array.from({ length: 24 }, (_, h) => h + 1).map(h => {
                                                     const t = `${String(h).padStart(2, '0')}:00`
@@ -1134,7 +1174,10 @@ export default function CalendarPage() {
                                             </select>
                                             <div style={{ position: 'relative' }}>
                                                 <input type="number" value={(item as any).price} onChange={e => {
-                                                    const u = [...editBookingItems]; u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }; setEditBookingItems(u)
+                                                    const u = [...editBookingItems]
+                                                    u[i] = { ...u[i], price: parseFloat(e.target.value) || 0 }
+                                                    setEditBookingItems(u)
+                                                    syncEditAmount(u)
                                                 }} placeholder="ราคา" className="admin-input" style={{ fontSize: '13px' }} />
                                                 {(() => {
                                                     const s = parseInt(((item as any).startTime || '09:00').split(':')[0])
@@ -1147,7 +1190,9 @@ export default function CalendarPage() {
                                         {/* Teacher selection */}
                                         <div style={{ marginTop: '6px' }}>
                                             <select value={(item as any).teacherId || ''} onChange={e => {
-                                                const u = [...editBookingItems]; u[i] = { ...u[i], teacherId: e.target.value || null }; setEditBookingItems(u)
+                                                const u = [...editBookingItems]
+                                                u[i] = { ...u[i], teacherId: e.target.value || null }
+                                                setEditBookingItems(u)
                                             }} className="admin-input" style={{ fontSize: '13px' }}>
                                                 <option value="">🎓 ไม่มีครูผู้สอน</option>
                                                 {teachers.filter(t => t.isActive && t.workStatus === 'ACTIVE').map(t => (

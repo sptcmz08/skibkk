@@ -17,6 +17,12 @@ export default function AdminSettingsPage() {
     const [bookingTerms, setBookingTerms] = useState('')
     const [maxBookingHours, setMaxBookingHours] = useState(0)
     const [maxParticipants, setMaxParticipants] = useState(2)
+    const [invoiceCompanyName, setInvoiceCompanyName] = useState('SKI BKK')
+    const [invoiceCompanyAddress1, setInvoiceCompanyAddress1] = useState('ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
+    const [invoiceCompanyAddress2, setInvoiceCompanyAddress2] = useState('กรุงเทพมหานคร 10230')
+    const [invoiceCompanyPhone, setInvoiceCompanyPhone] = useState('xxx-xxx-xxxx')
+    const [invoiceCompanyTaxId, setInvoiceCompanyTaxId] = useState('x-xxxx-xxxxx-xx-x')
+    const [invoiceRemarkNote, setInvoiceRemarkNote] = useState('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
     const logoInputRef = useRef<HTMLInputElement>(null)
     const qrInputRef = useRef<HTMLInputElement>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
@@ -33,6 +39,12 @@ export default function AdminSettingsPage() {
                 if (data.booking_terms) setBookingTerms(data.booking_terms)
                 if (data.max_booking_hours) setMaxBookingHours(parseInt(data.max_booking_hours) || 0)
                 if (data.max_participants) setMaxParticipants(parseInt(data.max_participants) || 2)
+                if (data.invoice_company_name) setInvoiceCompanyName(data.invoice_company_name)
+                if (data.invoice_company_address1) setInvoiceCompanyAddress1(data.invoice_company_address1)
+                if (data.invoice_company_address2) setInvoiceCompanyAddress2(data.invoice_company_address2)
+                if (data.invoice_company_phone) setInvoiceCompanyPhone(data.invoice_company_phone)
+                if (data.invoice_company_tax_id) setInvoiceCompanyTaxId(data.invoice_company_tax_id)
+                if (data.invoice_remark_note) setInvoiceRemarkNote(data.invoice_remark_note)
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
@@ -329,6 +341,60 @@ export default function AdminSettingsPage() {
                         e.target.value = ''
                     }
                 }} />
+            </div>
+
+            <div style={cardStyle}>
+                <h2 style={sectionTitle}>
+                    <FileText size={20} color="#2563eb" /> ข้อมูลเอกสารใบกำกับภาษี
+                </h2>
+                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>
+                    ใช้เป็นค่าเริ่มต้นในทุกใบกำกับภาษีและใบเสร็จรับเงิน
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(240px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ชื่อบริษัท / ร้าน</div>
+                        <input className="admin-input" value={invoiceCompanyName} onChange={e => setInvoiceCompanyName(e.target.value)} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>เบอร์โทร</div>
+                        <input className="admin-input" value={invoiceCompanyPhone} onChange={e => setInvoiceCompanyPhone(e.target.value)} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ที่อยู่บรรทัด 1</div>
+                        <input className="admin-input" value={invoiceCompanyAddress1} onChange={e => setInvoiceCompanyAddress1(e.target.value)} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ที่อยู่บรรทัด 2</div>
+                        <input className="admin-input" value={invoiceCompanyAddress2} onChange={e => setInvoiceCompanyAddress2(e.target.value)} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>เลขประจำตัวผู้เสียภาษี</div>
+                        <input className="admin-input" value={invoiceCompanyTaxId} onChange={e => setInvoiceCompanyTaxId(e.target.value)} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>หมายเหตุเริ่มต้น</div>
+                        <textarea
+                            className="admin-input"
+                            rows={4}
+                            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }}
+                            value={invoiceRemarkNote}
+                            onChange={e => setInvoiceRemarkNote(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <button className="btn-admin" onClick={async () => {
+                    await Promise.all([
+                        saveSetting('invoice_company_name', invoiceCompanyName),
+                        saveSetting('invoice_company_address1', invoiceCompanyAddress1),
+                        saveSetting('invoice_company_address2', invoiceCompanyAddress2),
+                        saveSetting('invoice_company_phone', invoiceCompanyPhone),
+                        saveSetting('invoice_company_tax_id', invoiceCompanyTaxId),
+                        saveSetting('invoice_remark_note', invoiceRemarkNote),
+                    ])
+                    toast.success('บันทึกข้อมูลเอกสารสำเร็จ')
+                }}>บันทึกข้อมูลเอกสาร</button>
             </div>
 
             {/* Booking Terms */}

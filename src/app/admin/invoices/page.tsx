@@ -15,6 +15,7 @@ interface Booking {
     bookingItems: BookingItem[]
     participants: Array<{ name: string; sportType: string }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
+    invoice?: { id: string; invoiceNumber: string; isIssued: boolean; issuedAt: string } | null
 }
 
 type DocType = 'full' | 'short'
@@ -27,6 +28,15 @@ interface EditableItem {
 }
 
 type ExcelCell = { v: string | number; s: unknown }
+
+const INVOICE_DEFAULTS = {
+    companyName: 'SKI BKK',
+    companyAddress1: 'ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน',
+    companyAddress2: 'กรุงเทพมหานคร 10230',
+    companyPhone: 'xxx-xxx-xxxx',
+    companyTaxId: 'x-xxxx-xxxxx-xx-x',
+    remarkNote: 'ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK',
+}
 
 // Stable components defined outside InvoicesPage to prevent focus loss on re-render
 function EditField({ value, onChange, style, multiline, inputStyle, editMode }: {
@@ -66,11 +76,11 @@ export default function InvoicesPage() {
     const printRef = useRef<HTMLDivElement>(null)
 
     // Editable fields
-    const [companyName, setCompanyName] = useState('SKI BKK')
-    const [companyAddress1, setCompanyAddress1] = useState('ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
-    const [companyAddress2, setCompanyAddress2] = useState('กรุงเทพมหานคร 10230')
-    const [companyPhone, setCompanyPhone] = useState('xxx-xxx-xxxx')
-    const [companyTaxId, setCompanyTaxId] = useState('x-xxxx-xxxxx-xx-x')
+    const [companyName, setCompanyName] = useState(INVOICE_DEFAULTS.companyName)
+    const [companyAddress1, setCompanyAddress1] = useState(INVOICE_DEFAULTS.companyAddress1)
+    const [companyAddress2, setCompanyAddress2] = useState(INVOICE_DEFAULTS.companyAddress2)
+    const [companyPhone, setCompanyPhone] = useState(INVOICE_DEFAULTS.companyPhone)
+    const [companyTaxId, setCompanyTaxId] = useState(INVOICE_DEFAULTS.companyTaxId)
     const [customerName, setCustomerName] = useState('')
     const [customerEmail, setCustomerEmail] = useState('')
     const [customerPhone, setCustomerPhone] = useState('')
@@ -79,16 +89,37 @@ export default function InvoicesPage() {
     const [refNo, setRefNo] = useState('')
     const [items, setItems] = useState<EditableItem[]>([])
     const [paymentNote, setPaymentNote] = useState('')
-    const [remarkNote, setRemarkNote] = useState('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
+    const [remarkNote, setRemarkNote] = useState(INVOICE_DEFAULTS.remarkNote)
     const [payerName, setPayerName] = useState('')
     const [payerDate, setPayerDate] = useState('')
     const [receiverName, setReceiverName] = useState('')
     const [receiverDate, setReceiverDate] = useState('')
     const [savingInvoice, setSavingInvoice] = useState(false)
+    const [invoiceDefaults, setInvoiceDefaults] = useState(INVOICE_DEFAULTS)
+    const [isIssued, setIsIssued] = useState(false)
 
     useEffect(() => {
-        fetch('/api/bookings').then(r => r.json())
-            .then(data => setBookings((data.bookings || []).filter((b: Booking) => b.status !== 'CANCELLED')))
+        Promise.all([
+            fetch('/api/bookings').then(r => r.json()),
+            fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
+        ]).then(([bookingData, settings]) => {
+            setBookings((bookingData.bookings || []).filter((b: Booking) => b.status !== 'CANCELLED'))
+            const nextDefaults = {
+                companyName: settings.invoice_company_name || INVOICE_DEFAULTS.companyName,
+                companyAddress1: settings.invoice_company_address1 || INVOICE_DEFAULTS.companyAddress1,
+                companyAddress2: settings.invoice_company_address2 || INVOICE_DEFAULTS.companyAddress2,
+                companyPhone: settings.invoice_company_phone || INVOICE_DEFAULTS.companyPhone,
+                companyTaxId: settings.invoice_company_tax_id || INVOICE_DEFAULTS.companyTaxId,
+                remarkNote: settings.invoice_remark_note || INVOICE_DEFAULTS.remarkNote,
+            }
+            setInvoiceDefaults(nextDefaults)
+            setCompanyName(nextDefaults.companyName)
+            setCompanyAddress1(nextDefaults.companyAddress1)
+            setCompanyAddress2(nextDefaults.companyAddress2)
+            setCompanyPhone(nextDefaults.companyPhone)
+            setCompanyTaxId(nextDefaults.companyTaxId)
+            setRemarkNote(nextDefaults.remarkNote)
+        })
             .catch(() => toast.error('โหลดข้อมูลไม่สำเร็จ'))
             .finally(() => setLoading(false))
     }, [])
@@ -293,11 +324,12 @@ export default function InvoicesPage() {
             const data = await res.json()
             if (data.invoice?.customData) {
                 const cd = data.invoice.customData as Record<string, unknown>
-                setCompanyName((cd.companyName as string) || 'SKI BKK')
-                setCompanyAddress1((cd.companyAddress1 as string) || 'ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
-                setCompanyAddress2((cd.companyAddress2 as string) || 'กรุงเทพมหานคร 10230')
-                setCompanyPhone((cd.companyPhone as string) || 'xxx-xxx-xxxx')
-                setCompanyTaxId((cd.companyTaxId as string) || 'x-xxxx-xxxxx-xx-x')
+                setIsIssued(Boolean(data.invoice.isIssued))
+                setCompanyName((cd.companyName as string) || invoiceDefaults.companyName)
+                setCompanyAddress1((cd.companyAddress1 as string) || invoiceDefaults.companyAddress1)
+                setCompanyAddress2((cd.companyAddress2 as string) || invoiceDefaults.companyAddress2)
+                setCompanyPhone((cd.companyPhone as string) || invoiceDefaults.companyPhone)
+                setCompanyTaxId((cd.companyTaxId as string) || invoiceDefaults.companyTaxId)
                 setCustomerName((cd.customerName as string) || b.user.name)
                 setCustomerEmail((cd.customerEmail as string) || b.user.email)
                 setCustomerPhone((cd.customerPhone as string) || '')
@@ -311,7 +343,7 @@ export default function InvoicesPage() {
                     unitPrice: item.price,
                 })))
                 setPaymentNote((cd.paymentNote as string) || '')
-                setRemarkNote((cd.remarkNote as string) || 'ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
+                setRemarkNote((cd.remarkNote as string) || invoiceDefaults.remarkNote)
                 setPayerName((cd.payerName as string) || '')
                 setPayerDate((cd.payerDate as string) || '')
                 setReceiverName((cd.receiverName as string) || '')
@@ -342,16 +374,17 @@ export default function InvoicesPage() {
             else if (pm.method === 'PROMPTPAY') payNote = 'พร้อมเพย์ • ชำระเงินเรียบร้อยแล้ว'
         }
         setPaymentNote(payNote)
-        setCompanyName('SKI BKK')
-        setCompanyAddress1('ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
-        setCompanyAddress2('กรุงเทพมหานคร 10230')
-        setCompanyPhone('xxx-xxx-xxxx')
-        setCompanyTaxId('x-xxxx-xxxxx-xx-x')
-        setRemarkNote('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
+        setCompanyName(invoiceDefaults.companyName)
+        setCompanyAddress1(invoiceDefaults.companyAddress1)
+        setCompanyAddress2(invoiceDefaults.companyAddress2)
+        setCompanyPhone(invoiceDefaults.companyPhone)
+        setCompanyTaxId(invoiceDefaults.companyTaxId)
+        setRemarkNote(invoiceDefaults.remarkNote)
         setPayerName('')
         setPayerDate('')
         setReceiverName('')
         setReceiverDate('')
+        setIsIssued(Boolean(b.invoice?.isIssued))
     }
 
     // Save invoice data to server
@@ -376,9 +409,31 @@ export default function InvoicesPage() {
                     vatAmount: vat,
                     grandTotal: itemTotal,
                     customData,
+                    isIssued,
                 }),
             })
             if (res.ok) {
+                const data = await res.json()
+                setBookings(current => current.map(booking => booking.id === selectedBooking.id
+                    ? {
+                        ...booking,
+                        invoice: data.invoice ? {
+                            id: data.invoice.id,
+                            invoiceNumber: data.invoice.invoiceNumber,
+                            isIssued: data.invoice.isIssued,
+                            issuedAt: data.invoice.issuedAt,
+                        } : booking.invoice,
+                    }
+                    : booking))
+                setSelectedBooking(current => current ? {
+                    ...current,
+                    invoice: data.invoice ? {
+                        id: data.invoice.id,
+                        invoiceNumber: data.invoice.invoiceNumber,
+                        isIssued: data.invoice.isIssued,
+                        issuedAt: data.invoice.issuedAt,
+                    } : current.invoice,
+                } : current)
                 toast.success('บันทึกข้อมูลใบกำกับภาษีสำเร็จ')
                 setEditMode(false)
             } else {
@@ -480,6 +535,16 @@ export default function InvoicesPage() {
                                 <Receipt size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> ใบเสร็จแบบย่อ
                             </button>
                         </div>
+                        <select
+                            value={isIssued ? 'issued' : 'pending'}
+                            onChange={e => setIsIssued(e.target.value === 'issued')}
+                            disabled={savingInvoice}
+                            className="admin-input"
+                            style={{ width: '170px', height: '38px' }}
+                        >
+                            <option value="pending">ยังไม่ออกใบกำกับ</option>
+                            <option value="issued">ออกใบกำกับภาษีแล้ว</option>
+                        </select>
                         {/* Edit toggle */}
                         <button onClick={() => {
                             if (editMode) {
@@ -837,14 +902,14 @@ export default function InvoicesPage() {
                     <thead>
                         <tr>
                             <th>เลขที่</th><th>หมายเลขจอง</th><th>ลูกค้า</th>
-                            <th>มูลค่าก่อน VAT</th><th>VAT 7%</th><th>รวมทั้งสิ้น</th><th>การชำระเงิน</th><th>วันที่</th><th>จัดการ</th>
+                            <th>มูลค่าก่อน VAT</th><th>VAT 7%</th><th>รวมทั้งสิ้น</th><th>การชำระเงิน</th><th>สถานะใบกำกับ</th><th>วันที่</th><th>จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</td></tr>
+                            <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</td></tr>
                         ) : filtered.length === 0 ? (
-                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
+                            <tr><td colSpan={10} style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
                                 <FileText size={40} style={{ marginBottom: '12px', opacity: 0.4, display: 'block', margin: '0 auto 12px' }} />
                                 <p style={{ fontWeight: 600 }}>ยังไม่มีรายการ</p>
                             </td></tr>
@@ -876,6 +941,21 @@ export default function InvoicesPage() {
                                                 </span>
                                             )
                                         })()}
+                                    </td>
+                                    <td>
+                                        <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            padding: '4px 10px',
+                                            borderRadius: '999px',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                            whiteSpace: 'nowrap',
+                                            background: b.invoice?.isIssued ? '#dcfce7' : '#f3f4f6',
+                                            color: b.invoice?.isIssued ? '#166534' : '#6b7280',
+                                        }}>
+                                            {b.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
+                                        </span>
                                     </td>
                                     <td>{new Date(b.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                     <td>

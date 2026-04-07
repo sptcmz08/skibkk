@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect } from 'react'
-import { Users, Search, Phone, Mail, Calendar, ChevronLeft, Clock, MapPin, X, Edit2, Save } from 'lucide-react'
+import { Search, Phone, Mail, Calendar, ChevronLeft, Clock, MapPin, X, Edit2, Save, CreditCard, Image as ImageIcon, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Customer {
@@ -13,8 +13,60 @@ interface Customer {
 
 interface BookingDetail {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string
-    bookingItems: Array<{ date: string; startTime: string; endTime: string; price: number; court: { name: string } }>
-    payments: Array<{ method: string; status: string; amount: number; createdAt: string }>
+    createdByAdmin?: boolean
+    user?: { id: string; name: string; email: string; phone: string; lineUserId?: string | null; lineDisplayName?: string | null }
+    bookingItems: Array<{ date: string; startTime: string; endTime: string; price: number; court: { name: string; venue?: { name: string } | null }; teacher?: { name: string } | null }>
+    participants: Array<{ name: string; sportType: string; phone?: string | null }>
+    payments: Array<{ id: string; method: string; status: string; amount: number; createdAt: string; slipUrl?: string | null }>
+}
+
+type BookingApiItem = BookingDetail & { user?: Customer }
+
+const detailStatusMap: Record<string, { label: string; bg: string; color: string }> = {
+    PENDING: { label: 'รอชำระ', bg: '#fff8e1', color: '#f5a623' },
+    CONFIRMED: { label: 'ยืนยัน', bg: '#e8f5e9', color: '#27ae60' },
+    CANCELLED: { label: 'ยกเลิก', bg: '#fde8e8', color: '#e74c3c' },
+}
+
+const paymentStatusMap: Record<string, { label: string; color: string }> = {
+    PENDING: { label: 'รอตรวจสอบ', color: '#f5a623' },
+    VERIFIED: { label: 'ตรวจสอบแล้ว', color: '#27ae60' },
+    REJECTED: { label: 'ถูกปฏิเสธ', color: '#e74c3c' },
+}
+
+const paymentMethodMap: Record<string, string> = {
+    PROMPTPAY: 'PromptPay',
+    QR_PROMPTPAY: 'QR PromptPay',
+    BANK_TRANSFER: 'โอนเงิน',
+    CASH: 'เงินสด',
+    PACKAGE: 'แพ็กเกจ',
+    CREDIT_CARD: 'บัตรเครดิต',
+}
+
+function formatBookingDateTH(dateStr: string, options?: Intl.DateTimeFormatOptions) {
+    return new Date(dateStr).toLocaleDateString('th-TH', options ?? { day: 'numeric', month: 'short' })
+}
+
+function getBookingDateGroups(items: BookingDetail['bookingItems']) {
+    return Object.entries(
+        items.reduce<Record<string, BookingDetail['bookingItems']>>((groups, item) => {
+            if (!groups[item.date]) groups[item.date] = []
+            groups[item.date].push(item)
+            return groups
+        }, {})
+    )
+        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+        .map(([date, dateItems]) => ({
+            date,
+            formattedDate: formatBookingDateTH(date),
+            times: [...dateItems]
+                .sort((a, b) => {
+                    if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime)
+                    if (a.endTime !== b.endTime) return a.endTime.localeCompare(b.endTime)
+                    return a.court.name.localeCompare(b.court.name)
+                })
+                .map(item => `${item.startTime}-${item.endTime}`),
+        }))
 }
 
 export default function CustomersPage() {
@@ -28,14 +80,15 @@ export default function CustomersPage() {
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
+    const [viewSlip, setViewSlip] = useState<string | null>(null)
 
     useEffect(() => {
         fetch('/api/bookings?take=500', { cache: 'no-store' })
             .then(r => r.json())
-            .then(data => {
+            .then((data: { bookings?: BookingApiItem[] }) => {
                 if (data.bookings) {
                     const usersMap = new Map<string, Customer>()
-                    data.bookings.forEach((b: any) => {
+                    data.bookings.forEach((b) => {
                         if (b.user) {
                             const existing = usersMap.get(b.user.id)
                             if (existing) {
@@ -63,9 +116,9 @@ export default function CustomersPage() {
         setLoadingBookings(true)
         try {
             const res = await fetch(`/api/bookings?search=${encodeURIComponent(customer.name)}`, { cache: 'no-store' })
-            const data = await res.json()
+            const data = await res.json() as { bookings?: BookingApiItem[] }
             // Filter to only this customer's bookings
-            const customerBookings = (data.bookings || []).filter((b: any) => b.user?.id === customer.id)
+            const customerBookings = (data.bookings || []).filter((b) => b.user?.id === customer.id)
             setBookings(customerBookings)
         } catch { toast.error('โหลดประวัติไม่สำเร็จ') }
         finally { setLoadingBookings(false) }
@@ -76,6 +129,50 @@ export default function CustomersPage() {
             case 'CONFIRMED': return { label: 'ยืนยันแล้ว', cls: 'badge-success' }
             case 'CANCELLED': return { label: 'ยกเลิก', cls: 'badge-danger' }
             default: return { label: 'รอดำเนินการ', cls: 'badge-warning' }
+        }
+    }
+
+    const handleSaveEdit = async () => {
+        if (!editBooking) return
+        setSaving(true)
+        try {
+            const res = await fetch('/api/bookings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId: editBooking.id, status: editStatus, totalAmount: editAmount }),
+            })
+            if (res.ok) {
+                toast.success('บันทึกสำเร็จ')
+                setEditBooking(null)
+                if (selectedCustomer) await viewCustomerHistory(selectedCustomer)
+            } else {
+                toast.error('บันทึกไม่สำเร็จ')
+            }
+        } catch {
+            toast.error('เกิดข้อผิดพลาด')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleCancelBooking = async (bookingId: string) => {
+        const reason = prompt('ระบุเหตุผลในการยกเลิก:')
+        if (reason === null) return
+        try {
+            const res = await fetch('/api/bookings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId, action: 'cancel', reason }),
+            })
+            if (res.ok) {
+                toast.success('ยกเลิกการจองสำเร็จ')
+                setEditBooking(null)
+                if (selectedCustomer) await viewCustomerHistory(selectedCustomer)
+            } else {
+                toast.error('ยกเลิกไม่สำเร็จ')
+            }
+        } catch {
+            toast.error('เกิดข้อผิดพลาด')
         }
     }
 
@@ -138,12 +235,25 @@ export default function CustomersPage() {
                                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>ไม่มีประวัติการจอง</td></tr>
                             ) : bookings.map(b => {
                                 const badge = statusBadge(b.status)
+                                const bookingDateGroups = getBookingDateGroups(b.bookingItems)
                                 return (
                                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setEditBooking(b); setEditStatus(b.status); setEditAmount(b.totalAmount) }}>
                                         <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{b.bookingNumber}</td>
-                                        <td>{b.bookingItems[0] ? new Date(b.bookingItems[0].date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) : '-'}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {bookingDateGroups.map(group => (
+                                                    <div key={group.date}>{group.formattedDate}</div>
+                                                ))}
+                                            </div>
+                                        </td>
                                         <td>{b.bookingItems.map(i => i.court.name).join(', ')}</td>
-                                        <td>{b.bookingItems.map(i => `${i.startTime}-${i.endTime}`).join(', ')}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {bookingDateGroups.map(group => (
+                                                    <div key={group.date}>{group.times.join(', ')}</div>
+                                                ))}
+                                            </div>
+                                        </td>
                                         <td style={{ fontWeight: 700 }}>฿{b.totalAmount.toLocaleString()}</td>
                                         <td><span className={`badge ${badge.cls}`}>{badge.label}</span></td>
                                         <td><Edit2 size={14} style={{ color: 'var(--a-primary)' }} /></td>
@@ -157,51 +267,154 @@ export default function CustomersPage() {
                 {/* Edit Booking Modal */}
                 {editBooking && (
                     <div className="modal-overlay" onClick={() => setEditBooking(null)}>
-                        <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h2 style={{ fontSize: '18px', fontWeight: 700 }}>แก้ไขการจอง</h2>
-                                <button onClick={() => setEditBooking(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                        <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '780px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+                                <div>
+                                    <h2 style={{ fontSize: '18px', fontWeight: 700 }}>รายละเอียดการจอง</h2>
+                                    <span style={{ fontSize: '14px', fontFamily: "'Inter', sans-serif", color: 'var(--a-text-muted)' }}>{editBooking.bookingNumber}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{
+                                        padding: '4px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                                        background: detailStatusMap[editStatus]?.bg || '#f3f4f6',
+                                        color: detailStatusMap[editStatus]?.color || '#6b7280',
+                                    }}>{detailStatusMap[editStatus]?.label || editStatus}</span>
+                                    {editBooking.createdByAdmin ? (
+                                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#fce4ec', color: '#c62828', fontWeight: 600 }}>Admin</span>
+                                    ) : (
+                                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>เว็บ</span>
+                                    )}
+                                    <button onClick={() => setEditBooking(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                                </div>
                             </div>
+
                             <div style={{ background: '#f8f9fa', padding: '14px', borderRadius: '10px', marginBottom: '16px', fontSize: '14px' }}>
-                                <div><strong>เลขจอง:</strong> {editBooking.bookingNumber}</div>
-                                <div style={{ marginTop: '6px' }}><strong>สนาม:</strong> {editBooking.bookingItems.map(i => i.court.name).join(', ')}</div>
-                                <div style={{ marginTop: '6px' }}><strong>เวลา:</strong> {editBooking.bookingItems.map(i => `${i.startTime}-${i.endTime}`).join(', ')}</div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>สถานะ</label>
-                                    <select className="admin-input" value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: '100%' }}>
-                                        <option value="PENDING">🟡 รอชำระเงิน</option>
-                                        <option value="CONFIRMED">✅ ยืนยันแล้ว</option>
-                                        <option value="CANCELLED">❌ ยกเลิก</option>
-                                    </select>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <div><strong>ลูกค้า:</strong> {editBooking.user?.name || selectedCustomer.name}</div>
+                                    <div><strong>โทร:</strong> {editBooking.user?.phone || selectedCustomer.phone || '-'}</div>
+                                    <div><strong>อีเมล:</strong> {editBooking.user?.email || selectedCustomer.email || '-'}</div>
+                                    <div><strong>วันที่สร้าง:</strong> {new Date(editBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div style={{ gridColumn: '1 / -1' }}><strong>วันที่จอง:</strong> {getBookingDateGroups(editBooking.bookingItems).map(group => group.formattedDate).join(', ')}</div>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <strong style={{ fontSize: '13px' }}>สถานะ:</strong>
+                                        <select className="admin-input" value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ marginTop: '4px', padding: '6px 10px' }}>
+                                            <option value="PENDING">🟡 รอชำระเงิน</option>
+                                            <option value="CONFIRMED">✅ ชำระเงินแล้ว</option>
+                                            <option value="CANCELLED">❌ ยกเลิก</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <strong style={{ fontSize: '13px' }}>ยอดรวม (฿):</strong>
+                                        <input className="admin-input" type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} style={{ marginTop: '4px', padding: '6px 10px' }} />
+                                    </div>
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>ยอดรวม (฿)</label>
-                                    <input className="admin-input" type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} style={{ width: '100%' }} />
-                                </div>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button onClick={() => setEditBooking(null)} className="btn-admin-outline" style={{ padding: '8px 16px' }}>ยกเลิก</button>
-                                <button disabled={saving} onClick={async () => {
-                                    setSaving(true)
-                                    try {
-                                        const res = await fetch('/api/bookings', {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ bookingId: editBooking.id, status: editStatus, totalAmount: editAmount }),
-                                        })
-                                        if (res.ok) {
-                                            toast.success('บันทึกสำเร็จ')
-                                            setEditBooking(null)
-                                            if (selectedCustomer) viewCustomerHistory(selectedCustomer)
-                                        } else toast.error('บันทึกไม่สำเร็จ')
-                                    } catch { toast.error('เกิดข้อผิดพลาด') }
-                                    finally { setSaving(false) }
-                                }} className="btn-admin" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+
+                            <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> รายละเอียดการจอง
+                            </h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                                {editBooking.bookingItems.map((item, i) => (
+                                    <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600 }}>{item.court.name}</div>
+                                            {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>📍 {item.court.venue.name}</div>}
+                                            <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
+                                                {formatBookingDateTH(item.date)} | {item.startTime} - {item.endTime}
+                                            </div>
+                                            {item.teacher && <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '2px' }}>ครู: {item.teacher.name}</div>}
+                                        </div>
+                                        <div style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>฿{item.price.toLocaleString()}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {editBooking.participants.length > 0 && (
+                                <>
+                                    <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>ผู้เรียน</h3>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                        {editBooking.participants.map((participant, i) => (
+                                            <span key={i} style={{ padding: '6px 12px', borderRadius: '6px', background: '#f3f4f6', fontSize: '13px' }}>
+                                                <strong>{participant.name}</strong> - {participant.sportType || '-'} {participant.phone ? `| ${participant.phone}` : ''}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+
+                            <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <CreditCard size={16} style={{ color: 'var(--a-primary)' }} /> การชำระเงิน
+                            </h3>
+                            {editBooking.payments.length === 0 ? (
+                                <div style={{ padding: '20px', textAlign: 'center', borderRadius: '8px', border: '1px solid var(--a-border)', color: 'var(--a-text-muted)', fontSize: '14px', marginBottom: '16px' }}>
+                                    ยังไม่มีการชำระเงิน
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                    {editBooking.payments.map(payment => (
+                                        <div key={payment.id} style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                                <div>
+                                                    <span style={{ fontWeight: 600 }}>{paymentMethodMap[payment.method] || payment.method}</span>
+                                                    <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginLeft: '8px' }}>
+                                                        {new Date(payment.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>฿{payment.amount.toLocaleString()}</span>
+                                                    <span style={{ fontSize: '12px', fontWeight: 600, color: paymentStatusMap[payment.status]?.color || '#999' }}>
+                                                        {paymentStatusMap[payment.status]?.label || payment.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {payment.slipUrl && (
+                                                <div style={{ marginTop: '10px' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); setViewSlip(payment.slipUrl || null) }}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                                        <ImageIcon size={14} /> ดูสลิป
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div style={{ padding: '12px 16px', background: '#fef9e7', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700 }}>
+                                <span>ยอดรวม</span>
+                                <span style={{ fontFamily: "'Inter', sans-serif", color: 'var(--a-primary)' }}>฿{editAmount.toLocaleString()}</span>
+                            </div>
+
+                            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                                {editStatus !== 'CANCELLED' && (
+                                    <button onClick={() => handleCancelBooking(editBooking.id)}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e17055', background: 'white', color: '#e17055', fontWeight: 600, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        <XCircle size={16} /> ยกเลิกการจอง
+                                    </button>
+                                )}
+                                {editStatus === 'PENDING' && (
+                                    <button onClick={() => setEditStatus('CONFIRMED')} className="btn-admin"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '14px' }}>
+                                        <CheckCircle size={16} /> ตั้งเป็นยืนยัน
+                                    </button>
+                                )}
+                                <button onClick={() => setEditBooking(null)} className="btn-admin-outline" style={{ padding: '8px 16px' }}>ปิด</button>
+                                <button disabled={saving} onClick={handleSaveEdit} className="btn-admin" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                     <Save size={14} /> {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {viewSlip && (
+                    <div className="modal-overlay" style={{ zIndex: 200 }} onClick={() => setViewSlip(null)}>
+                        <div onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%', background: 'white', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontWeight: 700, fontSize: '16px' }}>สลิปการชำระเงิน</h3>
+                                <button onClick={() => setViewSlip(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                            </div>
+                            <img src={viewSlip} alt="Payment slip" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '8px', border: '1px solid var(--a-border)' }} />
                         </div>
                     </div>
                 )}

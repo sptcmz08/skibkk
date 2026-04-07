@@ -40,14 +40,32 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
-        const { bookingId, invoiceNumber, totalAmount, vatAmount, grandTotal, customData } = body
+        const { bookingId, invoiceNumber, totalAmount, vatAmount, grandTotal, customData, isIssued } = body
 
         if (!bookingId || !invoiceNumber) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
         }
 
-        const createData = { bookingId, invoiceNumber, totalAmount, vatAmount, grandTotal, customData }
-        const updateData = { invoiceNumber, totalAmount, vatAmount, grandTotal, customData }
+        const issuedFlag = typeof isIssued === 'boolean' ? isIssued : false
+        const createData = {
+            bookingId,
+            invoiceNumber,
+            totalAmount,
+            vatAmount,
+            grandTotal,
+            customData,
+            isIssued: issuedFlag,
+            issuedAt: issuedFlag ? new Date() : undefined,
+        }
+        const updateData = {
+            invoiceNumber,
+            totalAmount,
+            vatAmount,
+            grandTotal,
+            customData,
+            isIssued: issuedFlag,
+            ...(issuedFlag ? { issuedAt: new Date() } : {}),
+        }
 
         const invoice = await prisma.invoice.upsert({
             where: { bookingId },

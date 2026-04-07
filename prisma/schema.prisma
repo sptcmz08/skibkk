@@ -346,6 +346,7 @@ model Invoice {
   id            String   @id @default(uuid())
   bookingId     String   @unique
   invoiceNumber String   @unique
+  isIssued      Boolean  @default(false)
   companyName   String?
   taxId         String?
   address       String?

@@ -199,7 +199,7 @@ function AdminBookInner() {
     const fetchAvailability = useCallback(async (dateStr: string, silent = false) => {
         if (!silent) setLoading(true)
         try {
-            const sessionId = getSessionId()
+            const sessionId = getSessionId('admin')
             const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
             const res = await fetch(`/api/availability?date=${dateStr}&sessionId=${sessionId}${venueParam}`, { cache: 'no-store' })
             const data = await res.json()
@@ -302,7 +302,7 @@ function AdminBookInner() {
         if (isInCart(court.courtId, selectedDate, slot.startTime)) {
             // Remove from cart & release lock
             setCart(cart.filter(i => !(i.courtId === court.courtId && i.date === selectedDate && i.startTime === slot.startTime)))
-            const sessionId = getSessionId()
+            const sessionId = getSessionId('admin')
             fetch('/api/locks', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
@@ -311,7 +311,7 @@ function AdminBookInner() {
             toast.success('ลบออกจากรายการแล้ว')
         } else {
             // Try to lock first
-            const sessionId = getSessionId()
+            const sessionId = getSessionId('admin')
             try {
                 const lockRes = await fetch('/api/locks', {
                     method: 'POST',
@@ -364,6 +364,26 @@ function AdminBookInner() {
         return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`
     }
 
+    const bookingDateGroups = Object.entries(
+        cart.reduce<Record<string, CartItem[]>>((groups, item) => {
+            if (!groups[item.date]) groups[item.date] = []
+            groups[item.date].push(item)
+            return groups
+        }, {})
+    )
+        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+        .map(([date, items]) => ({
+            date,
+            formattedDate: formatDateTH(date),
+            times: [...items]
+                .sort((a, b) => {
+                    if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime)
+                    if (a.endTime !== b.endTime) return a.endTime.localeCompare(b.endTime)
+                    return a.courtName.localeCompare(b.courtName)
+                })
+                .map(item => `${item.startTime}–${item.endTime}`),
+        }))
+
     const hasCustomer = bookCustomer || (isNewCustomer && newBookerName.trim())
 
     // Submit booking
@@ -405,7 +425,7 @@ function AdminBookInner() {
                 const data = await res.json()
                 await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
                 // Release locks after successful booking
-                const sessionId = getSessionId()
+                const sessionId = getSessionId('admin')
                 fetch('/api/locks', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
@@ -947,8 +967,6 @@ function AdminBookInner() {
                 const courtNames = [...new Set(cart.map(c => c.courtName))]
                 const bookerName = bookCustomer?.name || newBookerName || '-'
                 const validParts = participants.filter(p => p.name.trim())
-                const dateStr = selectedDate ? formatDateTH(selectedDate) : '-'
-                const timeSlots = [...cart].sort((a, b) => a.startTime.localeCompare(b.startTime)).map(c => `${c.startTime}–${c.endTime}`).join(', ')
 
                 return (
                     <div onClick={() => setShowConfirmModal(false)} style={{
@@ -997,12 +1015,16 @@ function AdminBookInner() {
                                     </div>
 
                                     {/* Date & Time */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                                         <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(155,89,182,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📅</div>
-                                        <div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                             <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>วันที่ / เวลา</div>
-                                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{dateStr}</div>
-                                            <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '2px' }}>⏰ {timeSlots}</div>
+                                            {bookingDateGroups.map(group => (
+                                                <div key={group.date}>
+                                                    <div style={{ fontSize: '15px', fontWeight: 700 }}>{group.formattedDate}</div>
+                                                    <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '2px' }}>⏰ {group.times.join(', ')}</div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
 

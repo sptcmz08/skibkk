@@ -7,6 +7,14 @@ import { FileText, Calendar, Download, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
 
+const INVOICE_DEFAULTS = {
+    companyName: 'SKI BKK',
+    companyAddress1: 'ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน',
+    companyAddress2: 'กรุงเทพมหานคร 10230',
+    companyPhone: 'xxx-xxx-xxxx',
+    companyTaxId: 'x-xxxx-xxxxx-xx-x',
+}
+
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string
@@ -24,16 +32,25 @@ export default function InvoiceReportPage() {
     const printRef = useRef<HTMLDivElement>(null)
 
     // Company info (editable)
-    const [companyName] = useState('SKI BKK')
-    const [companyAddress1] = useState('ซอยรามอินทรา 40 แขวงท่าแร้ง เขตบางเขน')
-    const [companyAddress2] = useState('กรุงเทพมหานคร 10230')
-    const [companyPhone] = useState('xxx-xxx-xxxx')
-    const [companyTaxId] = useState('x-xxxx-xxxxx-xx-x')
+    const [companyName, setCompanyName] = useState(INVOICE_DEFAULTS.companyName)
+    const [companyAddress1, setCompanyAddress1] = useState(INVOICE_DEFAULTS.companyAddress1)
+    const [companyAddress2, setCompanyAddress2] = useState(INVOICE_DEFAULTS.companyAddress2)
+    const [companyPhone, setCompanyPhone] = useState(INVOICE_DEFAULTS.companyPhone)
+    const [companyTaxId, setCompanyTaxId] = useState(INVOICE_DEFAULTS.companyTaxId)
 
     useEffect(() => {
-        fetch('/api/bookings?take=500', { cache: 'no-store' })
-            .then(r => r.json())
-            .then(data => setBookings(data.bookings || []))
+        Promise.all([
+            fetch('/api/bookings?take=500', { cache: 'no-store' }).then(r => r.json()),
+            fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
+        ])
+            .then(([bookingData, settings]) => {
+                setBookings(bookingData.bookings || [])
+                setCompanyName(settings.invoice_company_name || INVOICE_DEFAULTS.companyName)
+                setCompanyAddress1(settings.invoice_company_address1 || INVOICE_DEFAULTS.companyAddress1)
+                setCompanyAddress2(settings.invoice_company_address2 || INVOICE_DEFAULTS.companyAddress2)
+                setCompanyPhone(settings.invoice_company_phone || INVOICE_DEFAULTS.companyPhone)
+                setCompanyTaxId(settings.invoice_company_tax_id || INVOICE_DEFAULTS.companyTaxId)
+            })
             .catch(() => toast.error('โหลดไม่สำเร็จ'))
             .finally(() => setLoading(false))
     }, [])
