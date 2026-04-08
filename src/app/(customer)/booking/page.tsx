@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { clearStoredCart, readStoredCart, syncCartWithServerLocks } from '@/lib/cart'
 
-interface CartItem {
-    courtId: string; courtName: string; date: string; startTime: string; endTime: string; price: number
-}
+import type { CartItem } from '@/lib/cart'
 interface Participant {
     name: string; sportType: string; age: string; shoeSize: string; weight: string; height: string; phone: string; isBooker: boolean
 }
@@ -53,14 +52,17 @@ export default function BookingPage() {
             try {
                 const { getSessionId } = await import('@/lib/session')
                 const sessionId = getSessionId()
-                if (!sessionId) return
-                const res = await fetch(`/api/locks/check?sessionId=${sessionId}`)
-                const data = await res.json()
-                if (data.active && data.expiresAt) {
-                    expiresAt = new Date(data.expiresAt)
+                const result = await syncCartWithServerLocks(sessionId)
+                setCart(result.cart)
+                if (result.active && result.expiresAt) {
+                    expiresAt = result.expiresAt
                 } else {
                     expiresAt = null
                     setLockSecondsLeft(null)
+                    if (result.changed) {
+                        toast.error('รายการในตะกร้าหมดเวลา 20 นาทีแล้ว กรุณาเลือกใหม่')
+                        router.push('/cart')
+                    }
                 }
             } catch { /* ignore */ }
         }
@@ -74,9 +76,7 @@ export default function BookingPage() {
                 if (s <= 0 && !lockExpiredRef.current) {
                     lockExpiredRef.current = true
                     // Clear cart and release locks
-                    localStorage.setItem('skibkk-cart', '[]')
-                    localStorage.removeItem('skibkk-booking-draft')
-                    window.dispatchEvent(new Event('cart-updated'))
+                    clearStoredCart({ clearDraft: true })
                     try {
                         const { getSessionId } = await import('@/lib/session')
                         await fetch('/api/locks', {
@@ -229,9 +229,42 @@ export default function BookingPage() {
     }, [])
 
     useEffect(() => {
-        const stored = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
-        if (stored.length === 0) { router.push('/courts'); return }
-        setCart(stored)
+        let cancelled = false
+
+        const loadCart = async () => {
+            const { getSessionId } = await import('@/lib/session')
+            const result = await syncCartWithServerLocks(getSessionId())
+            if (cancelled) return
+            if (result.cart.length === 0) {
+                if (result.changed) {
+                    toast.error('รายการในตะกร้าหมดเวลา 20 นาทีแล้ว กรุณาเลือกใหม่')
+                }
+                router.push('/courts')
+                return
+            }
+            setCart(result.cart)
+        }
+
+        loadCart().catch(() => {
+            const stored = readStoredCart()
+            if (cancelled) return
+            if (stored.length === 0) {
+                router.push('/courts')
+                return
+            }
+            setCart(stored)
+        })
+
+        const handleCartUpdate = () => {
+            const updatedCart = readStoredCart()
+            if (cancelled) return
+            if (updatedCart.length === 0) {
+                router.push('/courts')
+                return
+            }
+            setCart(updatedCart)
+        }
+        window.addEventListener('cart-updated', handleCartUpdate)
 
         // Fetch booking terms from settings
         fetch('/api/settings', { cache: 'no-store' }).then(r => r.json())
@@ -279,6 +312,11 @@ export default function BookingPage() {
                 if (draft.isBookerLearner !== undefined) setIsBookerLearner(draft.isBookerLearner)
             }
         } catch { /* ignore */ }
+
+        return () => {
+            cancelled = true
+            window.removeEventListener('cart-updated', handleCartUpdate)
+        }
     }, [router])
 
     // Auto-save draft to localStorage on every change
@@ -428,9 +466,7 @@ export default function BookingPage() {
                 body: JSON.stringify({ sessionId }),
             }).catch(() => { })
 
-            localStorage.setItem('skibkk-cart', '[]')
-            localStorage.removeItem(BOOKING_DRAFT_KEY)
-            window.dispatchEvent(new Event('cart-updated'))
+            clearStoredCart({ clearDraft: true })
             setStep(3)
             toast.success('จองสำเร็จ!')
         } catch (err) {

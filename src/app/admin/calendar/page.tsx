@@ -596,7 +596,9 @@ export default function CalendarPage() {
                             let countColor = 'var(--a-text-muted)'
                             let statusLabel = 'ว่าง'
                             if (!isPast && dayAvail && dayAvail.status !== 'past') {
-                                if (dayAvail.status === 'full') {
+                                if (dayAvail.status === 'closed') {
+                                    cellBg = '#f3f4f6'; countColor = '#6b7280'; statusLabel = 'closed'
+                                } else if (dayAvail.status === 'full') {
                                     cellBg = '#fde4de'; countColor = '#d63031'; statusLabel = 'เต็ม'
                                 } else if (dayAvail.status === 'almost_full') {
                                     cellBg = '#fff8e1'; countColor = '#f39c12'; statusLabel = 'ใกล้เต็ม'
@@ -630,7 +632,16 @@ export default function CalendarPage() {
                                     }}>
                                         {day}
                                     </div>
-                                    {hasBookings ? (
+                                    {dayAvail?.status === 'closed' && !isPast ? (
+                                        <div>
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: countColor }}>
+                                                วันหยุด
+                                            </div>
+                                            <div style={{ fontSize: '9px', fontWeight: 600, color: countColor, opacity: 0.8 }}>
+                                                ปิดสนาม
+                                            </div>
+                                        </div>
+                                    ) : hasBookings ? (
                                         <div>
                                             <div style={{ fontSize: '11px', fontWeight: 700, color: countColor }}>
                                                 {bookingCount} ชม.การจอง
@@ -675,6 +686,11 @@ export default function CalendarPage() {
                                 <Calendar size={18} style={{ color: 'var(--a-primary)' }} />
                                 {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                             </h3>
+                            {calAvail[selectedDate]?.status === 'closed' && (
+                                <span className="badge" style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                                    วันหยุด
+                                </span>
+                            )}
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {venues.length > 1 && (
@@ -700,7 +716,19 @@ export default function CalendarPage() {
                         </div>
                     </div>
                     <div style={{ padding: '16px', overflowX: 'auto' }}>
-                        {loading ? (
+                        {calAvail[selectedDate]?.status === 'closed' ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '32px 20px',
+                                borderRadius: '12px',
+                                background: '#f9fafb',
+                                border: '1px solid #e5e7eb',
+                                color: '#6b7280',
+                                fontWeight: 700,
+                            }}>
+                                วันนี้ถูกตั้งเป็นวันหยุด ปิดสนามทั้งวัน
+                            </div>
+                        ) : loading ? (
                             <div style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
                         ) : (() => {
                             const venueCourtIdFilter = selectedVenueId && courts.length > 0

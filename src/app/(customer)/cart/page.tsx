@@ -7,15 +7,8 @@ import { ShoppingCart, Trash2, Calendar, Clock, MapPin, ArrowRight, AlertCircle,
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { getSessionId } from '@/lib/session'
-
-interface CartItem {
-    courtId: string
-    courtName: string
-    date: string
-    startTime: string
-    endTime: string
-    price: number
-}
+import { clearStoredCart, readStoredCart, syncCartWithServerLocks } from '@/lib/cart'
+import type { CartItem } from '@/lib/cart'
 
 export default function CartPage() {
     const router = useRouter()
@@ -23,16 +16,43 @@ export default function CartPage() {
     const [mounted, setMounted] = useState(false)
     const [user, setUser] = useState<{ name: string; email: string; phone: string } | null>(null)
     const [showAuthModal, setShowAuthModal] = useState(false)
+    const syncToastShownRef = useRef(false)
 
     useEffect(() => {
         setMounted(true)
-        const stored: CartItem[] = JSON.parse(localStorage.getItem('skibkk-cart') || '[]')
-        setCart(stored)
+        let cancelled = false
+
+        const syncCart = async () => {
+            const result = await syncCartWithServerLocks(getSessionId())
+            if (!cancelled) setCart(result.cart)
+            if (!cancelled && result.changed && result.removedCount > 0 && !syncToastShownRef.current) {
+                syncToastShownRef.current = true
+                toast('รายการในตะกร้าหมดเวลา 20 นาทีแล้ว ระบบลบออกให้อัตโนมัติ', {
+                    duration: 4500,
+                    icon: '⏰',
+                })
+            }
+        }
+
+        syncCart().catch(() => {
+            if (!cancelled) setCart(readStoredCart())
+        })
+
+        const handleCartUpdate = () => {
+            if (!cancelled) setCart(readStoredCart())
+        }
+        window.addEventListener('cart-updated', handleCartUpdate)
+
         // Check auth status
         fetch('/api/auth/me', { cache: 'no-store' })
             .then(r => r.ok ? r.json() : null)
             .then(data => { if (data?.user) setUser(data.user) })
             .catch(() => { })
+
+        return () => {
+            cancelled = true
+            window.removeEventListener('cart-updated', handleCartUpdate)
+        }
     }, [])
 
     const removeItem = (index: number) => {
@@ -56,8 +76,7 @@ export default function CartPage() {
 
     const clearCart = () => {
         setCart([])
-        localStorage.setItem('skibkk-cart', '[]')
-        window.dispatchEvent(new Event('cart-updated'))
+        clearStoredCart({ clearDraft: true })
         toast.success('ล้างตะกร้าแล้ว')
         // Release all locks for this session
         const sessionId = getSessionId()
@@ -93,10 +112,19 @@ export default function CartPage() {
             expiredRef.current = false
             const check = async () => {
                 try {
-                    const res = await fetch(`/api/locks/check?sessionId=${getSessionId()}`, { cache: 'no-store' })
-                    const data = await res.json()
-                    if (data.active && data.expiresAt) setExpiresAt(new Date(data.expiresAt))
-                    else setExpiresAt(null)
+                    const result = await syncCartWithServerLocks(getSessionId())
+                    setCart(result.cart)
+                    if (result.active && result.expiresAt) setExpiresAt(result.expiresAt)
+                    else {
+                        setExpiresAt(null)
+                        if (result.changed && result.removedCount > 0 && !syncToastShownRef.current) {
+                            syncToastShownRef.current = true
+                            toast('รายการในตะกร้าหมดเวลา 20 นาทีแล้ว ระบบลบออกให้อัตโนมัติ', {
+                                duration: 4500,
+                                icon: '⏰',
+                            })
+                        }
+                    }
                 } catch { }
             }
             check()
@@ -111,8 +139,7 @@ export default function CartPage() {
                 // Auto-clear cart when lock expires
                 if (s <= 0 && !expiredRef.current) {
                     expiredRef.current = true
-                    localStorage.setItem('skibkk-cart', '[]')
-                    window.dispatchEvent(new Event('cart-updated'))
+                    clearStoredCart({ clearDraft: true })
                     setCart([])
                     fetch('/api/locks', {
                         method: 'DELETE',

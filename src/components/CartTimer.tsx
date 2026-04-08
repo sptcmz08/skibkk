@@ -5,27 +5,41 @@ import { Timer } from 'lucide-react'
 import { getSessionId } from '@/lib/session'
 import toast from 'react-hot-toast'
 import { useRealtimeEvents } from '@/lib/use-realtime-events'
+import { syncCartWithServerLocks } from '@/lib/cart'
 
 export default function CartTimer() {
     const [expiresAt, setExpiresAt] = useState<Date | null>(null)
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
     const toastedRef = useRef(false)
     const checkLocksRef = useRef<(() => Promise<void>) | null>(null)
+    const invalidCartToastRef = useRef(false)
 
     // Poll server every 5s for the lock expiry
     useEffect(() => {
         const check = async () => {
             const sessionId = getSessionId()
-            if (!sessionId) return
             try {
-                const res = await fetch(`/api/locks/check?sessionId=${sessionId}`)
-                const data = await res.json()
-                if (data.active && data.expiresAt) {
-                    setExpiresAt(new Date(data.expiresAt))
+                const result = await syncCartWithServerLocks(sessionId)
+                if (result.active && result.expiresAt) {
+                    setExpiresAt(result.expiresAt)
                     toastedRef.current = false
+                    if (result.changed && result.removedCount > 0 && !invalidCartToastRef.current) {
+                        invalidCartToastRef.current = true
+                        toast('ระบบลบรายการที่หมดเวลา หรือถูกจองไปแล้ว ออกจากตะกร้าให้แล้ว', {
+                            duration: 4500,
+                            icon: '🧹',
+                        })
+                    }
                 } else {
                     setExpiresAt(null)
                     setSecondsLeft(null)
+                    if (result.changed && result.removedCount > 0 && !toastedRef.current) {
+                        toastedRef.current = true
+                        toast('หมดเวลา 20 นาที ระบบล้างตะกร้าให้อัตโนมัติแล้ว', {
+                            duration: 5000,
+                            icon: '⏰',
+                        })
+                    }
                 }
             } catch (err) {
                 console.error('[CartTimer] Error:', err)
