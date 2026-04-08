@@ -38,6 +38,7 @@ export default function CalendarPage() {
     const venueIdParam = searchParams.get('venueId')
     const now = new Date()
     const bookingGridRef = useRef<HTMLDivElement>(null)
+    const editDateInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
     // Helper: convert UTC ISO date string to YYYY-MM-DD in Bangkok timezone
     const toDateBangkok = (isoDate: string) => {
         const d = new Date(isoDate)
@@ -88,6 +89,16 @@ export default function CalendarPage() {
         const [year, month, day] = dateStr.split('-')
         if (!year || !month || !day) return dateStr
         return `${day}/${month}/${year}`
+    }
+
+    const openEditDatePicker = (index: number) => {
+        const input = editDateInputRefs.current[index]
+        if (!input) return
+        if ('showPicker' in input && typeof input.showPicker === 'function') {
+            input.showPicker()
+            return
+        }
+        input.focus()
     }
 
     const openBookingModal = (booking: Booking) => {
@@ -1186,7 +1197,19 @@ export default function CalendarPage() {
                                                     return filtered.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
                                                 })()}
                                             </select>
-                                            <div style={{ position: 'relative' }}>
+                                            <div
+                                                style={{ position: 'relative' }}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => openEditDatePicker(i)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault()
+                                                        openEditDatePicker(i)
+                                                    }
+                                                }}
+                                                aria-label="เปิดตัวเลือกวันที่"
+                                            >
                                                 <input
                                                     type="text"
                                                     readOnly
@@ -1196,6 +1219,7 @@ export default function CalendarPage() {
                                                 />
                                                 <input
                                                     type="date"
+                                                    ref={el => { editDateInputRefs.current[i] = el }}
                                                     value={(item as any).date}
                                                     onChange={async e => {
                                                         await updateEditBookingItem(i, { date: e.target.value }, { recalcPrice: true })
@@ -1206,7 +1230,7 @@ export default function CalendarPage() {
                                                         position: 'absolute',
                                                         inset: 0,
                                                         opacity: 0,
-                                                        cursor: 'pointer',
+                                                        pointerEvents: 'none',
                                                     }}
                                                 />
                                             </div>
