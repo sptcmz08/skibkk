@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
+import { DEFAULT_LINE_CONFIRMATION_TEMPLATE, DEFAULT_LINE_UPDATE_TEMPLATE } from '@/lib/line-booking-notify'
 
 export default function AdminSettingsPage() {
     const [logo, setLogo] = useState('')
@@ -24,6 +25,8 @@ export default function AdminSettingsPage() {
     const [invoiceCompanyPhone, setInvoiceCompanyPhone] = useState('xxx-xxx-xxxx')
     const [invoiceCompanyTaxId, setInvoiceCompanyTaxId] = useState('x-xxxx-xxxxx-xx-x')
     const [invoiceRemarkNote, setInvoiceRemarkNote] = useState('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
+    const [lineBookingConfirmationTemplate, setLineBookingConfirmationTemplate] = useState(DEFAULT_LINE_CONFIRMATION_TEMPLATE)
+    const [lineBookingUpdateTemplate, setLineBookingUpdateTemplate] = useState(DEFAULT_LINE_UPDATE_TEMPLATE)
     const logoInputRef = useRef<HTMLInputElement>(null)
     const qrInputRef = useRef<HTMLInputElement>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
@@ -46,6 +49,8 @@ export default function AdminSettingsPage() {
                 if (data.invoice_company_phone) setInvoiceCompanyPhone(data.invoice_company_phone)
                 if (data.invoice_company_tax_id) setInvoiceCompanyTaxId(data.invoice_company_tax_id)
                 if (data.invoice_remark_note) setInvoiceRemarkNote(data.invoice_remark_note)
+                if (data.line_booking_confirmation_template) setLineBookingConfirmationTemplate(data.line_booking_confirmation_template)
+                if (data.line_booking_update_template) setLineBookingUpdateTemplate(data.line_booking_update_template)
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
@@ -411,6 +416,52 @@ export default function AdminSettingsPage() {
                     onChange={e => setBookingTerms(e.target.value)}
                     onBlur={() => { saveSetting('booking_terms', bookingTerms); toast.success('บันทึกเงื่อนไขแล้ว') }}
                 />
+            </div>
+
+            <div style={cardStyle}>
+                <h2 style={sectionTitle}><FileText size={20} color="#00b894" /> ข้อความ LINE อัตโนมัติ</h2>
+                <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px', lineHeight: 1.7 }}>
+                    ใช้สำหรับข้อความที่ส่งหาลูกค้าอัตโนมัติทาง LINE ตอนยืนยันการจอง และตอนแอดมินแก้ไขการจอง
+                    <br />
+                    ตัวแปรที่ใช้ได้: {'{bookingNumber}'}, {'{customerName}'}, {'{items}'}, {'{totalAmount}'}
+                </p>
+
+                <div style={{ display: 'grid', gap: '16px', marginBottom: '14px' }}>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ข้อความตอนยืนยันการจอง</div>
+                        <textarea
+                            className="admin-input"
+                            rows={10}
+                            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }}
+                            value={lineBookingConfirmationTemplate}
+                            onChange={e => setLineBookingConfirmationTemplate(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ข้อความตอนแอดมินแก้ไขการจอง</div>
+                        <textarea
+                            className="admin-input"
+                            rows={10}
+                            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }}
+                            value={lineBookingUpdateTemplate}
+                            onChange={e => setLineBookingUpdateTemplate(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn-admin" onClick={async () => {
+                        await Promise.all([
+                            saveSetting('line_booking_confirmation_template', lineBookingConfirmationTemplate),
+                            saveSetting('line_booking_update_template', lineBookingUpdateTemplate),
+                        ])
+                        toast.success('บันทึกข้อความ LINE สำเร็จ')
+                    }}>บันทึกข้อความ LINE</button>
+                    <button className="btn-admin-outline" onClick={() => {
+                        setLineBookingConfirmationTemplate(DEFAULT_LINE_CONFIRMATION_TEMPLATE)
+                        setLineBookingUpdateTemplate(DEFAULT_LINE_UPDATE_TEMPLATE)
+                    }}>รีเซ็ตข้อความตัวอย่าง</button>
+                </div>
             </div>
 
             {/* Holiday closures */}

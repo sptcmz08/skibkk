@@ -3,11 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateNextBookingNumber } from '@/lib/document-number-service'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
+import { sendLinePush } from '@/lib/line-messaging'
+import {
+    DEFAULT_LINE_CONFIRMATION_TEMPLATE,
+    DEFAULT_LINE_UPDATE_TEMPLATE,
+    renderLineBookingTemplate,
+} from '@/lib/line-booking-notify'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
 // This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
 const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12:00:00Z')
-import { sendLineBookingConfirmation } from '@/lib/line-messaging'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +25,25 @@ const hasTargetField = (error: unknown, field: string) => {
     const target = meta?.target
     if (Array.isArray(target)) return target.includes(field)
     return target === field
+}
+
+const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+
+const getLineBookingTemplates = async () => {
+    const settings = await prisma.siteSetting.findMany({
+        where: {
+            key: {
+                in: ['line_booking_confirmation_template', 'line_booking_update_template'],
+            },
+        },
+    })
+
+    const settingsMap = Object.fromEntries(settings.map(setting => [setting.key, setting.value]))
+
+    return {
+        confirmation: settingsMap.line_booking_confirmation_template || DEFAULT_LINE_CONFIRMATION_TEMPLATE,
+        update: settingsMap.line_booking_update_template || DEFAULT_LINE_UPDATE_TEMPLATE,
+    }
 }
 
 export async function GET(req: NextRequest) {
@@ -240,20 +264,22 @@ export async function POST(req: NextRequest) {
         })
 
         // Send confirmation via LINE (non-blocking)
-        const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, lineUserId: true } })
+        const userRecord = await prisma.user.findUnique({ where: { id: bookingUserId }, select: { email: true, name: true, lineUserId: true } })
         if (userRecord?.lineUserId) {
-            sendLineBookingConfirmation(userRecord.lineUserId, {
+            const templates = await getLineBookingTemplates()
+            const message = renderLineBookingTemplate(templates.confirmation, {
                 bookingNumber,
                 customerName: userRecord.name,
                 items: booking.bookingItems.map(item => ({
                     courtName: item.court.name,
-                    date: new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+                    date: formatLineDate(item.date),
                     startTime: item.startTime,
                     endTime: item.endTime,
                     price: item.price,
                 })),
                 totalAmount: body.totalAmount,
-            }).catch(err => console.error('Failed to send LINE confirmation:', err))
+            }, DEFAULT_LINE_CONFIRMATION_TEMPLATE)
+            sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
         }
 
         publishRealtimeEvent({
@@ -429,7 +455,7 @@ export async function PATCH(req: NextRequest) {
                 status: updateData.status || undefined,
                 totalAmount: updateData.totalAmount !== undefined ? updateData.totalAmount : undefined,
             },
-            include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true } } },
+            include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true, lineUserId: true } } },
         })
 
         await prisma.auditLog.create({
@@ -449,6 +475,24 @@ export async function PATCH(req: NextRequest) {
             courtIds: [...new Set(updated.bookingItems.map(item => item.courtId))],
             message: updated.status === 'CANCELLED' ? 'booking cancelled' : 'booking updated',
         })
+
+        if (updated.user?.lineUserId) {
+            const templates = await getLineBookingTemplates()
+            const message = renderLineBookingTemplate(templates.update, {
+                bookingNumber: updated.bookingNumber,
+                customerName: updated.user.name,
+                items: updated.bookingItems.map(item => ({
+                    courtName: item.court.name,
+                    date: formatLineDate(item.date),
+                    startTime: item.startTime,
+                    endTime: item.endTime,
+                    price: item.price,
+                })),
+                totalAmount: updated.totalAmount,
+            }, DEFAULT_LINE_UPDATE_TEMPLATE)
+
+            sendLinePush(updated.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE update:', err))
+        }
 
         return NextResponse.json({ booking: updated })
     } catch (error) {
