@@ -5,9 +5,10 @@ import { generateNextBookingNumber } from '@/lib/document-number-service'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
 import { sendLinePush } from '@/lib/line-messaging'
 import {
-    DEFAULT_LINE_CONFIRMATION_TEMPLATE,
-    DEFAULT_LINE_UPDATE_TEMPLATE,
-    renderLineBookingTemplate,
+    buildLineConfirmationMessage,
+    buildLineUpdateMessage,
+    DEFAULT_LINE_CONFIRMATION_NOTE,
+    DEFAULT_LINE_UPDATE_NOTE,
 } from '@/lib/line-booking-notify'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
@@ -41,8 +42,8 @@ const getLineBookingTemplates = async () => {
     const settingsMap = Object.fromEntries(settings.map(setting => [setting.key, setting.value]))
 
     return {
-        confirmation: settingsMap.line_booking_confirmation_template || DEFAULT_LINE_CONFIRMATION_TEMPLATE,
-        update: settingsMap.line_booking_update_template || DEFAULT_LINE_UPDATE_TEMPLATE,
+        confirmation: settingsMap.line_booking_confirmation_template || DEFAULT_LINE_CONFIRMATION_NOTE,
+        update: settingsMap.line_booking_update_template || DEFAULT_LINE_UPDATE_NOTE,
     }
 }
 
@@ -267,7 +268,7 @@ export async function POST(req: NextRequest) {
         const userRecord = await prisma.user.findUnique({ where: { id: bookingUserId }, select: { email: true, name: true, lineUserId: true } })
         if (userRecord?.lineUserId) {
             const templates = await getLineBookingTemplates()
-            const message = renderLineBookingTemplate(templates.confirmation, {
+            const message = buildLineConfirmationMessage(templates.confirmation, {
                 bookingNumber,
                 customerName: userRecord.name,
                 items: booking.bookingItems.map(item => ({
@@ -278,7 +279,7 @@ export async function POST(req: NextRequest) {
                     price: item.price,
                 })),
                 totalAmount: body.totalAmount,
-            }, DEFAULT_LINE_CONFIRMATION_TEMPLATE)
+            })
             sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
         }
 
@@ -478,7 +479,7 @@ export async function PATCH(req: NextRequest) {
 
         if (updated.user?.lineUserId) {
             const templates = await getLineBookingTemplates()
-            const message = renderLineBookingTemplate(templates.update, {
+            const message = buildLineUpdateMessage(templates.update, {
                 bookingNumber: updated.bookingNumber,
                 customerName: updated.user.name,
                 items: updated.bookingItems.map(item => ({
@@ -489,7 +490,7 @@ export async function PATCH(req: NextRequest) {
                     price: item.price,
                 })),
                 totalAmount: updated.totalAmount,
-            }, DEFAULT_LINE_UPDATE_TEMPLATE)
+            })
 
             sendLinePush(updated.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE update:', err))
         }
