@@ -2,6 +2,7 @@
 
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
@@ -418,7 +419,7 @@ export default function AdminSettingsPage() {
                 <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px' }}>กำหนดวันที่ปิดสนามพิเศษ เช่น วันปีใหม่ วันสงกรานต์</p>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                    <input type="date" className="admin-input" style={{ width: '180px' }} value={newClosedDate} onChange={e => setNewClosedDate(e.target.value)} />
+                    <DatePickerInput value={newClosedDate} onChange={setNewClosedDate} style={{ width: '180px' }} />
                     <input className="admin-input" style={{ flex: 1, minWidth: '200px' }} placeholder="เหตุผล เช่น วันปีใหม่" value={newClosedReason} onChange={e => setNewClosedReason(e.target.value)} />
                     <button className="btn-admin" onClick={async () => {
                         if (!newClosedDate) { toast.error('เลือกวันที่'); return }

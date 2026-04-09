@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect } from 'react'
 import { BookOpen, Calendar, Clock, User, Download } from 'lucide-react'
@@ -88,9 +89,9 @@ export default function TeacherReportPage() {
                         <option value="all">ครูทุกคน</option>
                         {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <input type="date" className="admin-input" style={{ width: '150px' }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                    <DatePickerInput value={dateFrom} onChange={setDateFrom} style={{ width: '150px' }} />
                     <span style={{ color: 'var(--a-text-muted)' }}>ถึง</span>
-                    <input type="date" className="admin-input" style={{ width: '150px' }} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                    <DatePickerInput value={dateTo} onChange={setDateTo} style={{ width: '150px' }} />
                 </div>
             </div>
 

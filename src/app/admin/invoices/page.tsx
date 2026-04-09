@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save, Calendar } from 'lucide-react'
@@ -884,9 +885,9 @@ export default function InvoicesPage() {
             <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={16} style={{ color: 'var(--a-text-muted)' }} />
-                    <input type="date" className="admin-input" style={{ width: '160px' }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                    <DatePickerInput value={dateFrom} onChange={setDateFrom} style={{ width: '160px' }} />
                     <span style={{ color: 'var(--a-text-muted)', fontSize: '13px' }}>ถึง</span>
-                    <input type="date" className="admin-input" style={{ width: '160px' }} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                    <DatePickerInput value={dateTo} onChange={setDateTo} style={{ width: '160px' }} />
                     {(dateFrom || dateTo) && (
                         <button onClick={() => { setDateFrom(''); setDateTo('') }} className="btn-admin-outline" style={{ padding: '7px 12px', fontSize: '12px' }}>ล้าง</button>
                     )}

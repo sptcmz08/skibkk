@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect } from 'react'
 import { BarChart3, Calendar, TrendingUp, DollarSign, Users, Clock, Download, Search } from 'lucide-react'
@@ -77,9 +78,9 @@ export default function ReportsPage() {
                         <option value="booking">วันที่จองสนาม</option>
                         <option value="payment">วันที่ชำระเงิน</option>
                     </select>
-                    <input type="date" className="admin-input" style={{ width: '150px' }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                    <DatePickerInput value={dateFrom} onChange={setDateFrom} style={{ width: '150px' }} />
                     <span style={{ color: 'var(--a-text-muted)' }}>ถึง</span>
-                    <input type="date" className="admin-input" style={{ width: '150px' }} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                    <DatePickerInput value={dateTo} onChange={setDateTo} style={{ width: '150px' }} />
                 </div>
             </div>
 

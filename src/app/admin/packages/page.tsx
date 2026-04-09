@@ -2,6 +2,7 @@
 
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect } from 'react'
 import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2 } from 'lucide-react'
@@ -298,8 +299,8 @@ export default function PackagesPage() {
                             <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>อายุแพ็คเกจ (วัน)</label><input type="number" className="admin-input" value={form.validDays} onChange={e => setForm({ ...form, validDays: e.target.value })} /></div>
                             <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>คำอธิบาย</label><input className="admin-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="เช่น ซื้อ 10 ชม. ลด 15%" /></div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันเริ่มต้นใช้งาน</label><input type="date" className="admin-input" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })} /></div>
-                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันสิ้นสุดใช้งาน</label><input type="date" className="admin-input" value={form.validTo} onChange={e => setForm({ ...form, validTo: e.target.value })} /></div>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันเริ่มต้นใช้งาน</label><DatePickerInput value={form.validFrom} onChange={value => setForm({ ...form, validFrom: value })} style={{ width: '100%' }} /></div>
+                                <div className="input-group"><label style={{ color: 'var(--a-text-secondary)' }}>วันสิ้นสุดใช้งาน</label><DatePickerInput value={form.validTo} onChange={value => setForm({ ...form, validTo: value })} style={{ width: '100%' }} /></div>
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>

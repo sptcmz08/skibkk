@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Calendar, Download, Printer } from 'lucide-react'
@@ -266,7 +267,7 @@ export default function InvoiceReportPage() {
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <Calendar size={16} style={{ color: 'var(--a-text-muted)' }} />
-                    <input type="date" className="admin-input" style={{ width: '160px' }} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+                    <DatePickerInput value={selectedDate} onChange={setSelectedDate} style={{ width: '160px' }} />
                     <button onClick={handlePrint} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} disabled={filtered.length === 0}>
                         <Printer size={16} /> พิมพ์
                     </button>

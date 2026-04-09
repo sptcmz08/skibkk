@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useCallback } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle } from 'lucide-react'
@@ -42,7 +43,7 @@ export default function AvailabilityPage() {
                 <button onClick={() => changeDate(-1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronLeft size={18} /></button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={20} style={{ color: 'var(--a-primary)' }} />
-                    <input type="date" className="admin-input" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ fontWeight: 600 }} />
+                    <DatePickerInput value={selectedDate} onChange={setSelectedDate} style={{ width: '170px', fontWeight: 600 }} />
                     <span style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>
                         {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </span>
