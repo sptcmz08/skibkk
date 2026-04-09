@@ -49,6 +49,7 @@ export default function BookingsManagement() {
     const [editMode, setEditMode] = useState(false)
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
+    const [editBookingItems, setEditBookingItems] = useState<Booking['bookingItems']>([])
     const [saving, setSaving] = useState(false)
     const [page, setPage] = useState(0)
     const pageSize = 20
@@ -101,6 +102,13 @@ export default function BookingsManagement() {
                     bookingId: viewBooking.id,
                     status: editStatus,
                     totalAmount: editAmount,
+                    bookingItems: editBookingItems.map(item => ({
+                        courtId: item.courtId,
+                        date: item.date,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        price: item.price,
+                    })),
                 }),
             })
             if (res.ok) {
@@ -132,6 +140,27 @@ export default function BookingsManagement() {
 
     const paged = bookings.slice(page * pageSize, (page + 1) * pageSize)
     const totalPages = Math.ceil(bookings.length / pageSize)
+
+    const toDateOnly = (dateStr: string) => {
+        const d = new Date(dateStr)
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+
+    const sortBookingItems = <T extends { date: string; startTime: string }>(items: T[]) => {
+        return [...items].sort((a, b) => {
+            const dateCompare = toDateOnly(a.date).localeCompare(toDateOnly(b.date))
+            if (dateCompare !== 0) return dateCompare
+            return a.startTime.localeCompare(b.startTime)
+        })
+    }
+
+    const updateEditBookingItem = (index: number, patch: Partial<Booking['bookingItems'][number]>) => {
+        setEditBookingItems(prev => {
+            const next = [...prev]
+            next[index] = { ...next[index], ...patch }
+            return sortBookingItems(next)
+        })
+    }
 
     const totalConfirmed = bookings.filter(b => b.status === 'CONFIRMED').length
     const totalPending = bookings.filter(b => b.status === 'PENDING').length
@@ -220,7 +249,8 @@ export default function BookingsManagement() {
                                 </thead>
                                 <tbody>
                                     {paged.map(b => {
-                                        const firstItem = b.bookingItems[0]
+                                        const sortedItems = sortBookingItems(b.bookingItems)
+                                        const firstItem = sortedItems[0]
                                         const hasSlip = b.payments.some(p => p.slipUrl)
                                         return (
                                             <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => setViewBooking(b)}>
@@ -238,7 +268,7 @@ export default function BookingsManagement() {
                                                     <div style={{ fontSize: '13px' }}>{firstItem?.court?.name || '-'}</div>
                                                     <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
                                                         {firstItem ? `${firstItem.startTime}-${firstItem.endTime}` : '-'}
-                                                        {b.bookingItems.length > 1 && <span style={{ color: 'var(--a-primary)', fontWeight: 600 }}> +{b.bookingItems.length - 1}</span>}
+                                                        {sortedItems.length > 1 && <span style={{ color: 'var(--a-primary)', fontWeight: 600 }}> +{sortedItems.length - 1}</span>}
                                                     </div>
                                                 </td>
                                                 <td style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
@@ -325,7 +355,15 @@ export default function BookingsManagement() {
                                         </button>
                                     </>
                                 ) : (
-                                    <button onClick={() => { setEditMode(true); setEditStatus(viewBooking.status); setEditAmount(viewBooking.totalAmount) }}
+                                    <button onClick={() => {
+                                        setEditMode(true)
+                                        setEditStatus(viewBooking.status)
+                                        setEditAmount(viewBooking.totalAmount)
+                                        setEditBookingItems(sortBookingItems(viewBooking.bookingItems).map(item => ({
+                                            ...item,
+                                            date: toDateOnly(item.date),
+                                        })))
+                                    }}
                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
                                         <Edit2 size={12} /> แก้ไข
                                     </button>
@@ -365,17 +403,39 @@ export default function BookingsManagement() {
                             <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> รายการจอง ({viewBooking.bookingItems.length})
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-                            {viewBooking.bookingItems.map((item, i) => (
-                                <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            {(editMode ? editBookingItems : sortBookingItems(viewBooking.bookingItems)).map((item, i) => (
+                                <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                                     <div>
                                         <div style={{ fontWeight: 600 }}>{item.court.name}</div>
-                                        {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>📍 {item.court.venue.name}</div>}
-                                        <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
-                                            {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
-                                        </div>
-                                        {item.teacher && <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '2px' }}>👨‍🏫 ครู: {item.teacher.name}</div>}
+                                        {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>Venue: {item.court.venue.name}</div>}
+                                        {editMode ? (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+                                                <input
+                                                    type="date"
+                                                    className="admin-input"
+                                                    value={item.date}
+                                                    onChange={e => updateEditBookingItem(i, { date: e.target.value })}
+                                                    style={{ width: '160px', padding: '6px 10px' }}
+                                                />
+                                                <select className="admin-input" value={item.startTime} onChange={e => updateEditBookingItem(i, { startTime: e.target.value })} style={{ padding: '6px 10px' }}>
+                                                    {Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`).map(time => (
+                                                        <option key={time} value={time}>{time}</option>
+                                                    ))}
+                                                </select>
+                                                <select className="admin-input" value={item.endTime} onChange={e => updateEditBookingItem(i, { endTime: e.target.value })} style={{ padding: '6px 10px' }}>
+                                                    {Array.from({ length: 24 }, (_, h) => `${String(h + 1).padStart(2, '0')}:00`).map(time => (
+                                                        <option key={time} value={time}>{time}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
+                                                {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
+                                            </div>
+                                        )}
+                                        {item.teacher && <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '2px' }}>Teacher: {item.teacher.name}</div>}
                                     </div>
-                                    <div style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>฿{item.price.toLocaleString()}</div>
+                                    <div style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>THB {item.price.toLocaleString()}</div>
                                 </div>
                             ))}
                         </div>
@@ -487,3 +547,4 @@ export default function BookingsManagement() {
         </div></FadeIn>
     )
 }
+
