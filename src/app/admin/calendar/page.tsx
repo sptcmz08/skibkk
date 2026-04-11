@@ -1041,7 +1041,15 @@ export default function CalendarPage() {
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
                                                                 const sportLabel = sportTypes[0] || ''
-                                                                const teacherNames = [...new Set(cb.booking.bookingItems.filter(item => item.courtId === court.id && item.teacher).map(item => item.teacher!.name))]
+                                                                // Build per-hour teacher map for this block's time range
+                                                                const teacherByHour: Array<{ time: string; name: string }> = []
+                                                                cb.booking.bookingItems
+                                                                    .filter(item => item.courtId === court.id && item.teacher)
+                                                                    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                                                                    .forEach(item => {
+                                                                        teacherByHour.push({ time: `${item.startTime}-${item.endTime}`, name: item.teacher!.name })
+                                                                    })
+                                                                const hasTeachers = teacherByHour.length > 0
 
                                                                 if (hours <= 0) return null
 
@@ -1108,8 +1116,16 @@ export default function CalendarPage() {
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {teacherNames.length > 0 && (
-                                                                            <div style={{ fontSize: '10px', opacity: 0.8 }}>🎓 {teacherNames.join(', ')}</div>
+                                                                        {hasTeachers && (
+                                                                            <div style={{ fontSize: '10px', opacity: 0.85, lineHeight: 1.4 }}>
+                                                                                {teacherByHour.length === 1 ? (
+                                                                                    <span>🎓 {teacherByHour[0].name}</span>
+                                                                                ) : (
+                                                                                    teacherByHour.map((th, i) => (
+                                                                                        <div key={i}>🎓 {th.time} {th.name}</div>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
                                                                         )}
                                                                     </div>
                                                                 )
