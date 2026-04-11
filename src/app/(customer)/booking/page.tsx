@@ -870,44 +870,9 @@ export default function BookingPage() {
                 </motion.div>
             )}
 
-            {/* Step 3: Success */}
+            {/* Step 3: Success — auto-redirect to booking history */}
             {step === 3 && bookingResult && (
-                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', padding: '40px 0' }}>
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-                        style={{
-                            width: '100px', height: '100px', borderRadius: '50%',
-                            background: 'var(--c-gradient-success)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            margin: '0 auto 24px',
-                        }}
-                    >
-                        <CheckCircle size={48} style={{ color: '#0a0a1a' }} />
-                    </motion.div>
-                    <h2 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>จองสำเร็จ! 🎉</h2>
-                    <p style={{ color: 'var(--c-text-secondary)', marginBottom: '24px' }}>
-                        การจองของคุณได้รับการบันทึกเรียบร้อยแล้ว
-                    </p>
-                    <div className="glass-card" style={{ cursor: 'default', display: 'inline-block', padding: '20px 40px', marginBottom: '32px' }}>
-                        <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '4px' }}>หมายเลขการจอง</p>
-                        <p style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", letterSpacing: 1, background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            {bookingResult.bookingNumber}
-                        </p>
-                    </div>
-                    <p style={{ color: 'var(--c-text-muted)', fontSize: '14px', marginBottom: '32px' }}>
-                        รายละเอียดการจองจะถูกส่งไปยังอีเมลของคุณ
-                    </p>
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                        <button onClick={() => router.push('/profile')} className="btn btn-secondary">
-                            ดูประวัติการจอง
-                        </button>
-                        <button onClick={() => router.push('/courts')} className="btn btn-primary">
-                            จองเพิ่ม
-                        </button>
-                    </div>
-                </motion.div>
+                <SuccessRedirect router={router} bookingNumber={bookingResult.bookingNumber} />
             )}
 
             {/* Booking Terms Modal */}
@@ -943,5 +908,63 @@ export default function BookingPage() {
                 </div>
             )}
         </div>
+    )
+}
+
+// Auto-redirect to booking history after success
+function SuccessRedirect({ router, bookingNumber }: { router: ReturnType<typeof useRouter>; bookingNumber: string }) {
+    const [countdown, setCountdown] = useState(3)
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer)
+                    router.push('/profile')
+                    return 0
+                }
+                return prev - 1
+            })
+        }, 1000)
+        return () => clearInterval(timer)
+    }, [router])
+
+    return (
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', padding: '40px 0' }}>
+            <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                style={{
+                    width: '100px', height: '100px', borderRadius: '50%',
+                    background: 'var(--c-gradient-success)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 24px',
+                }}
+            >
+                <CheckCircle size={48} style={{ color: '#0a0a1a' }} />
+            </motion.div>
+            <h2 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>จองสำเร็จ! 🎉</h2>
+            <p style={{ color: 'var(--c-text-secondary)', marginBottom: '24px' }}>
+                การจองของคุณได้รับการบันทึกเรียบร้อยแล้ว
+            </p>
+            <div className="glass-card" style={{ cursor: 'default', display: 'inline-block', padding: '20px 40px', marginBottom: '32px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '4px' }}>หมายเลขการจอง</p>
+                <p style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", letterSpacing: 1, background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {bookingNumber}
+                </p>
+            </div>
+            <p style={{ color: 'var(--c-text-muted)', fontSize: '14px', marginBottom: '32px' }}>
+                กำลังไปหน้าประวัติการจองใน {countdown} วินาที...
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button onClick={() => router.push('/profile')} className="btn btn-secondary">
+                    ดูประวัติการจอง
+                </button>
+                <button onClick={() => router.push('/courts')} className="btn btn-primary">
+                    จองเพิ่ม
+                </button>
+            </div>
+        </motion.div>
     )
 }
