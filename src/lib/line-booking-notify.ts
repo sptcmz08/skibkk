@@ -16,6 +16,12 @@ type BookingNotifyData = {
         startTime: string
         endTime: string
         price: number
+        original?: {
+            courtName?: string
+            date?: string
+            startTime?: string
+            endTime?: string
+        } | null
     }>
     totalAmount: number
 }
@@ -23,9 +29,20 @@ type BookingNotifyData = {
 const PROTECTED_TOKENS = ['{bookingNumber}', '{customerName}', '{items}', '{totalAmount}']
 
 const formatItemsText = (items: BookingNotifyData['items']) =>
-    items.map(item =>
-        `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}\n💰 ฿${item.price.toLocaleString()}`
-    ).join('\n\n')
+    items.map(item => {
+        const originalParts = [
+            item.original?.courtName,
+            item.original?.date,
+            item.original?.startTime && item.original?.endTime
+                ? `เวลา ${item.original.startTime} - ${item.original.endTime}`
+                : item.original?.startTime,
+        ].filter(Boolean)
+        const originalText = originalParts.length
+            ? `\n↩️ เดิม: ${originalParts.join(' | ')}`
+            : ''
+
+        return `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}${originalText}\n💰 ฿${item.price.toLocaleString()}`
+    }).join('\n\n')
 
 export const normalizeLineEditableNote = (
     note: string | null | undefined,

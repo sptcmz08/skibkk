@@ -482,13 +482,25 @@ export async function PATCH(req: NextRequest) {
             const message = buildLineUpdateMessage(templates.update, {
                 bookingNumber: updated.bookingNumber,
                 customerName: updated.user.name,
-                items: updated.bookingItems.map(item => ({
-                    courtName: item.court.name,
-                    date: formatLineDate(item.date),
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                    price: item.price,
-                })),
+                items: updated.bookingItems.map(item => {
+                    const hasOriginal = Boolean(item.originalCourtId || item.originalDate || item.originalStartTime || item.originalEndTime)
+
+                    return {
+                        courtName: item.court.name,
+                        date: formatLineDate(item.date),
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        price: item.price,
+                        original: hasOriginal
+                            ? {
+                                courtName: item.originalCourt?.name || item.court.name,
+                                date: item.originalDate ? formatLineDate(item.originalDate) : undefined,
+                                startTime: item.originalStartTime || undefined,
+                                endTime: item.originalEndTime || undefined,
+                            }
+                            : null,
+                    }
+                }),
                 totalAmount: updated.totalAmount,
             })
 
