@@ -68,7 +68,7 @@ function StepWizard({ step }: { step: 1 | 2 | 3 }) {
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '6px',
                             padding: '6px 12px', borderRadius: '8px',
-                            background: done ? 'rgba(16,185,129,0.08)' : active ? 'rgba(245,166,35,0.12)' : 'transparent',
+                            background: done ? 'rgba(16,185,129,0.08)' : active ? 'rgba(250,204,21,0.12)' : 'transparent',
                         }}>
                             <div style={{
                                 width: '24px', height: '24px', borderRadius: '50%',
@@ -98,7 +98,7 @@ function VenueBadge({ name, image, onClick }: { name: string; image?: string | n
         <div onClick={onClick} style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
             padding: '8px 18px', borderRadius: '999px', cursor: 'pointer',
-            background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.25)',
+            background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.25)',
         }}>
             {image ? <img src={image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} /> : <MapPin size={16} />}
             <span style={{ fontWeight: 700, color: 'var(--c-primary-light)', fontSize: '14px' }}>{name}</span>
@@ -353,14 +353,14 @@ export default function CourtsPage() {
                                     onClick={() => { setSelectedVenue({ id: venue.id, name: venue.name, image: venue.image }); setStep(2) }}
                                     style={{
                                         padding: '0', borderRadius: '20px', cursor: 'pointer', overflow: 'hidden',
-                                        border: '2px solid rgba(245,166,35,0.2)',
+                                        border: '2px solid rgba(250,204,21,0.2)',
                                         background: 'rgba(255,255,255,0.03)',
                                         color: 'var(--c-text)', fontFamily: 'inherit',
                                         textAlign: 'center', display: 'flex', flexDirection: 'column',
                                     }}>
                                     <div style={{
                                         height: '140px', width: '100%',
-                                        background: venue.image ? `url(${venue.image}) center/cover` : 'linear-gradient(135deg, #f5a623 0%, #e8912d 100%)',
+                                        background: venue.image ? `url(${venue.image}) center/cover` : 'linear-gradient(135deg, #FACC15 0%, #EAB308 100%)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         {!venue.image && <MapPin size={36} style={{ color: 'rgba(255,255,255,0.5)' }} />}
@@ -404,7 +404,7 @@ export default function CourtsPage() {
                                     onClick={() => { setViewMonth(new Date().getMonth()); setViewYear(new Date().getFullYear()) }}
                                     style={{
                                         marginTop: '4px', padding: '4px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                                        background: 'var(--c-primary)', color: 'white', border: 'none', cursor: 'pointer',
+                                        background: 'var(--c-primary)', color: '#2d2a00', border: 'none', cursor: 'pointer',
                                     }}
                                 >
                                     วันนี้
@@ -442,7 +442,7 @@ export default function CourtsPage() {
                             const statusConfig = dayStatus === 'full'
                                 ? { bg: 'rgba(225,112,85,0.15)', border: 'rgba(225,112,85,0.4)', text: 'เต็มแล้ว', color: '#e17055' }
                                 : dayStatus === 'almost_full'
-                                    ? { bg: 'rgba(245,166,35,0.15)', border: 'rgba(245,166,35,0.4)', text: `เหลือ ${freeSlots} ชม.`, color: '#f5a623' }
+                                    ? { bg: 'rgba(250,204,21,0.15)', border: 'rgba(250,204,21,0.4)', text: `เหลือ ${freeSlots} ชม.`, color: '#B38600' }
                                     : { bg: 'rgba(0,184,148,0.1)', border: 'rgba(0,184,148,0.3)', text: 'ว่าง', color: '#00b894' }
 
                             return (
@@ -454,12 +454,12 @@ export default function CourtsPage() {
                                     disabled={isPast || isClosed}
                                     style={{
                                         borderRadius: '12px', cursor: isPast || isClosed ? 'not-allowed' : 'pointer',
-                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(245,166,35,0.5)' : `1px solid ${!isPast && !isClosed && dayInfo ? statusConfig.border : '#e9ecef'}`,
-                                        background: isSelected ? 'rgba(245,166,35,0.25)'
+                                        border: isSelected ? '2px solid var(--c-primary)' : isToday ? '2px solid rgba(250,204,21,0.5)' : `1px solid ${!isPast && !isClosed && dayInfo ? statusConfig.border : '#e9ecef'}`,
+                                        background: isSelected ? 'rgba(250,204,21,0.25)'
                                             : isPast ? '#f1f2f6'
                                                 : isClosed ? 'rgba(225,112,85,0.06)'
                                                     : dayInfo ? statusConfig.bg
-                                                        : isToday ? 'rgba(245,166,35,0.08)' : '#fff',
+                                                        : isToday ? 'rgba(250,204,21,0.08)' : '#fff',
                                         color: isPast ? '#b2bec3' : isClosed ? '#b2bec3' : isSelected ? 'var(--c-text)' : isSun ? '#e17055' : isSat ? '#6c5ce7' : 'var(--c-text)',
                                         fontWeight: isSelected || isToday ? 800 : 600,
                                         fontSize: '15px', fontFamily: "'Inter', sans-serif",
@@ -488,7 +488,7 @@ export default function CourtsPage() {
                     <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
                         {[
                             { color: '#00b894', label: 'ว่าง' },
-                            { color: '#f5a623', label: 'ใกล้เต็ม' },
+                            { color: '#B38600', label: 'ใกล้เต็ม' },
                             { color: '#e17055', label: 'เต็ม' },
                             { color: '#b2bec3', label: 'ผ่านแล้ว' },
                         ].map(s => (
@@ -537,22 +537,35 @@ export default function CourtsPage() {
 
             {/* Court tabs */}
             {availability.length > 1 && (
-                <div style={{ marginBottom: '28px' }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--c-text-secondary)' }}>
-                        <MapPin size={16} style={{ color: 'var(--c-primary)' }} /> เลือกสนาม
+                <div style={{
+                    marginBottom: '28px',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,0.94))',
+                    border: '2px solid rgba(250,204,21,0.38)',
+                    boxShadow: '0 8px 24px rgba(250,204,21,0.1)',
+                }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: 900, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--c-text)' }}>
+                        <MapPin size={17} style={{ color: '#B38600' }} /> เลือกสนาม
                     </h3>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
                         {availability.map(court => {
                             const active = selectedCourt === court.courtId
                             return (
                                 <button key={court.courtId} onClick={() => setSelectedCourt(court.courtId)} style={{
-                                    padding: '11px 26px', borderRadius: '12px', cursor: 'pointer', fontFamily: 'inherit',
-                                    border: active ? '2px solid var(--c-primary)' : '2px solid rgba(255,255,255,0.08)',
-                                    background: active ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)',
-                                    color: active ? 'var(--c-primary-light)' : 'var(--c-text-secondary)',
-                                    fontWeight: 700, fontSize: '14px',
+                                    padding: '13px 16px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                    border: active ? '2px solid #EAB308' : '1px solid #dfe3e8',
+                                    background: active ? '#FACC15' : '#ffffff',
+                                    color: active ? '#2d2a00' : 'var(--c-text-secondary)',
+                                    fontWeight: 900,
+                                    fontSize: '14px',
+                                    boxShadow: active ? '0 8px 18px rgba(250,204,21,0.28)' : '0 2px 8px rgba(0,0,0,0.04)',
+                                    minHeight: '46px',
                                 }}>
-                                    {court.courtName}
+                                    {active ? '✓ ' : ''}{court.courtName}
                                 </button>
                             )
                         })}
@@ -575,7 +588,7 @@ export default function CourtsPage() {
                     <div style={{ textAlign: 'center', padding: '60px', color: 'var(--c-text-muted)' }}>
                         <Clock size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
                         <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--c-text-secondary)' }}>ไม่มีเวลาว่างในวันนี้</p>
-                        <button onClick={() => setStep(2)} style={{ marginTop: '16px', background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: '10px', padding: '10px 24px', cursor: 'pointer', color: 'var(--c-primary-light)', fontFamily: 'inherit', fontWeight: 600 }}>
+                        <button onClick={() => setStep(2)} style={{ marginTop: '16px', background: 'rgba(250,204,21,0.15)', border: '1px solid rgba(250,204,21,0.3)', borderRadius: '10px', padding: '10px 24px', cursor: 'pointer', color: 'var(--c-primary-light)', fontFamily: 'inherit', fontWeight: 600 }}>
                             เลือกวันอื่น
                         </button>
                     </div>
@@ -611,7 +624,7 @@ export default function CourtsPage() {
                                                         ? '2px solid rgba(0,0,0,0.03)'
                                                         : '2px solid rgba(0,0,0,0.06)',
                                         background: inCart
-                                            ? 'rgba(245,166,35,0.2)'
+                                            ? 'rgba(250,204,21,0.2)'
                                             : isPast
                                                 ? 'rgba(225,112,85,0.06)'
                                                 : isLockedByOther
@@ -672,9 +685,9 @@ export default function CourtsPage() {
                         style={{
                             display: 'flex', alignItems: 'center', gap: '10px',
                             padding: '14px 24px', borderRadius: '999px',
-                            background: 'linear-gradient(135deg, #f5a623 0%, #e6951a 100%)',
-                            color: 'white', border: 'none', cursor: 'pointer',
-                            boxShadow: '0 8px 30px rgba(245,166,35,0.4)',
+                            background: 'linear-gradient(135deg, #FACC15 0%, #EAB308 100%)',
+                            color: '#2d2a00', border: 'none', cursor: 'pointer',
+                            boxShadow: '0 8px 30px rgba(250,204,21,0.4)',
                             fontFamily: 'inherit', fontWeight: 700, fontSize: '15px',
                         }}
                     >

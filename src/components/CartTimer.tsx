@@ -98,21 +98,21 @@ export default function CartTimer() {
             alignItems: 'center',
             gap: '6px',
             padding: '6px 12px',
-            background: isUrgent ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.1)',
-            border: `1px solid ${isUrgent ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.25)'}`,
+            background: isUrgent ? 'rgba(239,68,68,0.15)' : 'rgba(250,204,21,0.12)',
+            border: `1px solid ${isUrgent ? 'rgba(239,68,68,0.3)' : 'rgba(250,204,21,0.35)'}`,
             borderRadius: '20px',
             fontSize: '13px',
             fontWeight: 600,
             whiteSpace: 'nowrap',
             animation: isUrgent ? 'timerPulse 1s infinite' : 'none',
         }}>
-            <Timer size={14} style={{ color: isUrgent ? '#ef4444' : '#f59e0b', flexShrink: 0 }} />
-            <span style={{ color: isUrgent ? '#fca5a5' : '#fcd34d', fontSize: '12px' }}>Lock</span>
+            <Timer size={14} style={{ color: isUrgent ? '#ef4444' : '#EAB308', flexShrink: 0 }} />
+            <span style={{ color: isUrgent ? '#fca5a5' : '#B38600', fontSize: '12px' }}>Lock</span>
             <span style={{
                 fontFamily: "'Inter', monospace",
                 fontSize: '14px',
                 fontWeight: 800,
-                color: isUrgent ? '#ef4444' : '#f59e0b',
+                color: isUrgent ? '#ef4444' : '#EAB308',
                 letterSpacing: '1px',
                 minWidth: '42px',
                 textAlign: 'center',

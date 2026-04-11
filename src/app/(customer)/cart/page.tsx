@@ -160,15 +160,15 @@ export default function CartPage() {
         return (
             <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: urgent ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)',
-                border: `1px solid ${urgent ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)'}`,
+                background: urgent ? 'rgba(239,68,68,0.1)' : 'rgba(250,204,21,0.12)',
+                border: `1px solid ${urgent ? 'rgba(239,68,68,0.25)' : 'rgba(250,204,21,0.35)'}`,
                 borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: urgent ? '#fca5a5' : '#fcd34d', fontWeight: 600, fontSize: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: urgent ? '#fca5a5' : '#B38600', fontWeight: 600, fontSize: '14px' }}>
                     <Timer size={16} />
                     <span>เวลา Lock หมดใน</span>
                 </div>
-                <span style={{ fontFamily: "'Inter', monospace", fontSize: '20px', fontWeight: 800, letterSpacing: '2px', color: urgent ? '#ef4444' : '#f59e0b' }}>
+                <span style={{ fontFamily: "'Inter', monospace", fontSize: '20px', fontWeight: 800, letterSpacing: '2px', color: urgent ? '#ef4444' : '#EAB308' }}>
                     {String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
                 </span>
             </div>
@@ -191,7 +191,15 @@ export default function CartPage() {
                         <ShoppingCart size={28} style={{ color: 'var(--c-primary)' }} />
                         ตะกร้าสินค้า
                         {cart.length > 0 && (
-                            <span style={{ fontSize: '16px', color: 'var(--c-text-muted)', fontWeight: 500 }}>({cart.length} รายการ)</span>
+                            <span style={{
+                                fontSize: '14px',
+                                color: '#2d2a00',
+                                fontWeight: 800,
+                                background: 'rgba(250,204,21,0.24)',
+                                border: '1px solid rgba(250,204,21,0.55)',
+                                borderRadius: '999px',
+                                padding: '4px 10px',
+                            }}>({cart.length} รายการ)</span>
                         )}
                     </h1>
                     {cart.length > 0 && (
@@ -219,7 +227,9 @@ export default function CartPage() {
 
                         {/* Cart items grouped by date */}
                         <AnimatePresence>
-                            {Object.entries(groupedByDate).map(([date, items]) => (
+                            {Object.entries(groupedByDate)
+                                .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                                .map(([date, items]) => (
                                 <motion.div
                                     key={date}
                                     initial={{ opacity: 0, y: 10 }}
@@ -230,18 +240,31 @@ export default function CartPage() {
                                     <div style={{
                                         display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
                                         padding: '12px 16px', borderRadius: '12px',
-                                        background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.2)',
+                                        background: 'linear-gradient(135deg, rgba(250,204,21,0.24), rgba(255,255,255,0.92))',
+                                        border: '2px solid rgba(250,204,21,0.45)',
+                                        boxShadow: '0 8px 24px rgba(250,204,21,0.12)',
                                     }}>
-                                        <Calendar size={20} style={{ color: '#f5a623' }} />
+                                        <Calendar size={20} style={{ color: '#B38600' }} />
                                         <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--c-text)' }}>
                                             {new Date(date).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                                         </span>
-                                        <span style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginLeft: 'auto' }}>
+                                        <span style={{
+                                            fontSize: '13px',
+                                            color: '#2d2a00',
+                                            marginLeft: 'auto',
+                                            fontWeight: 800,
+                                            background: '#fff',
+                                            border: '1px solid rgba(250,204,21,0.45)',
+                                            borderRadius: '999px',
+                                            padding: '4px 10px',
+                                        }}>
                                             {items.length} รายการ
                                         </span>
                                     </div>
 
-                                    {items.map((item, idx) => {
+                                    {[...items]
+                                        .sort((itemA, itemB) => itemA.startTime.localeCompare(itemB.startTime) || itemA.endTime.localeCompare(itemB.endTime) || itemA.courtName.localeCompare(itemB.courtName))
+                                        .map((item, idx) => {
                                         const originalIndex = cart.findIndex(
                                             (c) => c.courtId === item.courtId && c.date === item.date && c.startTime === item.startTime
                                         )
@@ -317,10 +340,16 @@ export default function CartPage() {
                         </AnimatePresence>
 
                         {/* Summary */}
-                        <div className="glass-card" style={{ cursor: 'default', marginTop: '24px' }}>
+                        <div className="glass-card" style={{
+                            cursor: 'default',
+                            marginTop: '24px',
+                            background: '#fff',
+                            border: '2px solid rgba(250,204,21,0.45)',
+                            boxShadow: '0 12px 32px rgba(250,204,21,0.14)',
+                        }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <span style={{ color: 'var(--c-text-secondary)' }}>จำนวนรายการ</span>
-                                <span style={{ fontWeight: 600 }}>{cart.length} ชั่วโมง</span>
+                                <span style={{ color: 'var(--c-text-secondary)', fontWeight: 700 }}>จำนวนรายการ</span>
+                                <span style={{ fontWeight: 900, color: 'var(--c-text)' }}>{cart.length} ชั่วโมง</span>
                             </div>
                             <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
@@ -390,7 +419,7 @@ export default function CartPage() {
 
                             <div style={{
                                 width: '72px', height: '72px', borderRadius: '50%',
-                                background: 'rgba(245,166,35,0.15)',
+                                background: 'rgba(250,204,21,0.15)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 margin: '0 auto 20px',
                             }}>

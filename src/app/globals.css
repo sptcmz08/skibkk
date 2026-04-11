@@ -11,15 +11,15 @@
   --c-text: #2d3436;
   --c-text-secondary: #636e72;
   --c-text-muted: #b2bec3;
-  --c-primary: #f5a623;
-  --c-primary-light: #f7b731;
-  --c-secondary: #e6951a;
-  --c-accent: #fdcb6e;
-  --c-gradient: linear-gradient(135deg, #f5a623 0%, #e6951a 100%);
-  --c-gradient-accent: linear-gradient(135deg, #fdcb6e 0%, #f5a623 100%);
+  --c-primary: #FACC15;
+  --c-primary-light: #B38600;
+  --c-secondary: #EAB308;
+  --c-accent: #FEF08A;
+  --c-gradient: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+  --c-gradient-accent: linear-gradient(135deg, #FEF08A 0%, #FACC15 100%);
   --c-gradient-success: linear-gradient(135deg, #00b894 0%, #55efc4 100%);
   --c-success: #00b894;
-  --c-warning: #fdcb6e;
+  --c-warning: #FEF08A;
   --c-danger: #e17055;
   --c-border: rgba(0, 0, 0, 0.08);
   --c-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
@@ -31,9 +31,9 @@
   --a-bg: #f5f3ef;
   --a-bg-secondary: #faf9f6;
   --a-sidebar: #2a2520;
-  --a-sidebar-active: rgba(245, 166, 35, 0.15);
-  --a-primary: #f5a623;
-  --a-primary-hover: #e6951a;
+  --a-sidebar-active: rgba(250, 204, 21, 0.15);
+  --a-primary: #FACC15;
+  --a-primary-hover: #EAB308;
   --a-primary-light: #fef3d0;
   --a-text: #2d2a26;
   --a-text-secondary: #6b6560;
@@ -41,7 +41,7 @@
   --a-border: #e8e2da;
   --a-card-shadow: 0 2px 12px rgba(80, 60, 30, 0.06);
   --a-success: #00b894;
-  --a-warning: #fdcb6e;
+  --a-warning: #FEF08A;
   --a-danger: #e17055;
   --a-info: #74b9ff;
 }
@@ -230,13 +230,13 @@ body {
 
 .btn-primary {
   background: var(--c-gradient);
-  color: white;
-  box-shadow: 0 4px 20px rgba(245, 166, 35, 0.3);
+  color: #2d2a00;
+  box-shadow: 0 4px 20px rgba(250, 204, 21, 0.3);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(245, 166, 35, 0.4);
+  box-shadow: 0 8px 30px rgba(250, 204, 21, 0.4);
 }
 
 .btn-secondary {
@@ -253,12 +253,12 @@ body {
 .btn-accent {
   background: var(--c-gradient-accent);
   color: white;
-  box-shadow: 0 4px 20px rgba(253, 203, 110, 0.3);
+  box-shadow: 0 4px 20px rgba(254, 240, 138, 0.3);
 }
 
 .btn-accent:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(253, 203, 110, 0.4);
+  box-shadow: 0 8px 30px rgba(254, 240, 138, 0.4);
 }
 
 .btn-success {
@@ -367,7 +367,7 @@ body {
 
 .input-field:focus {
   border-color: var(--c-primary);
-  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.2);
 }
 
 .input-field::placeholder {
@@ -402,7 +402,7 @@ select.input-field option {
 
 .admin-input:focus {
   border-color: var(--a-primary);
-  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.15);
 }
 
 /* ==================== ADMIN LAYOUT ==================== */
@@ -689,7 +689,7 @@ select.input-field option {
 
 .badge-pending {
   background: #fff3e0;
-  color: #f39c12;
+  color: #D9A900;
 }
 
 /* ==================== CUSTOMER CARDS ==================== */

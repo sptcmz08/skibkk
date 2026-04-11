@@ -58,13 +58,13 @@ export default function ProfilePage() {
                 style={{
                     position: 'relative', overflow: 'hidden',
                     borderRadius: '24px', marginBottom: '28px',
-                    background: 'linear-gradient(135deg, rgba(245,166,35,0.15) 0%, rgba(230,149,26,0.15) 50%, rgba(253,203,110,0.1) 100%)',
+                    background: 'linear-gradient(135deg, rgba(250,204,21,0.15) 0%, rgba(217,169,0,0.15) 50%, rgba(254,240,138,0.1) 100%)',
                     border: '1px solid rgba(255,255,255,0.08)',
                 }}
             >
                 {/* Background decoration */}
-                <div style={{ position: 'absolute', top: '-40%', right: '-10%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,166,35,0.2), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
-                <div style={{ position: 'absolute', bottom: '-30%', left: '10%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(253,203,110,0.15), transparent)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', top: '-40%', right: '-10%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(250,204,21,0.2), transparent)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', bottom: '-30%', left: '10%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(254,240,138,0.15), transparent)', filter: 'blur(40px)', pointerEvents: 'none' }} />
 
                 <div style={{ position: 'relative', padding: '36px 32px', display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
                     {/* Avatar */}
@@ -81,7 +81,7 @@ export default function ProfilePage() {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '36px', fontWeight: 900, color: 'white',
                             fontFamily: "'Inter'", border: '3px solid rgba(255,255,255,0.15)',
-                            boxShadow: '0 8px 32px rgba(245,166,35,0.3)',
+                            boxShadow: '0 8px 32px rgba(250,204,21,0.3)',
                         }}>
                             {user.name.charAt(0).toUpperCase()}
                         </div>
@@ -93,7 +93,7 @@ export default function ProfilePage() {
                             <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>{user.name}</h1>
                             <span style={{
                                 padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
-                                background: 'rgba(245,166,35,0.2)', color: 'var(--c-primary-light)',
+                                background: 'rgba(250,204,21,0.2)', color: 'var(--c-primary-light)',
                                 display: 'flex', alignItems: 'center', gap: '4px',
                             }}>
                                 <Shield size={12} /> {user.role === 'CUSTOMER' ? 'สมาชิก' : user.role}
@@ -116,9 +116,9 @@ export default function ProfilePage() {
             {/* ── Stats Row ── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
                 {[
-                    { icon: <Calendar size={22} />, value: bookings.length, label: 'การจองทั้งหมด', gradient: 'var(--c-gradient)', shadow: 'rgba(245,166,35,0.25)' },
+                    { icon: <Calendar size={22} />, value: bookings.length, label: 'การจองทั้งหมด', gradient: 'var(--c-gradient)', shadow: 'rgba(250,204,21,0.25)' },
                     { icon: <Clock size={22} />, value: `${totalHours} ชม.`, label: 'เวลาเล่นรวม', gradient: 'var(--c-gradient-success)', shadow: 'rgba(56,239,125,0.25)' },
-                    { icon: <Package size={22} />, value: `฿${totalSpent.toLocaleString()}`, label: 'ยอดใช้จ่าย', gradient: 'var(--c-gradient-accent)', shadow: 'rgba(253,203,110,0.25)' },
+                    { icon: <Package size={22} />, value: `฿${totalSpent.toLocaleString()}`, label: 'ยอดใช้จ่าย', gradient: 'var(--c-gradient-accent)', shadow: 'rgba(254,240,138,0.25)' },
                 ].map((stat, i) => (
                     <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}
                         style={{
@@ -159,7 +159,7 @@ export default function ProfilePage() {
                             transition: 'all 0.2s',
                             background: tab === t.key ? 'var(--c-gradient)' : 'transparent',
                             color: tab === t.key ? 'white' : 'var(--c-text-muted)',
-                            boxShadow: tab === t.key ? '0 4px 15px rgba(245,166,35,0.3)' : 'none',
+                            boxShadow: tab === t.key ? '0 4px 15px rgba(250,204,21,0.3)' : 'none',
                         }}
                     >
                         {t.icon} {t.label}
@@ -181,7 +181,7 @@ export default function ProfilePage() {
                             }}>
                                 <div style={{
                                     width: '64px', height: '64px', borderRadius: '20px',
-                                    background: 'rgba(245,166,35,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: 'rgba(250,204,21,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     margin: '0 auto 16px',
                                 }}>
                                     <Sparkles size={28} style={{ color: 'var(--c-primary)' }} />
@@ -205,7 +205,7 @@ export default function ProfilePage() {
                                 return ea.localeCompare(eb)
                             })
                             .map((booking, i) => {
-                            const sc = statusConfig[booking.status] || { bg: 'rgba(245,166,35,0.1)', color: '#f5a623', label: booking.status }
+                            const sc = statusConfig[booking.status] || { bg: 'rgba(250,204,21,0.1)', color: '#B38600', label: booking.status }
                             return (
                                 <motion.div key={booking.id}
                                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
@@ -216,7 +216,7 @@ export default function ProfilePage() {
                                         transition: 'border-color 0.2s, transform 0.15s',
                                         cursor: 'pointer',
                                     }}
-                                    whileHover={{ scale: 1.01, borderColor: 'rgba(245,166,35,0.3)' }}
+                                    whileHover={{ scale: 1.01, borderColor: 'rgba(250,204,21,0.3)' }}
                                     whileTap={{ scale: 0.98 }}
                                 >
                                     {/* Header */}

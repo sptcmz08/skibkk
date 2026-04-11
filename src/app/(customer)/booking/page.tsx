@@ -645,14 +645,14 @@ export default function BookingPage() {
                     {lockSecondsLeft !== null && lockSecondsLeft > 0 && (
                         <div style={{
                             marginBottom: '20px', padding: '14px 18px', borderRadius: '14px',
-                            background: lockSecondsLeft < 120 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
-                            border: `1px solid ${lockSecondsLeft < 120 ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.3)'}`,
+                            background: lockSecondsLeft < 120 ? 'rgba(239,68,68,0.12)' : 'rgba(250,204,21,0.12)',
+                            border: `1px solid ${lockSecondsLeft < 120 ? 'rgba(239,68,68,0.35)' : 'rgba(250,204,21,0.35)'}`,
                             display: 'flex', alignItems: 'center', gap: '12px',
                             animation: lockSecondsLeft < 120 ? 'timerPulse 1s infinite' : 'none',
                         }}>
-                            <Timer size={20} style={{ color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b', flexShrink: 0 }} />
+                            <Timer size={20} style={{ color: lockSecondsLeft < 120 ? '#ef4444' : '#EAB308', flexShrink: 0 }} />
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 700, fontSize: '14px', color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b' }}>
+                                <div style={{ fontWeight: 700, fontSize: '14px', color: lockSecondsLeft < 120 ? '#ef4444' : '#EAB308' }}>
                                     กรุณาชำระเงินภายในเวลาที่กำหนด
                                 </div>
                                 <div style={{ fontSize: '12px', color: 'var(--c-text-secondary)', marginTop: '2px' }}>
@@ -661,7 +661,7 @@ export default function BookingPage() {
                             </div>
                             <div style={{
                                 fontFamily: "'Inter', monospace", fontSize: '22px', fontWeight: 900,
-                                color: lockSecondsLeft < 120 ? '#ef4444' : '#f59e0b',
+                                color: lockSecondsLeft < 120 ? '#ef4444' : '#EAB308',
                                 letterSpacing: '1px', minWidth: '60px', textAlign: 'center',
                             }}>
                                 {`${String(Math.floor(lockSecondsLeft / 60)).padStart(2, '0')}:${String(lockSecondsLeft % 60).padStart(2, '0')}`}
@@ -709,7 +709,7 @@ export default function BookingPage() {
                                     style={{
                                         padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                                         border: paymentMethod !== 'PACKAGE' ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
-                                        background: paymentMethod !== 'PACKAGE' ? 'rgba(245,166,35,0.1)' : 'transparent',
+                                        background: paymentMethod !== 'PACKAGE' ? 'rgba(250,204,21,0.1)' : 'transparent',
                                         color: 'var(--c-text)', fontFamily: 'inherit',
                                     }}
                                 >
@@ -722,7 +722,7 @@ export default function BookingPage() {
                                         style={{
                                             padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                                             border: selectedPackageId === pkg.id ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
-                                            background: selectedPackageId === pkg.id ? 'rgba(245,166,35,0.15)' : 'transparent',
+                                            background: selectedPackageId === pkg.id ? 'rgba(250,204,21,0.15)' : 'transparent',
                                             color: 'var(--c-text)', fontFamily: 'inherit',
                                         }}
                                     >
@@ -755,7 +755,7 @@ export default function BookingPage() {
                                 <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>
                                 <div style={{
                                     display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
-                                    background: 'rgba(245,166,35,0.15)', border: '2px solid rgba(245,166,35,0.4)',
+                                    background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
                                 }}>
                                     <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
                                     <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{total.toLocaleString()}</div>
@@ -826,10 +826,10 @@ export default function BookingPage() {
                                                 <strong>฿{paidTotal.toLocaleString()} / ฿{total.toLocaleString()}</strong>
                                             </div>
                                             <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                                                <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 1 ? '#10b981' : '#f5a623', width: `${Math.min(100, (paidTotal / total) * 100)}%`, transition: 'width 0.5s' }} />
+                                                <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 1 ? '#10b981' : '#FACC15', width: `${Math.min(100, (paidTotal / total) * 100)}%`, transition: 'width 0.5s' }} />
                                             </div>
                                             {remaining > 1 && (
-                                                <div style={{ marginTop: '8px', fontSize: '14px', color: '#f5a623', fontWeight: 700, textAlign: 'center' }}>
+                                                <div style={{ marginTop: '8px', fontSize: '14px', color: '#B38600', fontWeight: 700, textAlign: 'center' }}>
                                                     💰 โอนเพิ่มอีก ฿{remaining.toLocaleString()} แล้วแนบสลิปใหม่
                                                 </div>
                                             )}
@@ -839,7 +839,7 @@ export default function BookingPage() {
                                                 </div>
                                             )}
                                             {paidTotal > total + 1 && (
-                                                <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245,166,35,0.1)', fontSize: '12px', color: '#f5a623' }}>
+                                                <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(250,204,21,0.1)', fontSize: '12px', color: '#B38600' }}>
                                                     ⚠️ โอนเกิน ฿{(paidTotal - total).toLocaleString()} กรุณา Add Line: <strong>@skibkk</strong> เพื่อรับเงินคืน
                                                 </div>
                                             )}
@@ -887,7 +887,7 @@ export default function BookingPage() {
                         border: '1px solid var(--c-glass-border)',
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                            <AlertTriangle size={24} style={{ color: '#f5a623' }} />
+                            <AlertTriangle size={24} style={{ color: '#B38600' }} />
                             <h2 style={{ fontSize: '20px', fontWeight: 800 }}>เงื่อนไขการจอง</h2>
                         </div>
                         <div style={{

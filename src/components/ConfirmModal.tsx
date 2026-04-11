@@ -22,10 +22,10 @@ const themeMap = {
         shadow: 'rgba(231,76,60,0.3)',
     },
     warning: {
-        gradient: 'linear-gradient(135deg, #f5a623 0%, #e8961e 100%)',
+        gradient: 'linear-gradient(135deg, #FACC15 0%, #EAB308 100%)',
         icon: '⚡',
-        buttonBg: 'linear-gradient(135deg, #f5a623 0%, #e8961e 100%)',
-        shadow: 'rgba(245,166,35,0.3)',
+        buttonBg: 'linear-gradient(135deg, #FACC15 0%, #EAB308 100%)',
+        shadow: 'rgba(250,204,21,0.3)',
     },
     info: {
         gradient: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
