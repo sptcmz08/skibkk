@@ -477,7 +477,12 @@ export async function PATCH(req: NextRequest) {
             message: updated.status === 'CANCELLED' ? 'booking cancelled' : 'booking updated',
         })
 
-        if (updated.user?.lineUserId) {
+        // Only send LINE notification if date/time/court actually changed (not for trainer-only changes)
+        const hasScheduleChange = updated.bookingItems.some(item =>
+            Boolean(item.originalCourtId || item.originalDate || item.originalStartTime || item.originalEndTime)
+        )
+
+        if (updated.user?.lineUserId && hasScheduleChange) {
             const templates = await getLineBookingTemplates()
             const message = buildLineUpdateMessage(templates.update, {
                 bookingNumber: updated.bookingNumber,

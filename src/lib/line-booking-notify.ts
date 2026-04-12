@@ -41,7 +41,7 @@ const formatItemsText = (items: BookingNotifyData['items']) =>
             ? `\n↩️ เดิม: ${originalParts.join(' | ')}`
             : ''
 
-        return `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}${originalText}\n💰 ฿${item.price.toLocaleString()}`
+        return `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}${originalText}`
     }).join('\n\n')
 
 export const normalizeLineEditableNote = (
@@ -67,5 +67,5 @@ export const buildLineUpdateMessage = (
     data: BookingNotifyData,
 ) => {
     const safeNote = normalizeLineEditableNote(note, DEFAULT_LINE_UPDATE_NOTE)
-    return `🔄 มีการแก้ไขการจอง\n#${data.bookingNumber}\n\nสวัสดีคุณ ${data.customerName}\n${safeNote}\n\n${formatItemsText(data.items)}\n\n💳 ยอดรวมล่าสุด: ฿${data.totalAmount.toLocaleString()}`
+    return `🔄 มีการแก้ไขการจอง\n#${data.bookingNumber}\n\nสวัสดีคุณ ${data.customerName}\n${safeNote}\n\n${formatItemsText(data.items)}`
 }
