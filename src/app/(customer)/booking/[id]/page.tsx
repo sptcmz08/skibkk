@@ -30,6 +30,12 @@ interface BookingDetail {
 type ParticipantDraft = {
     id?: string
     name: string
+    sportType: string
+    age: string
+    shoeSize: string
+    weight: string
+    height: string
+    phone: string
     isBooker?: boolean
 }
 
@@ -64,6 +70,7 @@ export default function BookingDetailPage() {
     const [editingParticipants, setEditingParticipants] = useState(false)
     const [participantDrafts, setParticipantDrafts] = useState<ParticipantDraft[]>([])
     const [savingParticipants, setSavingParticipants] = useState(false)
+    const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
 
     useEffect(() => {
         if (!bookingId) return
@@ -77,6 +84,12 @@ export default function BookingDetailPage() {
                 setParticipantDrafts(data.booking.participants.map((participant: BookingDetail['participants'][number]) => ({
                     id: participant.id,
                     name: participant.name,
+                    sportType: participant.sportType || '',
+                    age: participant.age ? String(participant.age) : '',
+                    shoeSize: participant.shoeSize || '',
+                    weight: participant.weight ? String(participant.weight) : '',
+                    height: participant.height ? String(participant.height) : '',
+                    phone: participant.phone || '',
                     isBooker: participant.isBooker,
                 })))
             })
@@ -97,11 +110,26 @@ export default function BookingDetailPage() {
             .catch(() => { })
     }, [])
 
+    useEffect(() => {
+        fetch('/api/sport-types', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sportTypes) setSportTypes(data.sportTypes.filter((s: any) => s.isActive).map((s: any) => ({ name: s.name, icon: s.icon })))
+            })
+            .catch(() => { })
+    }, [])
+
     const resetParticipantDrafts = (nextBooking = booking) => {
         if (!nextBooking) return
         setParticipantDrafts(nextBooking.participants.map(participant => ({
             id: participant.id,
             name: participant.name,
+            sportType: participant.sportType || '',
+            age: participant.age ? String(participant.age) : '',
+            shoeSize: participant.shoeSize || '',
+            weight: participant.weight ? String(participant.weight) : '',
+            height: participant.height ? String(participant.height) : '',
+            phone: participant.phone || '',
             isBooker: participant.isBooker,
         })))
     }
@@ -111,11 +139,12 @@ export default function BookingDetailPage() {
             toast.error(`เพิ่มผู้เรียนได้สูงสุด ${maxParticipants} คน`)
             return
         }
-        setParticipantDrafts(prev => [...prev, { name: '', isBooker: false }])
+        const existingSport = participantDrafts[0]?.sportType || ''
+        setParticipantDrafts(prev => [...prev, { name: '', sportType: existingSport, age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false }])
     }
 
-    const updateParticipantDraftName = (index: number, name: string) => {
-        setParticipantDrafts(prev => prev.map((participant, i) => i === index ? { ...participant, name } : participant))
+    const updateParticipantDraft = (index: number, field: keyof ParticipantDraft, value: string) => {
+        setParticipantDrafts(prev => prev.map((participant, i) => i === index ? { ...participant, [field]: value } : participant))
     }
 
     const removeParticipantDraft = (index: number) => {
@@ -151,6 +180,12 @@ export default function BookingDetailPage() {
                     participants: participantDrafts.map(participant => ({
                         id: participant.id,
                         name: participant.name.trim(),
+                        sportType: participant.sportType || null,
+                        age: participant.age ? parseInt(participant.age) : null,
+                        shoeSize: participant.shoeSize || null,
+                        weight: participant.weight ? parseFloat(participant.weight) : null,
+                        height: participant.height ? parseFloat(participant.height) : null,
+                        phone: participant.phone || null,
                     })),
                 }),
             })
@@ -361,46 +396,76 @@ export default function BookingDetailPage() {
                     {editingParticipants ? (
                         <>
                             {participantDrafts.map((participant, i) => (
-                                <div key={participant.id || `new-${i}`} style={{
-                                    display: 'flex', alignItems: 'center', gap: '10px',
-                                    padding: '12px', borderRadius: '12px',
-                                    background: '#fff', border: '1px solid rgba(250,204,21,0.32)',
-                                }}>
                                     <div style={{
-                                        width: '32px', height: '32px', borderRadius: '8px',
-                                        background: participant.isBooker ? 'var(--c-gradient)' : 'rgba(250,204,21,0.16)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        color: '#2d2a00', fontSize: '14px', fontWeight: 900, flexShrink: 0,
+                                        padding: '14px', borderRadius: '14px',
+                                        background: '#fff', border: '1px solid rgba(250,204,21,0.32)',
                                     }}>
-                                        {i + 1}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                                            <div style={{
+                                                width: '32px', height: '32px', borderRadius: '8px',
+                                                background: participant.isBooker ? 'var(--c-gradient)' : 'rgba(250,204,21,0.16)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: '#2d2a00', fontSize: '14px', fontWeight: 900, flexShrink: 0,
+                                            }}>
+                                                {i + 1}
+                                            </div>
+                                            <input
+                                                className="input-field"
+                                                placeholder={`ชื่อผู้เรียนคนที่ ${i + 1}`}
+                                                value={participant.name}
+                                                onChange={e => updateParticipantDraft(i, 'name', e.target.value)}
+                                                style={{ flex: 1, background: '#fff', fontWeight: 700 }}
+                                            />
+                                            {participant.isBooker && (
+                                                <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '6px', background: 'rgba(250,204,21,0.18)', color: 'var(--c-primary-light)', fontWeight: 800 }}>
+                                                    ผู้จอง
+                                                </span>
+                                            )}
+                                            {!participant.isBooker && participantDrafts.length > 1 && (
+                                                <button
+                                                    onClick={() => removeParticipantDraft(i)}
+                                                    disabled={savingParticipants}
+                                                    style={{
+                                                        width: '36px', height: '36px', borderRadius: '8px',
+                                                        border: '1px solid rgba(225,112,85,0.22)', background: 'rgba(225,112,85,0.08)',
+                                                        color: 'var(--c-danger)', cursor: 'pointer', flexShrink: 0,
+                                                    }}
+                                                    aria-label="ลบผู้เรียน"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>ประเภทกีฬา</label>
+                                                <select className="input-field" value={participant.sportType} onChange={e => updateParticipantDraft(i, 'sportType', e.target.value)} style={{ background: '#fff', fontSize: '13px' }}>
+                                                    <option value="">เลือก</option>
+                                                    {sportTypes.map(st => <option key={st.name} value={st.name}>{st.icon} {st.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>เบอร์โทร</label>
+                                                <input className="input-field" type="tel" placeholder="08x-xxx-xxxx" value={participant.phone} onChange={e => updateParticipantDraft(i, 'phone', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>อายุ</label>
+                                                <input className="input-field" type="number" placeholder="ปี" value={participant.age} onChange={e => updateParticipantDraft(i, 'age', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>ไซส์รองเท้า</label>
+                                                <input className="input-field" placeholder="TH size" value={participant.shoeSize} onChange={e => updateParticipantDraft(i, 'shoeSize', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>น้ำหนัก (kg)</label>
+                                                <input className="input-field" type="number" placeholder="kg" value={participant.weight} onChange={e => updateParticipantDraft(i, 'weight', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>ส่วนสูง (cm)</label>
+                                                <input className="input-field" type="number" placeholder="cm" value={participant.height} onChange={e => updateParticipantDraft(i, 'height', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <input
-                                        className="input-field"
-                                        placeholder={`ชื่อผู้เรียนคนที่ ${i + 1}`}
-                                        value={participant.name}
-                                        onChange={e => updateParticipantDraftName(i, e.target.value)}
-                                        style={{ flex: 1, background: '#fff' }}
-                                    />
-                                    {participant.isBooker && (
-                                        <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '6px', background: 'rgba(250,204,21,0.18)', color: 'var(--c-primary-light)', fontWeight: 800 }}>
-                                            ผู้จอง
-                                        </span>
-                                    )}
-                                    {!participant.isBooker && participantDrafts.length > 1 && (
-                                        <button
-                                            onClick={() => removeParticipantDraft(i)}
-                                            disabled={savingParticipants}
-                                            style={{
-                                                width: '36px', height: '36px', borderRadius: '8px',
-                                                border: '1px solid rgba(225,112,85,0.22)', background: 'rgba(225,112,85,0.08)',
-                                                color: 'var(--c-danger)', cursor: 'pointer', flexShrink: 0,
-                                            }}
-                                            aria-label="ลบผู้เรียน"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
-                                    )}
-                                </div>
                             ))}
                             <button
                                 onClick={addParticipantDraft}

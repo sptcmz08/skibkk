@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 
-type ParticipantNameInput = {
+type ParticipantInput = {
     id?: unknown
     name?: unknown
+    sportType?: unknown
+    age?: unknown
+    shoeSize?: unknown
+    weight?: unknown
+    height?: unknown
+    phone?: unknown
 }
 
 export async function GET(
@@ -60,7 +66,7 @@ export async function PATCH(
         const { id } = await params
         const body = await req.json() as { participants?: unknown }
         const participantInputs = Array.isArray(body.participants)
-            ? body.participants as ParticipantNameInput[]
+            ? body.participants as ParticipantInput[]
             : null
 
         if (!participantInputs) {
@@ -82,9 +88,15 @@ export async function PATCH(
 
         const maxSetting = await prisma.siteSetting.findUnique({ where: { key: 'max_participants' } })
         const maxParticipants = Math.max(1, parseInt(maxSetting?.value || '2', 10) || 2)
-        const participants: Array<{ id?: string; name: string }> = participantInputs.map(participant => ({
+        const participants = participantInputs.map(participant => ({
             id: typeof participant.id === 'string' ? participant.id : undefined,
             name: typeof participant.name === 'string' ? participant.name.trim() : '',
+            sportType: typeof participant.sportType === 'string' ? participant.sportType : undefined,
+            age: typeof participant.age === 'number' ? participant.age : (participant.age === null ? null : undefined),
+            shoeSize: typeof participant.shoeSize === 'string' ? participant.shoeSize : (participant.shoeSize === null ? null : undefined),
+            weight: typeof participant.weight === 'number' ? participant.weight : (participant.weight === null ? null : undefined),
+            height: typeof participant.height === 'number' ? participant.height : (participant.height === null ? null : undefined),
+            phone: typeof participant.phone === 'string' ? participant.phone : (participant.phone === null ? null : undefined),
         }))
 
         if (participants.length < 1) {
@@ -124,16 +136,28 @@ export async function PATCH(
 
             for (const participant of participants) {
                 if (participant.id) {
+                    const updateData: Record<string, unknown> = { name: participant.name }
+                    if (participant.sportType !== undefined) updateData.sportType = participant.sportType
+                    if (participant.age !== undefined) updateData.age = participant.age
+                    if (participant.shoeSize !== undefined) updateData.shoeSize = participant.shoeSize
+                    if (participant.weight !== undefined) updateData.weight = participant.weight
+                    if (participant.height !== undefined) updateData.height = participant.height
+                    if (participant.phone !== undefined) updateData.phone = participant.phone
                     await tx.participant.update({
                         where: { id: participant.id },
-                        data: { name: participant.name },
+                        data: updateData,
                     })
                 } else {
                     await tx.participant.create({
                         data: {
                             bookingId: id,
                             name: participant.name,
-                            sportType: defaultSportType,
+                            sportType: participant.sportType || defaultSportType,
+                            age: typeof participant.age === 'number' ? participant.age : null,
+                            shoeSize: typeof participant.shoeSize === 'string' ? participant.shoeSize : null,
+                            weight: typeof participant.weight === 'number' ? participant.weight : null,
+                            height: typeof participant.height === 'number' ? participant.height : null,
+                            phone: typeof participant.phone === 'string' ? participant.phone : null,
                             isBooker: false,
                         },
                     })
