@@ -2,7 +2,7 @@
 
 import { FadeIn } from '@/components/Motion'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -53,6 +53,13 @@ export default function BookingsManagement() {
     const [saving, setSaving] = useState(false)
     const [page, setPage] = useState(0)
     const pageSize = 20
+    const editDateRefs = useRef<(HTMLInputElement | null)[]>([])
+
+    const formatDateDD = (dateStr: string) => {
+        if (!dateStr) return ''
+        const [y, m, d] = dateStr.split('-')
+        return `${d}/${m}/${y}`
+    }
 
     const fetchBookings = useCallback(async () => {
         setLoading(true)
@@ -410,13 +417,28 @@ export default function BookingsManagement() {
                                         {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>Venue: {item.court.venue.name}</div>}
                                         {editMode ? (
                                             <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
-                                                <input
-                                                    type="date"
-                                                    className="admin-input"
-                                                    value={item.date}
-                                                    onChange={e => updateEditBookingItem(i, { date: e.target.value })}
-                                                    style={{ width: '160px', padding: '6px 10px' }}
-                                                />
+                                                <div
+                                                    style={{ position: 'relative', cursor: 'pointer' }}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => editDateRefs.current[i]?.showPicker?.()}
+                                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') editDateRefs.current[i]?.showPicker?.() }}
+                                                >
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={formatDateDD(item.date)}
+                                                        className="admin-input"
+                                                        style={{ width: '160px', padding: '6px 10px', cursor: 'pointer', background: '#fff' }}
+                                                    />
+                                                    <input
+                                                        type="date"
+                                                        ref={el => { editDateRefs.current[i] = el }}
+                                                        value={item.date}
+                                                        onChange={e => updateEditBookingItem(i, { date: e.target.value })}
+                                                        style={{ position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none' }}
+                                                    />
+                                                </div>
                                                 <select className="admin-input" value={item.startTime} onChange={e => updateEditBookingItem(i, { startTime: e.target.value })} style={{ padding: '6px 10px' }}>
                                                     {Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`).map(time => (
                                                         <option key={time} value={time}>{time}</option>
