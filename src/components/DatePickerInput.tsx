@@ -32,14 +32,20 @@ export default function DatePickerInput({
                 value={formatDisplayDate(value)}
                 readOnly
                 placeholder={placeholder}
-                style={{ width: '100%', paddingRight: '36px', cursor: 'pointer' }}
+                tabIndex={-1}
+                style={{ width: '100%', paddingRight: '36px', cursor: 'pointer', pointerEvents: 'none' }}
             />
             <input
                 type="date"
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 aria-label={placeholder}
-                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}
+                style={{
+                    position: 'absolute', inset: 0,
+                    opacity: 0, cursor: 'pointer',
+                    width: '100%', height: '100%',
+                    zIndex: 2, fontSize: '16px',
+                }}
             />
         </div>
     )
