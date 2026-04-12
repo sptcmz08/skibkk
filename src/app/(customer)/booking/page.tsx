@@ -44,6 +44,7 @@ export default function BookingPage() {
     // Lock countdown timer for payment step
     const [lockSecondsLeft, setLockSecondsLeft] = useState<number | null>(null)
     const lockExpiredRef = useRef(false)
+    const bookingCompleteRef = useRef(false)
     useEffect(() => {
         if (step !== 2) return
         lockExpiredRef.current = false
@@ -256,6 +257,7 @@ export default function BookingPage() {
         })
 
         const handleCartUpdate = () => {
+            if (bookingCompleteRef.current) return
             const updatedCart = readStoredCart()
             if (cancelled) return
             if (updatedCart.length === 0) {
@@ -466,6 +468,7 @@ export default function BookingPage() {
                 body: JSON.stringify({ sessionId }),
             }).catch(() => { })
 
+            bookingCompleteRef.current = true
             clearStoredCart({ clearDraft: true })
             setStep(3)
             toast.success('จองสำเร็จ!')
@@ -480,7 +483,7 @@ export default function BookingPage() {
         }
     }
 
-    if (cart.length === 0) return null
+    if (cart.length === 0 && !bookingCompleteRef.current) return null
 
     return (
         <div style={{ maxWidth: '700px', margin: '0 auto', padding: '32px 24px' }}>
