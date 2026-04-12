@@ -1224,10 +1224,11 @@ export default function CalendarPage() {
                                                         syncEditAmount(nextItems)
                                                     }
                                                 })
-                                            }} style={{ position: 'absolute', top: '6px', right: '8px', background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                                            }} style={{ position: 'absolute', top: '6px', right: '8px', zIndex: 10, background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
                                                 🗑️ ลบ
                                             </button>
                                         )}
+                                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)', marginBottom: '6px' }}>รายการจองที่ {i + 1}</div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                                             <select value={(item as any).courtId} onChange={async e => {
                                                 await updateEditBookingItem(i, { courtId: e.target.value }, { recalcPrice: true })
