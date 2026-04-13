@@ -4,7 +4,7 @@ import { FadeIn } from '@/components/Motion'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect } from 'react'
-import { BookOpen, Calendar, Clock, User, Download } from 'lucide-react'
+import { BookOpen, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Teacher {

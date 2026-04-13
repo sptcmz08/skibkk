@@ -4,7 +4,7 @@ import { FadeIn } from '@/components/Motion'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Clock, Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CourtAvailability {
