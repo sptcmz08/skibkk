@@ -4,7 +4,7 @@ import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useRealtimeEvents } from '@/lib/use-realtime-events'
@@ -54,7 +54,7 @@ export default function CalendarPage() {
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string }>>([])
-    const [editBookingItems, setEditBookingItems] = useState<Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
+    const [editBookingItems, setEditBookingItems] = useState<Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
@@ -91,6 +91,10 @@ export default function CalendarPage() {
         return `${day}/${month}/${year}`
     }
 
+    const formatShortDateTH = (dateStr: string | Date) => {
+        return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+    }
+
     const openEditDatePicker = (index: number) => {
         const input = editDateInputRefs.current[index]
         if (!input) return
@@ -107,13 +111,13 @@ export default function CalendarPage() {
         setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
         setEditBookingItems(booking.bookingItems.map(item => {
             const dateStr = toDateBangkok(item.date)
-            return { courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
+            return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
         }))
         setEditStatus(booking.status)
         setEditAmount(booking.totalAmount)
     }
 
-    const syncEditAmount = (items: Array<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>) => {
+    const syncEditAmount = (items: Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>) => {
         setEditAmount(items.reduce((sum, bookingItem) => sum + (bookingItem.price || 0), 0))
     }
 
@@ -143,7 +147,7 @@ export default function CalendarPage() {
 
     const updateEditBookingItem = async (
         index: number,
-        patch: Partial<{ courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>,
+        patch: Partial<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>,
         opts?: { recalcPrice?: boolean }
     ) => {
         const nextItems = [...editBookingItems]
@@ -156,6 +160,22 @@ export default function CalendarPage() {
         nextItems[index] = nextItem
         setEditBookingItems(nextItems)
         syncEditAmount(nextItems)
+    }
+
+    const removeEditBookingItem = (index: number) => {
+        if (editBookingItems.length <= 1) {
+            toast.error('ต้องมีรายการจองอย่างน้อย 1 รายการ')
+            return
+        }
+
+        setPendingCalendarAction({
+            message: 'ต้องการลบรายการจองนี้ออกใช่ไหม?',
+            action: () => {
+                const nextItems = editBookingItems.filter((_, itemIndex) => itemIndex !== index)
+                setEditBookingItems(nextItems)
+                syncEditAmount(nextItems)
+            },
+        })
     }
 
     const refetchBookings = useCallback(async () => {
@@ -1211,24 +1231,35 @@ export default function CalendarPage() {
 
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
                         {(editMode ? editBookingItems : [...viewBooking.bookingItems].sort((a, b) => a.startTime.localeCompare(b.startTime))).map((item, i) => (
-                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px', position: 'relative' }}>
+                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
                                 {editMode ? (
                                     <>
-                                        {editBookingItems.length > 1 && (
-                                            <button onClick={() => {
-                                                setPendingCalendarAction({
-                                                    message: 'ต้องการลบรายการจองนี้ออกใช่ไหม?',
-                                                    action: () => {
-                                                        const nextItems = editBookingItems.filter((_, j) => j !== i)
-                                                        setEditBookingItems(nextItems)
-                                                        syncEditAmount(nextItems)
-                                                    }
-                                                })
-                                            }} style={{ position: 'absolute', top: '6px', right: '8px', zIndex: 10, background: '#fde8e8', border: '1px solid #f5c6cb', borderRadius: '6px', cursor: 'pointer', color: '#e17055', padding: '4px 8px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
-                                                🗑️ ลบ
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)' }}>รายการจองที่ {i + 1}</div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeEditBookingItem(i)}
+                                                aria-label="ลบรายการจอง"
+                                                title="ลบรายการจอง"
+                                                style={{
+                                                    background: '#fde8e8',
+                                                    border: '1px solid #f5c6cb',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    color: '#e17055',
+                                                    padding: '6px 10px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 800,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    fontFamily: 'inherit',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                <Trash2 size={14} /> ลบ
                                             </button>
-                                        )}
-                                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a-text-muted)', marginBottom: '6px' }}>รายการจองที่ {i + 1}</div>
+                                        </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                                             <select value={(item as any).courtId} onChange={async e => {
                                                 await updateEditBookingItem(i, { courtId: e.target.value }, { recalcPrice: true })
@@ -1327,20 +1358,35 @@ export default function CalendarPage() {
                                             </select>
                                         </div>
                                         {/* Show original data */}
-                                        {viewBooking.bookingItems[i] && (() => {
-                                            const orig = viewBooking.bookingItems[i] as any
-                                            const hasOriginal = orig.originalCourtId || orig.originalStartTime
-                                            const origCourtName = hasOriginal
-                                                ? (orig.originalCourt?.name || courts.find(c => c.id === orig.originalCourtId)?.name || orig.court?.name)
-                                                : (orig.court?.name || courts.find(c => c.id === orig.courtId)?.name)
-                                            const origDate = hasOriginal && orig.originalDate
-                                                ? new Date(orig.originalDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
-                                                : new Date(orig.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
-                                            const origStart = hasOriginal ? (orig.originalStartTime || orig.startTime) : orig.startTime
-                                            const origEnd = hasOriginal ? (orig.originalEndTime || orig.endTime) : orig.endTime
+                                        {(() => {
+                                            const editItem = item as typeof editBookingItems[number]
+                                            const persistedItem = editItem.id
+                                                ? viewBooking.bookingItems.find(originalItem => originalItem.id === editItem.id)
+                                                : viewBooking.bookingItems[i]
+                                            if (!persistedItem) return null
+
+                                            const persistedDate = toDateBangkok(persistedItem.date)
+                                            const hasPendingChange =
+                                                editItem.courtId !== persistedItem.courtId ||
+                                                editItem.date !== persistedDate ||
+                                                editItem.startTime !== persistedItem.startTime ||
+                                                editItem.endTime !== persistedItem.endTime
+                                            const hasStoredOriginal = Boolean(persistedItem.originalCourtId || persistedItem.originalDate || persistedItem.originalStartTime || persistedItem.originalEndTime)
+
+                                            if (!hasPendingChange && !hasStoredOriginal) return null
+
+                                            const origCourtName = hasPendingChange
+                                                ? (persistedItem.court?.name || courts.find(c => c.id === persistedItem.courtId)?.name)
+                                                : (persistedItem.originalCourt?.name || courts.find(c => c.id === persistedItem.originalCourtId)?.name || persistedItem.court?.name)
+                                            const origDate = hasPendingChange
+                                                ? formatShortDateTH(persistedItem.date)
+                                                : formatShortDateTH(persistedItem.originalDate || persistedItem.date)
+                                            const origStart = hasPendingChange ? persistedItem.startTime : (persistedItem.originalStartTime || persistedItem.startTime)
+                                            const origEnd = hasPendingChange ? persistedItem.endTime : (persistedItem.originalEndTime || persistedItem.endTime)
+
                                             return (
-                                                <div style={{ fontSize: '11px', color: hasOriginal ? '#e17055' : '#999', marginTop: '4px', padding: '4px 8px', background: hasOriginal ? '#fff5f5' : '#fafafa', borderRadius: '4px', borderLeft: `3px solid ${hasOriginal ? '#e17055' : '#ddd'}` }}>
-                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{orig.price.toLocaleString()}
+                                                <div style={{ fontSize: '11px', color: '#e17055', marginTop: '4px', padding: '4px 8px', background: '#fff5f5', borderRadius: '4px', borderLeft: '3px solid #e17055' }}>
+                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{persistedItem.price.toLocaleString()}
                                                 </div>
                                             )
                                         })()}

@@ -323,6 +323,7 @@ export async function PATCH(req: NextRequest) {
             include: { bookingItems: true },
         })
         if (!booking) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
+        let scheduleChanged = false
 
         if (action === 'cancel') {
             await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } })
@@ -398,30 +399,33 @@ export async function PATCH(req: NextRequest) {
             // Read existing items to preserve original data
             const existingItems = await prisma.bookingItem.findMany({
                 where: { bookingId },
-                orderBy: { startTime: 'asc' },
+                orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { courtId: 'asc' }],
             })
+            const existingItemsById = new Map(existingItems.map(item => [item.id, item]))
+            if (updateData.bookingItems.length !== existingItems.length) scheduleChanged = true
 
             await prisma.bookingItem.deleteMany({ where: { bookingId } })
             await prisma.bookingItem.createMany({
-                data: updateData.bookingItems.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; originalCourtId?: string | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }, idx: number) => {
-                    const oldItem = existingItems[idx]
-                    // Determine original values: keep existing originals if set, otherwise use old item's current values if data changed
-                    let origCourtId = item.originalCourtId || oldItem?.originalCourtId || null
-                    let origDate = item.originalDate ? toDateNoonUTC(item.originalDate) : (oldItem?.originalDate || null)
-                    let origStartTime = item.originalStartTime || oldItem?.originalStartTime || null
-                    let origEndTime = item.originalEndTime || oldItem?.originalEndTime || null
+                data: updateData.bookingItems.map((item: { id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; originalCourtId?: string | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }, idx: number) => {
+                    const oldItem = item.id ? existingItemsById.get(item.id) : existingItems[idx]
+                    let origCourtId = oldItem?.originalCourtId || null
+                    let origDate = oldItem?.originalDate || null
+                    let origStartTime = oldItem?.originalStartTime || null
+                    let origEndTime = oldItem?.originalEndTime || null
 
-                    // If no originals stored yet and the data actually changed, record the old values
-                    if (oldItem && !origCourtId) {
+                    if (oldItem) {
                         const oldDateStr = oldItem.date instanceof Date ? oldItem.date.toISOString().split('T')[0] : String(oldItem.date).split('T')[0]
                         const newDateStr = item.date.split('T')[0]
                         const changed = oldItem.courtId !== item.courtId || oldDateStr !== newDateStr || oldItem.startTime !== item.startTime || oldItem.endTime !== item.endTime
                         if (changed) {
+                            scheduleChanged = true
                             origCourtId = oldItem.courtId
                             origDate = oldItem.date
                             origStartTime = oldItem.startTime
                             origEndTime = oldItem.endTime
                         }
+                    } else {
+                        scheduleChanged = true
                     }
 
                     return {
@@ -478,9 +482,7 @@ export async function PATCH(req: NextRequest) {
         })
 
         // Only send LINE notification if date/time/court actually changed (not for trainer-only changes)
-        const hasScheduleChange = updated.bookingItems.some(item =>
-            Boolean(item.originalCourtId || item.originalDate || item.originalStartTime || item.originalEndTime)
-        )
+        const hasScheduleChange = scheduleChanged
 
         if (updated.user?.lineUserId && hasScheduleChange) {
             const templates = await getLineBookingTemplates()

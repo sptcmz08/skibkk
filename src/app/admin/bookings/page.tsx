@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2, Save } from 'lucide-react'
+import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2, Save, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -11,7 +11,7 @@ interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number
     createdAt: string; createdByAdmin: boolean; isBookerLearner: boolean; notes: string | null
     user: { id: string; name: string; email: string; phone: string }
-    bookingItems: Array<{ court: { name: string; venue?: { name: string } | null }; courtId: string; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string } }>
+    bookingItems: Array<{ id?: string; court: { name: string; venue?: { name: string } | null }; courtId: string; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string }>
     payments: Array<{ id: string; method: string; status: string; amount: number; slipUrl: string | null; createdAt: string; verifiedAt: string | null }>
 }
@@ -59,6 +59,10 @@ export default function BookingsManagement() {
         if (!dateStr) return ''
         const [y, m, d] = dateStr.split('-')
         return `${d}/${m}/${y}`
+    }
+
+    const formatShortDateTH = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
     }
 
     const fetchBookings = useCallback(async () => {
@@ -110,6 +114,7 @@ export default function BookingsManagement() {
                     status: editStatus,
                     totalAmount: editAmount,
                     bookingItems: editBookingItems.map(item => ({
+                        id: item.id,
                         courtId: item.courtId,
                         date: item.date,
                         startTime: item.startTime,
@@ -167,6 +172,17 @@ export default function BookingsManagement() {
             next[index] = { ...next[index], ...patch }
             return sortBookingItems(next)
         })
+    }
+
+    const removeEditBookingItem = (index: number) => {
+        if (editBookingItems.length <= 1) {
+            toast.error('ต้องมีรายการจองอย่างน้อย 1 รายการ')
+            return
+        }
+
+        const nextItems = editBookingItems.filter((_, itemIndex) => itemIndex !== index)
+        setEditBookingItems(nextItems)
+        setEditAmount(nextItems.reduce((sum, item) => sum + (item.price || 0), 0))
     }
 
     const totalConfirmed = bookings.filter(b => b.status === 'CONFIRMED').length
@@ -407,12 +423,12 @@ export default function BookingsManagement() {
 
                         {/* Booking Items */}
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> รายการจอง ({viewBooking.bookingItems.length})
+                            <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> รายการจอง ({editMode ? editBookingItems.length : viewBooking.bookingItems.length})
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                             {(editMode ? editBookingItems : sortBookingItems(viewBooking.bookingItems)).map((item, i) => (
                                 <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                                    <div>
+                                    <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600 }}>{item.court.name}</div>
                                         {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>Venue: {item.court.venue.name}</div>}
                                         {editMode ? (
@@ -455,9 +471,66 @@ export default function BookingsManagement() {
                                                 {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
                                             </div>
                                         )}
+                                        {editMode && (() => {
+                                            const persistedItem = item.id
+                                                ? viewBooking.bookingItems.find(originalItem => originalItem.id === item.id)
+                                                : viewBooking.bookingItems[i]
+                                            if (!persistedItem) return null
+
+                                            const persistedDate = toDateOnly(persistedItem.date)
+                                            const hasPendingChange =
+                                                item.courtId !== persistedItem.courtId ||
+                                                item.date !== persistedDate ||
+                                                item.startTime !== persistedItem.startTime ||
+                                                item.endTime !== persistedItem.endTime
+                                            const hasStoredOriginal = Boolean(persistedItem.originalCourtId || persistedItem.originalDate || persistedItem.originalStartTime || persistedItem.originalEndTime)
+
+                                            if (!hasPendingChange && !hasStoredOriginal) return null
+
+                                            const origCourtName = hasPendingChange
+                                                ? persistedItem.court.name
+                                                : (persistedItem.originalCourt?.name || persistedItem.court.name)
+                                            const origDate = hasPendingChange
+                                                ? formatShortDateTH(persistedItem.date)
+                                                : formatShortDateTH(persistedItem.originalDate || persistedItem.date)
+                                            const origStart = hasPendingChange ? persistedItem.startTime : (persistedItem.originalStartTime || persistedItem.startTime)
+                                            const origEnd = hasPendingChange ? persistedItem.endTime : (persistedItem.originalEndTime || persistedItem.endTime)
+
+                                            return (
+                                                <div style={{ fontSize: '11px', color: '#e17055', marginTop: '6px', padding: '4px 8px', background: '#fff5f5', borderRadius: '4px', borderLeft: '3px solid #e17055' }}>
+                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{persistedItem.price.toLocaleString()}
+                                                </div>
+                                            )
+                                        })()}
                                         {item.teacher && <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '2px' }}>Teacher: {item.teacher.name}</div>}
                                     </div>
-                                    <div style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>THB {item.price.toLocaleString()}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                        <div style={{ fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>THB {item.price.toLocaleString()}</div>
+                                        {editMode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeEditBookingItem(i)}
+                                                aria-label="ลบรายการจอง"
+                                                title="ลบรายการจอง"
+                                                style={{
+                                                    background: '#fde8e8',
+                                                    border: '1px solid #f5c6cb',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    color: '#e17055',
+                                                    padding: '6px 10px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 800,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                <Trash2 size={14} /> ลบ
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
