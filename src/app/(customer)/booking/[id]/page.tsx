@@ -46,8 +46,8 @@ const statusConfig: Record<string, { bg: string; color: string; label: string; i
 }
 
 const paymentMethodLabels: Record<string, string> = {
-    PROMPTPAY: 'พร้อมเพย์',
-    BANK_TRANSFER: 'โอนธนาคาร',
+    PROMPTPAY: 'โอนเงิน',
+    BANK_TRANSFER: 'โอนเงิน',
     PACKAGE: 'แพ็คเกจ',
     CASH: 'เงินสด',
     CREDIT_CARD: 'บัตรเครดิต',

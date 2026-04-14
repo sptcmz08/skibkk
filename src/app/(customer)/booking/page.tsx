@@ -447,12 +447,13 @@ export default function BookingPage() {
                 if (!pkgRes.ok) throw new Error('Package deduction failed')
             } else {
                 // Create payment — status depends on whether slip was auto-verified or fallback
+                const paymentMethodForRecord = paymentMethod === 'PROMPTPAY' ? 'BANK_TRANSFER' : paymentMethod
                 const paymentRes = await fetch('/api/payments', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         bookingId: data.booking.id,
-                        method: paymentMethod,
+                        method: paymentMethodForRecord,
                         amount: total,
                         slipData: verifiedSlips.map(s => s.transRef).filter(Boolean).join(',') || slipPreview,
                     }),
