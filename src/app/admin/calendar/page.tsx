@@ -1417,7 +1417,11 @@ export default function CalendarPage() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === (persistedItem.date instanceof Date ? persistedItem.date.toISOString().split('T')[0] : String(persistedItem.date).split('T')[0])))
+                                                        const persistedItemDateStr = typeof persistedItem.date === 'object' && persistedItem.date instanceof Date
+                                                            ? persistedItem.date.toISOString().split('T')[0]
+                                                            : String(persistedItem.date).split('T')[0]
+
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === persistedItemDateStr))
                                                         
                                                         if (pastState) {
                                                             // Avoid identical consecutive snapshots

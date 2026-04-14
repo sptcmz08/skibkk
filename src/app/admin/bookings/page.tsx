@@ -497,7 +497,11 @@ export default function BookingsManagement() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === item.courtId && prevItem.startTime === item.startTime && prevItem.date === (item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0])))
+                                                        const itemDateStr = typeof item.date === 'object' && item.date instanceof Date 
+                                                            ? item.date.toISOString().split('T')[0] 
+                                                            : String(item.date).split('T')[0]
+                                                        
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === item.courtId && prevItem.startTime === item.startTime && prevItem.date === itemDateStr))
                                                         
                                                         if (pastState) {
                                                             const last = historicalStates[historicalStates.length - 1]
@@ -582,7 +586,11 @@ export default function BookingsManagement() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === (persistedItem.date instanceof Date ? persistedItem.date.toISOString().split('T')[0] : String(persistedItem.date).split('T')[0])))
+                                                        const persistedItemDateStr = typeof persistedItem.date === 'object' && persistedItem.date instanceof Date
+                                                            ? persistedItem.date.toISOString().split('T')[0]
+                                                            : String(persistedItem.date).split('T')[0]
+
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === persistedItemDateStr))
                                                         
                                                         if (pastState) {
                                                             const last = historicalStates[historicalStates.length - 1]
