@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
+import { getAuditRequestMeta } from '@/lib/audit'
+
+const summarizeParticipantForAudit = (participant: {
+    id?: string
+    name: string
+    sportType?: string | null
+    phone?: string | null
+    height?: number | null
+    weight?: number | null
+    isBooker?: boolean | null
+}) => ({
+    id: participant.id,
+    name: participant.name,
+    sportType: participant.sportType || null,
+    phone: participant.phone || null,
+    height: participant.height || null,
+    weight: participant.weight || null,
+    isBooker: Boolean(participant.isBooker),
+})
 
 type ParticipantInput = {
     id?: unknown
@@ -63,6 +82,7 @@ export async function PATCH(
 ) {
     try {
         const user = await requireAuth()
+        const requestMeta = getAuditRequestMeta(req)
         const { id } = await params
         const body = await req.json() as { participants?: unknown }
         const participantInputs = Array.isArray(body.participants)
@@ -170,7 +190,26 @@ export async function PATCH(
                     action: 'BOOKING_PARTICIPANTS_UPDATE',
                     entityType: 'booking',
                     entityId: id,
-                    details: JSON.stringify({ bookingNumber: booking.bookingNumber, participantCount: participants.length }),
+                    ipAddress: requestMeta.ipAddress,
+                    details: JSON.stringify({
+                        bookingNumber: booking.bookingNumber,
+                        participantCount: participants.length,
+                        changes: {
+                            participants: {
+                                before: booking.participants.map(summarizeParticipantForAudit),
+                                after: participants.map(participant => summarizeParticipantForAudit({
+                                    id: participant.id,
+                                    name: participant.name,
+                                    sportType: participant.sportType || defaultSportType,
+                                    phone: participant.phone || null,
+                                    height: typeof participant.height === 'number' ? participant.height : null,
+                                    weight: typeof participant.weight === 'number' ? participant.weight : null,
+                                    isBooker: booking.participants.find(existing => existing.id === participant.id)?.isBooker || false,
+                                })),
+                            },
+                        },
+                        request: requestMeta,
+                    }),
                 },
             })
         })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
+import { getAuditRequestMeta } from '@/lib/audit'
 
 const LOCK_DURATION_MS = 20 * 60 * 1000 // 20 minutes
 
@@ -8,6 +9,7 @@ const LOCK_DURATION_MS = 20 * 60 * 1000 // 20 minutes
 // DELETE /api/locks — release all locks for a session
 export async function POST(req: NextRequest) {
     try {
+        const requestMeta = getAuditRequestMeta(req)
         const { sessionId, slots } = await req.json() as {
             sessionId: string
             slots: { courtId: string; date: string; startTime: string }[]
@@ -59,7 +61,15 @@ export async function POST(req: NextRequest) {
                 await prisma.auditLog.create({
                     data: {
                         userId: null, action: 'BOOKING_FAIL', entityType: 'lock', entityId: lock.id,
-                        details: JSON.stringify({ reason: 'ไม่ทำภายในเวลาที่กำหนด', sessionId: lock.sessionId, courtId: lock.courtId, date: lock.date, startTime: lock.startTime }),
+                        ipAddress: requestMeta.ipAddress,
+                        details: JSON.stringify({
+                            reason: 'ไม่ทำภายในเวลาที่กำหนด',
+                            sessionId: lock.sessionId,
+                            courtId: lock.courtId,
+                            date: lock.date,
+                            startTime: lock.startTime,
+                            request: requestMeta,
+                        }),
                     },
                 }).catch(() => { })
             }

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
+import { getAuditRequestMeta } from '@/lib/audit'
 import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
+        const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
 
         const { bookingId, method, amount, slipData, manualReview } = body
@@ -48,7 +50,13 @@ export async function POST(req: NextRequest) {
                 await prisma.auditLog.create({
                     data: {
                         userId: user.id, action: 'BOOKING_FAIL', entityType: 'payment', entityId: bookingId,
-                        details: JSON.stringify({ reason: 'สลิปซ้ำ', bookingNumber: booking.bookingNumber }),
+                        ipAddress: requestMeta.ipAddress,
+                        details: JSON.stringify({
+                            reason: 'สลิปซ้ำ',
+                            bookingNumber: booking.bookingNumber,
+                            payment: { method: method || 'PROMPTPAY', amount, manualReview: Boolean(manualReview) },
+                            request: requestMeta,
+                        }),
                     },
                 })
                 return NextResponse.json(

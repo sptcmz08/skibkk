@@ -4,6 +4,7 @@ import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateNextBookingNumber } from '@/lib/document-number-service'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
 import { sendLinePush } from '@/lib/line-messaging'
+import { getAuditRequestMeta } from '@/lib/audit'
 import {
     buildLineConfirmationMessage,
     buildLineUpdateMessage,
@@ -29,6 +30,47 @@ const hasTargetField = (error: unknown, field: string) => {
 }
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+const formatAuditDate = (date: Date | string) => new Date(date).toISOString().split('T')[0]
+
+const summarizeAuditBookingItem = (item: {
+    id?: string
+    courtId: string
+    court?: { name?: string | null } | null
+    date: Date | string
+    startTime: string
+    endTime: string
+    price: number
+    teacherId?: string | null
+    teacher?: { name?: string | null } | null
+}) => ({
+    id: item.id,
+    courtId: item.courtId,
+    courtName: item.court?.name || item.courtId,
+    date: formatAuditDate(item.date),
+    startTime: item.startTime,
+    endTime: item.endTime,
+    price: item.price,
+    teacherName: item.teacher?.name || null,
+    teacherId: item.teacherId || null,
+})
+
+const summarizeAuditParticipant = (participant: {
+    id?: string
+    name: string
+    sportType?: string | null
+    phone?: string | null
+    height?: number | null
+    weight?: number | null
+    isBooker?: boolean | null
+}) => ({
+    id: participant.id,
+    name: participant.name,
+    sportType: participant.sportType || null,
+    phone: participant.phone || null,
+    height: participant.height || null,
+    weight: participant.weight || null,
+    isBooker: Boolean(participant.isBooker),
+})
 
 const getLineBookingTemplates = async () => {
     const settings = await prisma.siteSetting.findMany({
@@ -134,6 +176,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
+        const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
 
         // Admin can create bookings on behalf of customers
@@ -260,7 +303,22 @@ export async function POST(req: NextRequest) {
                 action: 'BOOKING_CREATE',
                 entityType: 'booking',
                 entityId: booking.id,
-                details: JSON.stringify({ bookingNumber, totalAmount: body.totalAmount }),
+                ipAddress: requestMeta.ipAddress,
+                details: JSON.stringify({
+                    bookingNumber,
+                    totalAmount: body.totalAmount,
+                    source: body.createdByAdmin ? 'admin' : 'customer',
+                    customerId: bookingUserId,
+                    items: booking.bookingItems.map(summarizeAuditBookingItem),
+                    participants: booking.participants.map(summarizeAuditParticipant),
+                    payment: body.paymentMethod ? {
+                        method: body.paymentMethod,
+                        amount: body.totalAmount,
+                        bankName: body.bankName || null,
+                        status: 'VERIFIED',
+                    } : null,
+                    request: requestMeta,
+                }),
             },
         })
 
@@ -311,6 +369,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
     try {
         const user = await requireAuth()
+        const requestMeta = getAuditRequestMeta(req)
         if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
@@ -320,7 +379,10 @@ export async function PATCH(req: NextRequest) {
 
         const booking = await prisma.booking.findUnique({
             where: { id: bookingId },
-            include: { bookingItems: true },
+            include: {
+                bookingItems: { include: { court: true, teacher: true }, orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { courtId: 'asc' }] },
+                participants: true,
+            },
         })
         if (!booking) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
         let scheduleChanged = false
@@ -330,10 +392,25 @@ export async function PATCH(req: NextRequest) {
             await prisma.auditLog.create({
                 data: {
                     userId: user.id, action: 'BOOKING_CANCEL', entityType: 'booking', entityId: bookingId,
-                    details: JSON.stringify({ bookingNumber: booking.bookingNumber, reason: reason || 'Admin cancelled' }),
+                    ipAddress: requestMeta.ipAddress,
+                    details: JSON.stringify({
+                        bookingNumber: booking.bookingNumber,
+                        reason: reason || 'Admin cancelled',
+                        before: { status: booking.status },
+                        after: { status: 'CANCELLED' },
+                        items: booking.bookingItems.map(summarizeAuditBookingItem),
+                        request: requestMeta,
+                    }),
                 },
             })
             return NextResponse.json({ message: 'ยกเลิกการจองสำเร็จ' })
+        }
+
+        const beforeAudit = {
+            status: booking.status,
+            totalAmount: booking.totalAmount,
+            items: booking.bookingItems.map(summarizeAuditBookingItem),
+            participants: booking.participants.map(summarizeAuditParticipant),
         }
 
         // Update participants if provided
@@ -399,6 +476,7 @@ export async function PATCH(req: NextRequest) {
             // Read existing items to preserve original data
             const existingItems = await prisma.bookingItem.findMany({
                 where: { bookingId },
+                include: { court: true, teacher: true },
                 orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { courtId: 'asc' }],
             })
             const existingItemsById = new Map(existingItems.map(item => [item.id, item]))
@@ -466,7 +544,26 @@ export async function PATCH(req: NextRequest) {
         await prisma.auditLog.create({
             data: {
                 userId: user.id, action: 'BOOKING_UPDATE', entityType: 'booking', entityId: bookingId,
-                details: JSON.stringify({ bookingNumber: booking.bookingNumber, changes: updateData }),
+                ipAddress: requestMeta.ipAddress,
+                details: JSON.stringify({
+                    bookingNumber: booking.bookingNumber,
+                    changes: {
+                        ...(beforeAudit.status !== updated.status && { status: { from: beforeAudit.status, to: updated.status } }),
+                        ...(beforeAudit.totalAmount !== updated.totalAmount && { totalAmount: { from: beforeAudit.totalAmount, to: updated.totalAmount } }),
+                        bookingItems: {
+                            before: beforeAudit.items,
+                            after: updated.bookingItems.map(summarizeAuditBookingItem),
+                        },
+                        ...(updateData.participants && {
+                            participants: {
+                                before: beforeAudit.participants,
+                                after: updated.participants.map(summarizeAuditParticipant),
+                            },
+                        }),
+                    },
+                    rawPayload: updateData,
+                    request: requestMeta,
+                }),
             },
         })
 
