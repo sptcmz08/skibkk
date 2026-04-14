@@ -497,8 +497,8 @@ export default function BookingsManagement() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const itemDateStr = typeof item.date === 'object' && item.date instanceof Date 
-                                                            ? item.date.toISOString().split('T')[0] 
+                                                        const itemDateStr = (item.date as any) instanceof Date 
+                                                            ? (item.date as any).toISOString().split('T')[0] 
                                                             : String(item.date).split('T')[0]
                                                         
                                                         const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === item.courtId && prevItem.startTime === item.startTime && prevItem.date === itemDateStr))
@@ -586,8 +586,8 @@ export default function BookingsManagement() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const persistedItemDateStr = typeof persistedItem.date === 'object' && persistedItem.date instanceof Date
-                                                            ? persistedItem.date.toISOString().split('T')[0]
+                                                        const persistedItemDateStr = (persistedItem.date as any) instanceof Date
+                                                            ? (persistedItem.date as any).toISOString().split('T')[0]
                                                             : String(persistedItem.date).split('T')[0]
 
                                                         const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === persistedItemDateStr))

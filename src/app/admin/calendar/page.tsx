@@ -1417,8 +1417,8 @@ export default function CalendarPage() {
                                                             ? (details.changes?.bookingItems?.before || [])
                                                             : (details.items || [])
                                                         
-                                                        const persistedItemDateStr = typeof persistedItem.date === 'object' && persistedItem.date instanceof Date
-                                                            ? persistedItem.date.toISOString().split('T')[0]
+                                                        const persistedItemDateStr = (persistedItem.date as any) instanceof Date
+                                                            ? (persistedItem.date as any).toISOString().split('T')[0]
                                                             : String(persistedItem.date).split('T')[0]
 
                                                         const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === persistedItemDateStr))
