@@ -326,23 +326,26 @@ export async function POST(req: NextRequest) {
             },
         })
 
-        // Send confirmation via LINE (non-blocking)
-        const userRecord = await prisma.user.findUnique({ where: { id: bookingUserId }, select: { email: true, name: true, lineUserId: true } })
-        if (userRecord?.lineUserId) {
-            const templates = await getLineBookingTemplates()
-            const message = buildLineConfirmationMessage(templates.confirmation, {
-                bookingNumber,
-                customerName: userRecord.name,
-                items: booking.bookingItems.map(item => ({
-                    courtName: item.court.name,
-                    date: formatLineDate(item.date),
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                    price: item.price,
-                })),
-                totalAmount: body.totalAmount,
-            })
-            sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+        // Send LINE confirmation immediately only for admin-paid bookings.
+        // Customer bookings must send after payment success to avoid false confirmations.
+        if (body.createdByAdmin && body.paymentMethod) {
+            const userRecord = await prisma.user.findUnique({ where: { id: bookingUserId }, select: { email: true, name: true, lineUserId: true } })
+            if (userRecord?.lineUserId) {
+                const templates = await getLineBookingTemplates()
+                const message = buildLineConfirmationMessage(templates.confirmation, {
+                    bookingNumber,
+                    customerName: userRecord.name,
+                    items: booking.bookingItems.map(item => ({
+                        courtName: item.court.name,
+                        date: formatLineDate(item.date),
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        price: item.price,
+                    })),
+                    totalAmount: body.totalAmount,
+                })
+                sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+            }
         }
 
         publishRealtimeEvent({

@@ -211,6 +211,7 @@ export default function BookingDetailPage() {
 
     const sc = statusConfig[booking.status] || statusConfig.PENDING
     const StatusIcon = sc.icon
+    const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE')
 
     // Group booking items by date
     const itemsByDate = booking.bookingItems.reduce((acc, item) => {
@@ -268,7 +269,7 @@ export default function BookingDetailPage() {
                     <div>
                         <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดรวม</div>
                         <div style={{ fontSize: '28px', fontWeight: 900, fontFamily: "'Inter'", background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            ฿{booking.totalAmount.toLocaleString()}
+                            ฿{(isPackageBooking ? 0 : booking.totalAmount).toLocaleString()}
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -329,7 +330,7 @@ export default function BookingDetailPage() {
                                     </div>
                                 </div>
                                 <div style={{ fontWeight: 800, fontFamily: "'Inter'", fontSize: '15px', color: 'var(--c-text)' }}>
-                                    ฿{item.price.toLocaleString()}
+                                    ฿{(isPackageBooking ? 0 : item.price).toLocaleString()}
                                 </div>
                             </div>
                         ))}
@@ -454,7 +455,7 @@ export default function BookingDetailPage() {
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>ไซส์รองเท้า</label>
-                                                <input className="input-field" placeholder="TH size" value={participant.shoeSize} onChange={e => updateParticipantDraft(i, 'shoeSize', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
+                                                <input className="input-field" placeholder="EU SIZE" value={participant.shoeSize} onChange={e => updateParticipantDraft(i, 'shoeSize', e.target.value)} style={{ background: '#fff', fontSize: '13px' }} />
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '11px', color: 'var(--c-text-muted)', fontWeight: 600, marginBottom: '2px', display: 'block' }}>น้ำหนัก (kg)</label>
@@ -579,6 +580,11 @@ export default function BookingDetailPage() {
                                 </div>
                             )
                         })}
+                        {isPackageBooking && (
+                            <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(56,239,125,0.08)', color: '#00b894', fontSize: '12px', fontWeight: 700 }}>
+                                ✅ รายการนี้ใช้แพ็คเกจ ยอดที่บันทึกเป็น 0 บาท
+                            </div>
+                        )}
                     </div>
                 )}
             </motion.div>

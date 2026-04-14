@@ -25,6 +25,7 @@ export default function BookingPage() {
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
     const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
+    const [booker, setBooker] = useState<{ name: string; phone: string; email: string }>({ name: '', phone: '', email: '' })
     const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
     const [slipFile, setSlipFile] = useState<File | null>(null)
     const [slipPreview, setSlipPreview] = useState<string | null>(null)
@@ -38,6 +39,7 @@ export default function BookingPage() {
     const [qrImage, setQrImage] = useState<string | null>(null)
 
     const total = cart.reduce((s, i) => s + i.price, 0)
+    const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
     const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
     const remaining = total - paidTotal
 
@@ -284,6 +286,11 @@ export default function BookingPage() {
             .then(d => {
                 if (d.user) {
                     setUser(d.user)
+                    setBooker({
+                        name: d.user.name || '',
+                        phone: d.user.phone || '',
+                        email: d.user.email || '',
+                    })
                     // Auto-fill first participant with user profile data
                     setParticipants(prev => {
                         const updated = [...prev]
@@ -366,16 +373,29 @@ export default function BookingPage() {
 
     const handleBookerToggle = (checked: boolean) => {
         setIsBookerLearner(checked)
-        if (checked && user) {
+        if (checked) {
             // Auto-fill first participant with booker info
             const updated = [...participants]
             if (updated.length === 0) {
-                updated.push({ name: user.name, sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: user.phone || '', isBooker: true })
+                updated.push({ name: booker.name, sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: booker.phone || '', isBooker: true })
             } else {
-                updated[0] = { ...updated[0], name: user.name, phone: user.phone || '', isBooker: true }
+                updated[0] = { ...updated[0], name: booker.name, phone: booker.phone || '', isBooker: true }
             }
             setParticipants(updated)
         }
+    }
+
+    const syncBookerToFirstParticipant = (nextBooker: { name: string; phone: string; email: string }) => {
+        if (!isBookerLearner) return
+        setParticipants(prev => {
+            const updated = [...prev]
+            if (updated.length === 0) {
+                updated.push({ name: nextBooker.name, sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: nextBooker.phone || '', isBooker: true })
+            } else {
+                updated[0] = { ...updated[0], name: nextBooker.name, phone: nextBooker.phone || '', isBooker: true }
+            }
+            return updated
+        })
     }
 
 
@@ -385,6 +405,10 @@ export default function BookingPage() {
         || (remaining <= 1 && verifiedSlips.length > 0)
 
     const handleSubmitBooking = async () => {
+        if (!booker.name.trim() || !booker.email.trim() || !booker.phone.trim()) {
+            toast.error('กรุณากรอกข้อมูลผู้จองให้ครบ')
+            return
+        }
         if (participants.some(p => !p.name || !p.sportType)) {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
             return
@@ -401,6 +425,17 @@ export default function BookingPage() {
         setLoading(true)
         let createdBookingId: string | null = null
         try {
+            const profileRes = await fetch('/api/auth/me', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(booker),
+            })
+            if (!profileRes.ok) {
+                const profileData = await profileRes.json().catch(() => ({}))
+                toast.error(profileData.error || 'บันทึกข้อมูลผู้จองไม่สำเร็จ')
+                return
+            }
+
             // Step 1: Create booking
             const res = await fetch('/api/bookings', {
                 method: 'POST',
@@ -531,6 +566,49 @@ export default function BookingPage() {
                         1 ชั่วโมง สามารถเพิ่มผู้เรียนได้ 2 คน (รวม {maxParticipants} คน)
                     </p>
 
+                    <div className="glass-card" style={{ cursor: 'default', marginBottom: '20px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '14px' }}>ข้อมูลผู้จอง</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                                <label>ชื่อผู้จอง *</label>
+                                <input
+                                    className="input-field"
+                                    placeholder="ชื่อ-สกุล"
+                                    value={booker.name}
+                                    onChange={e => {
+                                        const nextBooker = { ...booker, name: e.target.value }
+                                        setBooker(nextBooker)
+                                        syncBookerToFirstParticipant(nextBooker)
+                                    }}
+                                />
+                            </div>
+                            <div className="input-group">
+                                <label>อีเมลผู้จอง *</label>
+                                <input
+                                    className="input-field"
+                                    type="email"
+                                    placeholder="name@email.com"
+                                    value={booker.email}
+                                    onChange={e => setBooker(prev => ({ ...prev, email: e.target.value }))}
+                                />
+                            </div>
+                            <div className="input-group">
+                                <label>เบอร์โทรผู้จอง *</label>
+                                <input
+                                    className="input-field"
+                                    type="tel"
+                                    placeholder="08x-xxx-xxxx"
+                                    value={booker.phone}
+                                    onChange={e => {
+                                        const nextBooker = { ...booker, phone: e.target.value }
+                                        setBooker(nextBooker)
+                                        syncBookerToFirstParticipant(nextBooker)
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Booker is learner toggle */}
                     <div className="glass-card" style={{ cursor: 'default', marginBottom: '20px', padding: '16px 20px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
@@ -585,7 +663,7 @@ export default function BookingPage() {
                                 </div>
                                 <div className="input-group">
                                     <label>ไซส์รองเท้า</label>
-                                    <input className="input-field" placeholder="TH size" value={p.shoeSize} onChange={e => updateParticipant(idx, 'shoeSize', e.target.value)} />
+                                    <input className="input-field" placeholder="EU SIZE" value={p.shoeSize} onChange={e => updateParticipant(idx, 'shoeSize', e.target.value)} />
                                 </div>
                                 <div className="input-group">
                                     <label>น้ำหนัก (kg)</label>
@@ -697,7 +775,7 @@ export default function BookingPage() {
                         ))}
                         <div style={{ borderTop: '2px solid var(--c-border)', marginTop: '12px', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ fontSize: '18px', fontWeight: 800 }}>ยอดรวม</span>
-                            <span style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>฿{total.toLocaleString()}</span>
+                            <span style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>฿{payableTotal.toLocaleString()}</span>
                         </div>
                     </div>
 
@@ -762,7 +840,7 @@ export default function BookingPage() {
                                     background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
                                 }}>
                                     <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
-                                    <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{total.toLocaleString()}</div>
+                                    <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{payableTotal.toLocaleString()}</div>
                                 </div>
                                 <div style={{ fontSize: '12px', color: '#e17055', marginTop: '10px', fontWeight: 600 }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
                             </div>
@@ -871,6 +949,11 @@ export default function BookingPage() {
                             {loading ? <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} /> : <>ยืนยันการจอง <CheckCircle size={18} /></>}
                         </motion.button>
                     </div>
+                    {paymentMethod === 'PACKAGE' && (
+                        <div style={{ marginTop: '10px', padding: '10px 12px', borderRadius: '10px', background: 'rgba(56,239,125,0.08)', color: '#00b894', fontSize: '13px', fontWeight: 700 }}>
+                            ✅ ใช้แพ็คเกจในการจองครั้งนี้ ยอดที่บันทึกเป็น 0 บาท
+                        </div>
+                    )}
                 </motion.div>
             )}
 

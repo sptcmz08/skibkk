@@ -3,6 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { getAuditRequestMeta } from '@/lib/audit'
 import crypto from 'crypto'
+import { sendLinePush } from '@/lib/line-messaging'
+import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
+
+const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 
 export async function POST(req: NextRequest) {
     try {
@@ -96,6 +100,31 @@ export async function POST(req: NextRequest) {
                 where: { id: bookingId },
                 data: { status: 'CONFIRMED' },
             })
+
+            const confirmedBooking = await prisma.booking.findUnique({
+                where: { id: bookingId },
+                include: {
+                    bookingItems: { include: { court: true } },
+                    user: { select: { name: true, lineUserId: true } },
+                },
+            })
+
+            if (confirmedBooking?.user?.lineUserId) {
+                const templateSetting = await prisma.siteSetting.findUnique({ where: { key: 'line_booking_confirmation_template' } })
+                const message = buildLineConfirmationMessage(templateSetting?.value || DEFAULT_LINE_CONFIRMATION_NOTE, {
+                    bookingNumber: confirmedBooking.bookingNumber,
+                    customerName: confirmedBooking.user.name,
+                    items: confirmedBooking.bookingItems.map(item => ({
+                        courtName: item.court.name,
+                        date: formatLineDate(item.date),
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        price: item.price,
+                    })),
+                    totalAmount: confirmedBooking.totalAmount,
+                })
+                sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+            }
         }
 
         return NextResponse.json({ payment }, { status: 201 })

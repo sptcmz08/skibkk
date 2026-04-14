@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { User, Calendar, Clock, MapPin, Package, Settings, History, Mail, Phone, Shield, ChevronRight, Sparkles } from 'lucide-react'
+import { User, Calendar, Clock, MapPin, Package, Settings, History, Mail, Phone, Shield, ChevronRight, Sparkles, Save, Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -16,24 +16,83 @@ interface Booking {
     participants: Array<{ name: string; sportType: string }>
     payments: Array<{ method: string; status: string; amount: number }>
 }
+interface UserPackage {
+    id: string
+    remainingHours: number
+    purchasedAt: string
+    expiresAt: string
+    package: { id: string; name: string; totalHours: number; price: number }
+}
+interface PackageUsage {
+    id: string
+    amount: number
+    packageId: string | null
+    createdAt: string
+    booking: {
+        bookingNumber: string
+        bookingItems: Array<{ date: string; startTime: string; endTime: string; court: { name: string } }>
+    }
+}
 
 export default function ProfilePage() {
     const router = useRouter()
     const [user, setUser] = useState<UserData | null>(null)
     const [bookings, setBookings] = useState<Booking[]>([])
+    const [packages, setPackages] = useState<UserPackage[]>([])
+    const [packageUsage, setPackageUsage] = useState<PackageUsage[]>([])
     const [loading, setLoading] = useState(true)
-    const [tab, setTab] = useState<'bookings' | 'settings'>('bookings')
+    const [tab, setTab] = useState<'bookings' | 'packages' | 'settings'>('bookings')
+    const [editProfile, setEditProfile] = useState(false)
+    const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '' })
+    const [savingProfile, setSavingProfile] = useState(false)
 
     useEffect(() => {
         Promise.all([
             fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json()),
             fetch('/api/bookings', { cache: 'no-store' }).then(r => r.json()),
-        ]).then(([authData, bookingsData]) => {
-            if (authData.user) setUser(authData.user)
+            fetch('/api/user-packages?includeAll=1&withUsage=1', { cache: 'no-store' }).then(r => r.json()),
+        ]).then(([authData, bookingsData, packageData]) => {
+            if (authData.user) {
+                setUser(authData.user)
+                setProfileForm({
+                    name: authData.user.name || '',
+                    email: authData.user.email || '',
+                    phone: authData.user.phone?.startsWith('LINE-') ? '' : (authData.user.phone || ''),
+                })
+            }
             else { router.push('/login'); return }
             if (bookingsData.bookings) setBookings(bookingsData.bookings)
+            if (packageData.packages) setPackages(packageData.packages)
+            if (packageData.usage) setPackageUsage(packageData.usage)
         }).catch(() => toast.error('ไม่สามารถโหลดข้อมูลได้')).finally(() => setLoading(false))
     }, [router])
+
+    const handleSaveProfile = async () => {
+        if (!profileForm.name.trim() || !profileForm.email.trim() || !profileForm.phone.trim()) {
+            toast.error('กรุณากรอกชื่อ อีเมล และเบอร์โทรให้ครบ')
+            return
+        }
+        setSavingProfile(true)
+        try {
+            const res = await fetch('/api/auth/me', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profileForm),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(data.error || 'บันทึกข้อมูลไม่สำเร็จ')
+                return
+            }
+            setUser(data.user)
+            setEditProfile(false)
+            toast.success('บันทึกข้อมูลส่วนตัวแล้ว')
+        } catch {
+            toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่')
+        } finally {
+            setSavingProfile(false)
+        }
+    }
 
     const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED')
     const totalSpent = confirmedBookings.reduce((s, b) => s + b.totalAmount, 0)
@@ -149,6 +208,7 @@ export default function ProfilePage() {
             }}>
                 {[
                     { key: 'bookings' as const, icon: <History size={15} />, label: 'ประวัติการจอง' },
+                    { key: 'packages' as const, icon: <Package size={15} />, label: 'แพ็คเกจของฉัน' },
                     { key: 'settings' as const, icon: <Settings size={15} />, label: 'ข้อมูลส่วนตัว' },
                 ].map(t => (
                     <button key={t.key} onClick={() => setTab(t.key)}
@@ -289,29 +349,101 @@ export default function ProfilePage() {
                             borderRadius: '20px', padding: '32px',
                         }}
                     >
-                        <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <User size={20} style={{ color: 'var(--c-primary)' }} /> ข้อมูลส่วนตัว
-                        </h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+                            <h3 style={{ fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <User size={20} style={{ color: 'var(--c-primary)' }} /> ข้อมูลส่วนตัว
+                            </h3>
+                            {!editProfile ? (
+                                <button
+                                    onClick={() => setEditProfile(true)}
+                                    style={{ border: '1px solid rgba(250,204,21,0.35)', background: 'rgba(250,204,21,0.12)', color: '#2d2a00', borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <Pencil size={14} /> แก้ไข
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSaveProfile}
+                                    disabled={savingProfile}
+                                    style={{ border: 'none', background: 'var(--c-gradient)', color: '#2d2a00', borderRadius: '10px', padding: '8px 14px', cursor: savingProfile ? 'not-allowed' : 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px', opacity: savingProfile ? 0.7 : 1 }}
+                                >
+                                    <Save size={14} /> {savingProfile ? 'กำลังบันทึก...' : 'บันทึก'}
+                                </button>
+                            )}
+                        </div>
                         <div style={{ display: 'grid', gap: '18px' }}>
                             {[
-                                { label: 'ชื่อ-สกุล', value: user.name, icon: <User size={16} /> },
-                                { label: 'อีเมล', value: user.email, icon: <Mail size={16} /> },
-                                { label: 'เบอร์โทรศัพท์', value: user.phone?.startsWith('LINE-') ? 'ยังไม่ได้ระบุ' : (user.phone || '-'), icon: <Phone size={16} /> },
+                                { label: 'ชื่อ-สกุล', key: 'name' as const, value: profileForm.name, fallback: user.name, icon: <User size={16} /> },
+                                { label: 'อีเมล', key: 'email' as const, value: profileForm.email, fallback: user.email, icon: <Mail size={16} /> },
+                                { label: 'เบอร์โทรศัพท์', key: 'phone' as const, value: profileForm.phone, fallback: user.phone?.startsWith('LINE-') ? 'ยังไม่ได้ระบุ' : (user.phone || '-'), icon: <Phone size={16} /> },
                             ].map(field => (
                                 <div key={field.label}>
                                     <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--c-text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         {field.icon} {field.label}
                                     </label>
-                                    <div style={{
-                                        padding: '14px 18px', borderRadius: '12px',
-                                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                                        fontSize: '15px', fontWeight: 500, color: 'var(--c-text)',
-                                    }}>
-                                        {field.value}
-                                    </div>
+                                    {editProfile ? (
+                                        <input
+                                            className="input-field"
+                                            type={field.key === 'email' ? 'email' : 'text'}
+                                            value={field.value}
+                                            onChange={e => setProfileForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                            placeholder={field.label}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            padding: '14px 18px', borderRadius: '12px',
+                                            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                                            fontSize: '15px', fontWeight: 500, color: 'var(--c-text)',
+                                        }}>
+                                            {field.fallback}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
+                    </motion.div>
+                )}
+
+                {tab === 'packages' && (
+                    <motion.div key="packages" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                        style={{ display: 'grid', gap: '14px' }}
+                    >
+                        {packages.length === 0 ? (
+                            <div style={{ background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)', borderRadius: '20px', padding: '28px', color: 'var(--c-text-muted)' }}>
+                                ยังไม่มีแพ็คเกจ
+                            </div>
+                        ) : packages.map(pkg => {
+                            const packageUsages = packageUsage.filter(log => log.packageId === pkg.package.id)
+                            return (
+                                <div key={pkg.id} style={{ background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)', borderRadius: '18px', padding: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 800, fontSize: '17px' }}>{pkg.package.name}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>ซื้อเมื่อ {new Date(pkg.purchasedAt).toLocaleDateString('th-TH')} • หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH')}</div>
+                                        </div>
+                                        <div style={{ fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>
+                                            เหลือ {pkg.remainingHours} / {pkg.package.totalHours} ชม.
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '12px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>การใช้งานแพ็คเกจ</div>
+                                        {packageUsages.length === 0 ? (
+                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>ยังไม่มีรายการใช้งาน</div>
+                                        ) : (
+                                            <div style={{ display: 'grid', gap: '6px' }}>
+                                                {packageUsages.map(usage => (
+                                                    <div key={usage.id} style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '12px' }}>
+                                                        <div style={{ fontWeight: 700 }}>#{usage.booking.bookingNumber} • ใช้แพ็คเกจ ({usage.booking.bookingItems.length} ชม.)</div>
+                                                        <div style={{ color: 'var(--c-text-muted)', marginTop: '2px' }}>
+                                                            {usage.booking.bookingItems.map(item => `${new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} ${item.startTime}-${item.endTime} ${item.court.name}`).join(' | ')}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </motion.div>
                 )}
             </AnimatePresence>
