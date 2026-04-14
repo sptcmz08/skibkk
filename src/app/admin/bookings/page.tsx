@@ -51,6 +51,7 @@ export default function BookingsManagement() {
     const [editAmount, setEditAmount] = useState(0)
     const [editBookingItems, setEditBookingItems] = useState<Booking['bookingItems']>([])
     const [saving, setSaving] = useState(false)
+    const [bookingHistory, setBookingHistory] = useState<any[]>([])
     const [page, setPage] = useState(0)
     const pageSize = 20
     const editDateRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -86,6 +87,15 @@ export default function BookingsManagement() {
         const t = setTimeout(fetchBookings, 300)
         return () => clearTimeout(t)
     }, [fetchBookings])
+
+    const fetchHistory = async (bookingId: string) => {
+        try {
+            const res = await fetch(`/api/audit-logs?entityType=booking&entityId=${bookingId}&limit=100`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.logs) setBookingHistory(data.logs)
+            else setBookingHistory([])
+        } catch { setBookingHistory([]) }
+    }
 
     const handleConfirm = async (bookingId: string) => {
         try {
@@ -276,7 +286,11 @@ export default function BookingsManagement() {
                                         const firstItem = sortedItems[0]
                                         const hasSlip = b.payments.some(p => p.slipUrl)
                                         return (
-                                            <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => setViewBooking(b)}>
+                                            <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => {
+                                                setBookingHistory([])
+                                                fetchHistory(b.id)
+                                                setViewBooking(b)
+                                            }}>
                                                 <td style={{ fontWeight: 700, fontSize: '13px', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>
                                                     {b.bookingNumber}
                                                 </td>
@@ -471,6 +485,67 @@ export default function BookingsManagement() {
                                                 {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
                                             </div>
                                         )}
+                                        {/* Show full change history from audit logs (Read-only view) */}
+                                        {!editMode && (() => {
+                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
+                                            
+                                            bookingHistory.forEach(log => {
+                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
+                                                    try {
+                                                        const details = JSON.parse(log.details || '{}')
+                                                        const items = log.action === 'BOOKING_UPDATE' 
+                                                            ? (details.changes?.bookingItems?.before || [])
+                                                            : (details.items || [])
+                                                        
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === item.courtId && prevItem.startTime === item.startTime && prevItem.date === (item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0])))
+                                                        
+                                                        if (pastState) {
+                                                            const last = historicalStates[historicalStates.length - 1]
+                                                            const isDuplicate = last && 
+                                                                last.courtId === pastState.courtId && 
+                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
+                                                                last.startTime === pastState.startTime && 
+                                                                last.endTime === pastState.endTime
+                                                            
+                                                            if (!isDuplicate) {
+                                                                historicalStates.push({
+                                                                    ...pastState,
+                                                                    createdAt: log.createdAt
+                                                                })
+                                                            }
+                                                        }
+                                                    } catch (e) { }
+                                                }
+                                            })
+
+                                            if (historicalStates.length === 0) return null
+
+                                            return (
+                                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    {historicalStates.map((state, sIdx) => (
+                                                        <div key={sIdx} style={{ 
+                                                            fontSize: '11px', 
+                                                            color: '#666', 
+                                                            padding: '4px 8px', 
+                                                            background: '#f8f9fa', 
+                                                            borderRadius: '4px', 
+                                                            borderLeft: `3px solid #ccc`,
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <span>
+                                                                📌 ข้อมูลเดิม: {state.courtName || state.courtId} | {formatShortDateTH(String(state.date))} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
+                                                            </span>
+                                                            <span style={{ fontSize: '9px', opacity: 0.7 }}>
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )
+                                        })()}
+                                        {/* Show full change history from audit logs */}
                                         {editMode && (() => {
                                             const persistedItem = item.id
                                                 ? viewBooking.bookingItems.find(originalItem => originalItem.id === item.id)
@@ -483,22 +558,75 @@ export default function BookingsManagement() {
                                                 item.date !== persistedDate ||
                                                 item.startTime !== persistedItem.startTime ||
                                                 item.endTime !== persistedItem.endTime
-                                            const hasStoredOriginal = Boolean(persistedItem.originalCourtId || persistedItem.originalDate || persistedItem.originalStartTime || persistedItem.originalEndTime)
 
-                                            if (!hasPendingChange && !hasStoredOriginal) return null
+                                            // Extract history from audit logs
+                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
+                                            
+                                            if (hasPendingChange) {
+                                                historicalStates.push({
+                                                    courtName: persistedItem.court.name,
+                                                    courtId: persistedItem.courtId,
+                                                    date: persistedItem.date,
+                                                    startTime: persistedItem.startTime,
+                                                    endTime: persistedItem.endTime,
+                                                    price: persistedItem.price,
+                                                    createdAt: viewBooking.updatedAt || viewBooking.createdAt
+                                                })
+                                            }
 
-                                            const origCourtName = hasPendingChange
-                                                ? persistedItem.court.name
-                                                : (persistedItem.originalCourt?.name || persistedItem.court.name)
-                                            const origDate = hasPendingChange
-                                                ? formatShortDateTH(persistedItem.date)
-                                                : formatShortDateTH(persistedItem.originalDate || persistedItem.date)
-                                            const origStart = hasPendingChange ? persistedItem.startTime : (persistedItem.originalStartTime || persistedItem.startTime)
-                                            const origEnd = hasPendingChange ? persistedItem.endTime : (persistedItem.originalEndTime || persistedItem.endTime)
+                                            bookingHistory.forEach(log => {
+                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
+                                                    try {
+                                                        const details = JSON.parse(log.details || '{}')
+                                                        const items = log.action === 'BOOKING_UPDATE' 
+                                                            ? (details.changes?.bookingItems?.before || [])
+                                                            : (details.items || [])
+                                                        
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === item.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === (persistedItem.date instanceof Date ? persistedItem.date.toISOString().split('T')[0] : String(persistedItem.date).split('T')[0])))
+                                                        
+                                                        if (pastState) {
+                                                            const last = historicalStates[historicalStates.length - 1]
+                                                            const isDuplicate = last && 
+                                                                last.courtId === pastState.courtId && 
+                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
+                                                                last.startTime === pastState.startTime && 
+                                                                last.endTime === pastState.endTime
+                                                            
+                                                            if (!isDuplicate) {
+                                                                historicalStates.push({
+                                                                    ...pastState,
+                                                                    createdAt: log.createdAt
+                                                                })
+                                                            }
+                                                        }
+                                                    } catch (e) { }
+                                                }
+                                            })
+
+                                            if (historicalStates.length === 0) return null
 
                                             return (
-                                                <div style={{ fontSize: '11px', color: '#e17055', marginTop: '6px', padding: '4px 8px', background: '#fff5f5', borderRadius: '4px', borderLeft: '3px solid #e17055' }}>
-                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{persistedItem.price.toLocaleString()}
+                                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    {historicalStates.map((state, sIdx) => (
+                                                        <div key={sIdx} style={{ 
+                                                            fontSize: '11px', 
+                                                            color: sIdx === 0 && hasPendingChange ? '#e17055' : '#666', 
+                                                            padding: '4px 8px', 
+                                                            background: sIdx === 0 && hasPendingChange ? '#fff5f5' : '#f8f9fa', 
+                                                            borderRadius: '4px', 
+                                                            borderLeft: `3px solid ${sIdx === 0 && hasPendingChange ? '#e17055' : '#ccc'}`,
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <span>
+                                                                📌 {sIdx === 0 && hasPendingChange ? 'ข้อมูลปัจจุบัน (ก่อนแก้):' : 'ข้อมูลเดิม:'} {state.courtName || state.courtId} | {formatShortDateTH(String(state.date))} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
+                                                            </span>
+                                                            <span style={{ fontSize: '9px', opacity: 0.7 }}>
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )
                                         })()}

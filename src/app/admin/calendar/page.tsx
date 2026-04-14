@@ -83,6 +83,7 @@ export default function CalendarPage() {
     const [teachers, setTeachers] = useState<Teacher[]>([])
     const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
     const [sportTypes, setSportTypes] = useState<string[]>([])
+    const [bookingHistory, setBookingHistory] = useState<any[]>([])
 
     const formatDateInputDisplay = (dateStr: string) => {
         if (!dateStr) return ''
@@ -105,9 +106,20 @@ export default function CalendarPage() {
         input.focus()
     }
 
+    const fetchHistory = async (bookingId: string) => {
+        try {
+            const res = await fetch(`/api/audit-logs?entityType=booking&entityId=${bookingId}&limit=100`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.logs) setBookingHistory(data.logs)
+            else setBookingHistory([])
+        } catch { setBookingHistory([]) }
+    }
+
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
         setEditMode(false)
+        setBookingHistory([])
+        fetchHistory(booking.id)
         setEditParticipants(booking.participants.map(p => ({
             name: p.name,
             sportType: p.sportType,
@@ -1365,7 +1377,7 @@ export default function CalendarPage() {
                                                 ))}
                                             </select>
                                         </div>
-                                        {/* Show original data */}
+                                        {/* Show full change history from audit logs */}
                                         {(() => {
                                             const editItem = item as typeof editBookingItems[number]
                                             const persistedItem = editItem.id
@@ -1379,22 +1391,78 @@ export default function CalendarPage() {
                                                 editItem.date !== persistedDate ||
                                                 editItem.startTime !== persistedItem.startTime ||
                                                 editItem.endTime !== persistedItem.endTime
-                                            const hasStoredOriginal = Boolean(persistedItem.originalCourtId || persistedItem.originalDate || persistedItem.originalStartTime || persistedItem.originalEndTime)
 
-                                            if (!hasPendingChange && !hasStoredOriginal) return null
+                                            // Extract history from audit logs
+                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
+                                            
+                                            // 1. If currently being edited, the state currently in database is the most recent "original"
+                                            if (hasPendingChange) {
+                                                historicalStates.push({
+                                                    courtName: persistedItem.court?.name || courts.find(c => c.id === persistedItem.courtId)?.name,
+                                                    courtId: persistedItem.courtId,
+                                                    date: persistedItem.date,
+                                                    startTime: persistedItem.startTime,
+                                                    endTime: persistedItem.endTime,
+                                                    price: persistedItem.price,
+                                                    createdAt: viewBooking.updatedAt || viewBooking.createdAt
+                                                })
+                                            }
 
-                                            const origCourtName = hasPendingChange
-                                                ? (persistedItem.court?.name || courts.find(c => c.id === persistedItem.courtId)?.name)
-                                                : (persistedItem.originalCourt?.name || courts.find(c => c.id === persistedItem.originalCourtId)?.name || persistedItem.court?.name)
-                                            const origDate = hasPendingChange
-                                                ? formatShortDateTH(persistedItem.date)
-                                                : formatShortDateTH(persistedItem.originalDate || persistedItem.date)
-                                            const origStart = hasPendingChange ? persistedItem.startTime : (persistedItem.originalStartTime || persistedItem.startTime)
-                                            const origEnd = hasPendingChange ? persistedItem.endTime : (persistedItem.originalEndTime || persistedItem.endTime)
+                                            // 2. Fetch from audit logs (already ordered newest to oldest)
+                                            bookingHistory.forEach(log => {
+                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
+                                                    try {
+                                                        const details = JSON.parse(log.details || '{}')
+                                                        const items = log.action === 'BOOKING_UPDATE' 
+                                                            ? (details.changes?.bookingItems?.before || [])
+                                                            : (details.items || [])
+                                                        
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === (persistedItem.date instanceof Date ? persistedItem.date.toISOString().split('T')[0] : String(persistedItem.date).split('T')[0])))
+                                                        
+                                                        if (pastState) {
+                                                            // Avoid identical consecutive snapshots
+                                                            const last = historicalStates[historicalStates.length - 1]
+                                                            const isDuplicate = last && 
+                                                                last.courtId === pastState.courtId && 
+                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
+                                                                last.startTime === pastState.startTime && 
+                                                                last.endTime === pastState.endTime
+                                                            
+                                                            if (!isDuplicate) {
+                                                                historicalStates.push({
+                                                                    ...pastState,
+                                                                    createdAt: log.createdAt
+                                                                })
+                                                            }
+                                                        }
+                                                    } catch (e) { /* skip malformed logs */ }
+                                                }
+                                            })
+
+                                            if (historicalStates.length === 0) return null
 
                                             return (
-                                                <div style={{ fontSize: '11px', color: '#e17055', marginTop: '4px', padding: '4px 8px', background: '#fff5f5', borderRadius: '4px', borderLeft: '3px solid #e17055' }}>
-                                                    📌 ข้อมูลเดิม: {origCourtName} | {origDate} | {origStart}-{origEnd} | ฿{persistedItem.price.toLocaleString()}
+                                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    {historicalStates.map((state, sIdx) => (
+                                                        <div key={sIdx} style={{ 
+                                                            fontSize: '11px', 
+                                                            color: sIdx === 0 && hasPendingChange ? '#e17055' : '#666', 
+                                                            padding: '4px 8px', 
+                                                            background: sIdx === 0 && hasPendingChange ? '#fff5f5' : '#f8f9fa', 
+                                                            borderRadius: '4px', 
+                                                            borderLeft: `3px solid ${sIdx === 0 && hasPendingChange ? '#e17055' : '#ccc'}`,
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <span>
+                                                                📌 {sIdx === 0 && hasPendingChange ? 'ข้อมูลปัจจุบัน (ก่อนแก้):' : 'ข้อมูลเดิม:'} {state.courtName || courts.find(c => c.id === state.courtId)?.name || state.courtId} | {formatShortDateTH(state.date)} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
+                                                            </span>
+                                                            <span style={{ fontSize: '9px', opacity: 0.7 }}>
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )
                                         })()}
@@ -1408,6 +1476,67 @@ export default function CalendarPage() {
                                         {(item as any).teacher && (
                                             <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '4px' }}>👨‍🏫 ครู: {(item as any).teacher.name}</div>
                                         )}
+                                        {/* Show full change history from audit logs (Read-only view) */}
+                                        {(() => {
+                                            const editItem = item as any
+                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
+                                            
+                                            bookingHistory.forEach(log => {
+                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
+                                                    try {
+                                                        const details = JSON.parse(log.details || '{}')
+                                                        const items = log.action === 'BOOKING_UPDATE' 
+                                                            ? (details.changes?.bookingItems?.before || [])
+                                                            : (details.items || [])
+                                                        
+                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === (item as any).courtId && prevItem.startTime === (item as any).startTime && prevItem.date === (item as any).date))
+                                                        
+                                                        if (pastState) {
+                                                            const last = historicalStates[historicalStates.length - 1]
+                                                            const isDuplicate = last && 
+                                                                last.courtId === pastState.courtId && 
+                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
+                                                                last.startTime === pastState.startTime && 
+                                                                last.endTime === pastState.endTime
+                                                            
+                                                            if (!isDuplicate) {
+                                                                historicalStates.push({
+                                                                    ...pastState,
+                                                                    createdAt: log.createdAt
+                                                                })
+                                                            }
+                                                        }
+                                                    } catch (e) { }
+                                                }
+                                            })
+
+                                            if (historicalStates.length === 0) return null
+
+                                            return (
+                                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    {historicalStates.map((state, sIdx) => (
+                                                        <div key={sIdx} style={{ 
+                                                            fontSize: '11px', 
+                                                            color: '#666', 
+                                                            padding: '4px 8px', 
+                                                            background: '#f8f9fa', 
+                                                            borderRadius: '4px', 
+                                                            borderLeft: `3px solid #ccc`,
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <span>
+                                                                📌 ข้อมูลเดิม: {state.courtName || courts.find(c => c.id === state.courtId)?.name || state.courtId} | {formatShortDateTH(state.date)} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
+                                                            </span>
+                                                            <span style={{ fontSize: '9px', opacity: 0.7 }}>
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )
+                                        })()}
                                     </>
                                 )}
                             </div>
