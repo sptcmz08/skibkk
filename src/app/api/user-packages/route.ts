@@ -140,6 +140,11 @@ export async function POST(req: NextRequest) {
                         price: item.price,
                     })),
                     totalAmount: confirmedBooking.totalAmount,
+                    packageUsage: {
+                        packageName: userPkg.package?.name || null,
+                        hoursUsed: hoursToDeduct,
+                        hoursRemaining: userPkg.remainingHours - hoursToDeduct,
+                    },
                 })
                 sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
             }

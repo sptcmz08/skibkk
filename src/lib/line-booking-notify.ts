@@ -33,6 +33,11 @@ type BookingNotifyData = {
         } | null
     }>
     totalAmount: number
+    packageUsage?: {
+        packageName?: string | null
+        hoursUsed?: number | null
+        hoursRemaining?: number | null
+    } | null
 }
 
 const PROTECTED_TOKENS = ['{bookingNumber}', '{customerName}', '{items}', '{totalAmount}']
@@ -68,7 +73,16 @@ export const buildLineConfirmationMessage = (
     data: BookingNotifyData,
 ) => {
     const safeNote = normalizeLineEditableNote(note, DEFAULT_LINE_CONFIRMATION_NOTE)
-    return `✅ ยืนยันการจอง\n#${data.bookingNumber}\n\nสวัสดีคุณ ${data.customerName}\n${safeNote}\n\n${formatItemsText(data.items)}\n\n💳 ยอดรวม: ฿${data.totalAmount.toLocaleString()}`
+    const packageUsageLines = data.packageUsage
+        ? [
+            '🎫 ชำระด้วยแพ็คเกจ',
+            data.packageUsage.packageName ? `แพ็คเกจ: ${data.packageUsage.packageName}` : null,
+            Number.isFinite(data.packageUsage.hoursUsed) ? `ใช้ไป: ${Number(data.packageUsage.hoursUsed)} ชม.` : null,
+            Number.isFinite(data.packageUsage.hoursRemaining) ? `คงเหลือ: ${Number(data.packageUsage.hoursRemaining)} ชม.` : null,
+        ].filter(Boolean).join('\n')
+        : ''
+    const packageSection = packageUsageLines ? `\n\n${packageUsageLines}` : ''
+    return `✅ ยืนยันการจอง\n#${data.bookingNumber}\n\nสวัสดีคุณ ${data.customerName}\n${safeNote}\n\n${formatItemsText(data.items)}${packageSection}\n\n💳 ยอดรวม: ฿${data.totalAmount.toLocaleString()}`
 }
 
 export const buildLineUpdateMessage = (

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
+import { sendLinePush } from '@/lib/line-messaging'
+import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
 
 export const dynamic = 'force-dynamic'
+const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 
 // GET — list all user-packages (admin view)
 export async function GET(req: NextRequest) {
@@ -125,6 +128,35 @@ export async function PATCH(req: NextRequest) {
                 },
             })
         })
+
+        const confirmedBooking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                bookingItems: { include: { court: true } },
+                user: { select: { name: true, lineUserId: true } },
+            },
+        })
+        if (confirmedBooking?.user?.lineUserId) {
+            const templateSetting = await prisma.siteSetting.findUnique({ where: { key: 'line_booking_confirmation_template' } })
+            const message = buildLineConfirmationMessage(templateSetting?.value || DEFAULT_LINE_CONFIRMATION_NOTE, {
+                bookingNumber: confirmedBooking.bookingNumber,
+                customerName: confirmedBooking.user.name,
+                items: confirmedBooking.bookingItems.map(item => ({
+                    courtName: item.court.name,
+                    date: formatLineDate(item.date),
+                    startTime: item.startTime,
+                    endTime: item.endTime,
+                    price: item.price,
+                })),
+                totalAmount: confirmedBooking.totalAmount,
+                packageUsage: {
+                    packageName: userPkg.package?.name || null,
+                    hoursUsed: hoursToDeduct,
+                    hoursRemaining: userPkg.remainingHours - hoursToDeduct,
+                },
+            })
+            sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+        }
 
         return NextResponse.json({ message: 'ตัดชั่วโมงแพ็คเกจสำเร็จ' })
     } catch (error) {
