@@ -60,6 +60,14 @@ export default function LogsPage() {
         return JSON.stringify(value)
     }
 
+    const formatCurrency = (value: unknown) => {
+        const amount = Number(value)
+        if (!Number.isFinite(amount)) return '-'
+        return `฿${amount.toLocaleString()}`
+    }
+
+    const hasValue = (value: unknown) => value !== null && value !== undefined && value !== ''
+
     const formatAuditItem = (item: Record<string, unknown>) => {
         const court = item.courtName || item.courtId || '-'
         const date = item.date || '-'
@@ -92,8 +100,12 @@ export default function LogsPage() {
             if (obj.source) rows.push(`ช่องทาง: ${obj.source === 'admin' ? 'แอดมิน' : 'ลูกค้า'}`)
             if (obj.totalAmount !== undefined) rows.push(`ยอดรวม: ฿${Number(obj.totalAmount).toLocaleString()}`)
 
-            if (obj.changes?.status) rows.push(`สถานะ: ${obj.changes.status.from} → ${obj.changes.status.to}`)
-            if (obj.changes?.totalAmount) rows.push(`ยอดเงิน: ฿${Number(obj.changes.totalAmount.from).toLocaleString()} → ฿${Number(obj.changes.totalAmount.to).toLocaleString()}`)
+            if (obj.changes?.status && (hasValue(obj.changes.status.from) || hasValue(obj.changes.status.to))) {
+                rows.push(`สถานะ: ${formatValue(obj.changes.status.from)} → ${formatValue(obj.changes.status.to)}`)
+            }
+            if (obj.changes?.totalAmount && (hasValue(obj.changes.totalAmount.from) || hasValue(obj.changes.totalAmount.to))) {
+                rows.push(`ยอดเงิน: ${formatCurrency(obj.changes.totalAmount.from)} → ${formatCurrency(obj.changes.totalAmount.to)}`)
+            }
 
             const beforeItems = obj.changes?.bookingItems?.before || obj.changes?.items?.before
             const afterItems = obj.changes?.bookingItems?.after || obj.changes?.items?.after
@@ -134,6 +146,69 @@ export default function LogsPage() {
             return rows
         } catch {
             return [details || '-']
+        }
+    }
+
+    const summarizeAction = (action: string, details: string | null): string[] => {
+        if (!details) return []
+
+        try {
+            const obj = JSON.parse(details)
+            const notes: string[] = []
+
+            if (action === 'BOOKING_CREATE') {
+                if (Array.isArray(obj.items)) notes.push(`เพิ่มรายการจอง ${obj.items.length} รายการ`)
+                if (Array.isArray(obj.participants)) notes.push(`ผู้เรียน ${obj.participants.length} คน`)
+                if (obj.source) notes.push(`ช่องทาง: ${obj.source === 'admin' ? 'แอดมิน' : 'ลูกค้า'}`)
+                return notes
+            }
+
+            if (action === 'BOOKING_CANCEL') {
+                notes.push('ยกเลิกการจอง')
+                if (obj.reason) notes.push(`เหตุผล: ${obj.reason}`)
+                return notes
+            }
+
+            if (action === 'BOOKING_PARTICIPANTS_UPDATE') {
+                const beforeCount = Array.isArray(obj.changes?.participants?.before) ? obj.changes.participants.before.length : null
+                const afterCount = Array.isArray(obj.changes?.participants?.after) ? obj.changes.participants.after.length : null
+                if (beforeCount !== null && afterCount !== null) {
+                    notes.push(`ผู้เรียน: ${beforeCount} → ${afterCount} คน`)
+                } else if (typeof obj.participantCount === 'number') {
+                    notes.push(`ผู้เรียนทั้งหมด ${obj.participantCount} คน`)
+                }
+                return notes
+            }
+
+            if (action === 'BOOKING_UPDATE') {
+                if (obj.changes?.status && (hasValue(obj.changes.status.from) || hasValue(obj.changes.status.to))) {
+                    notes.push(`สถานะ: ${formatValue(obj.changes.status.from)} → ${formatValue(obj.changes.status.to)}`)
+                }
+                if (obj.changes?.totalAmount && (hasValue(obj.changes.totalAmount.from) || hasValue(obj.changes.totalAmount.to))) {
+                    notes.push(`ยอดเงิน: ${formatCurrency(obj.changes.totalAmount.from)} → ${formatCurrency(obj.changes.totalAmount.to)}`)
+                }
+
+                const beforeItems = Array.isArray(obj.changes?.bookingItems?.before) ? obj.changes.bookingItems.before.length : null
+                const afterItems = Array.isArray(obj.changes?.bookingItems?.after) ? obj.changes.bookingItems.after.length : null
+                if (beforeItems !== null && afterItems !== null && beforeItems !== afterItems) {
+                    notes.push(`รายการจอง: ${beforeItems} → ${afterItems} รายการ`)
+                }
+
+                const beforeParticipants = Array.isArray(obj.changes?.participants?.before) ? obj.changes.participants.before.length : null
+                const afterParticipants = Array.isArray(obj.changes?.participants?.after) ? obj.changes.participants.after.length : null
+                if (beforeParticipants !== null && afterParticipants !== null && beforeParticipants !== afterParticipants) {
+                    notes.push(`ผู้เรียน: ${beforeParticipants} → ${afterParticipants} คน`)
+                }
+
+                if (notes.length === 0) notes.push('แก้ไขข้อมูลการจอง')
+                return notes
+            }
+
+            if (obj.reason) notes.push(`เหตุผล: ${obj.reason}`)
+            if (obj.source) notes.push(`ช่องทาง: ${obj.source === 'admin' ? 'แอดมิน' : 'ลูกค้า'}`)
+            return notes
+        } catch {
+            return []
         }
     }
 
@@ -198,13 +273,28 @@ export default function LogsPage() {
                                                 <div style={{ fontSize: '11px', color: 'var(--a-text-muted)' }}>{log.user?.role}</div>
                                             </td>
                                             <td>
-                                                <span style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                    padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-                                                    background: `${actionInfo.color}15`, color: actionInfo.color,
-                                                }}>
-                                                    {actionInfo.label}
-                                                </span>
+                                                {(() => {
+                                                    const actionNotes = summarizeAction(log.action, log.details)
+                                                    return (
+                                                        <div style={{ display: 'grid', gap: '6px', minWidth: '170px' }}>
+                                                            <span style={{
+                                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                                padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
+                                                                background: `${actionInfo.color}15`, color: actionInfo.color,
+                                                                width: 'fit-content',
+                                                            }}>
+                                                                {actionInfo.label}
+                                                            </span>
+                                                            {actionNotes.length > 0 && (
+                                                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', lineHeight: 1.45 }}>
+                                                                    {actionNotes.slice(0, 3).map((note, index) => (
+                                                                        <div key={index}>• {note}</div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                             </td>
                                             <td style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
                                                 {log.entityType}
