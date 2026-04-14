@@ -37,6 +37,8 @@ const paymentMethodMap: Record<string, string> = {
     CREDIT_CARD: '💳 บัตรเครดิต',
 }
 
+const paymentMethodOptions = ['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'] as const
+
 export default function BookingsManagement() {
     const router = useRouter()
     const [bookings, setBookings] = useState<Booking[]>([])
@@ -48,6 +50,7 @@ export default function BookingsManagement() {
     const [viewSlip, setViewSlip] = useState<string | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [editStatus, setEditStatus] = useState('')
+    const [editPaymentMethod, setEditPaymentMethod] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [editBookingItems, setEditBookingItems] = useState<Booking['bookingItems']>([])
     const [saving, setSaving] = useState(false)
@@ -122,6 +125,7 @@ export default function BookingsManagement() {
                 body: JSON.stringify({
                     bookingId: viewBooking.id,
                     status: editStatus,
+                    paymentMethod: editPaymentMethod || undefined,
                     totalAmount: editAmount,
                     bookingItems: editBookingItems.map(item => ({
                         id: item.id,
@@ -493,6 +497,7 @@ export default function BookingsManagement() {
                                     <button onClick={() => {
                                         setEditMode(true)
                                         setEditStatus(viewBooking.status)
+                                        setEditPaymentMethod(viewBooking.payments[0]?.method || '')
                                         setEditAmount(viewBooking.totalAmount)
                                         setEditBookingItems(sortBookingItems(viewBooking.bookingItems).map(item => ({
                                             ...item,
@@ -527,6 +532,15 @@ export default function BookingsManagement() {
                                         <div style={{ flex: 1, minWidth: '140px' }}>
                                             <strong style={{ fontSize: '13px' }}>ยอดรวม (฿):</strong>
                                             <input className="admin-input" type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} style={{ marginTop: '4px', padding: '6px 10px' }} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: '160px' }}>
+                                            <strong style={{ fontSize: '13px' }}>วิธีชำระ:</strong>
+                                            <select className="admin-input" value={editPaymentMethod} onChange={e => setEditPaymentMethod(e.target.value)} style={{ marginTop: '4px', padding: '6px 10px' }}>
+                                                <option value="">-- เลือกวิธีชำระ --</option>
+                                                {paymentMethodOptions.map(method => (
+                                                    <option key={method} value={method}>{paymentMethodMap[method] || method}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 )}

@@ -18,6 +18,8 @@ const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12
 
 export const dynamic = 'force-dynamic'
 
+const EDITABLE_PAYMENT_METHODS = new Set(['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'])
+
 const hasCode = (error: unknown, code: string): error is { code: string } =>
     typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === code
 
@@ -384,6 +386,7 @@ export async function PATCH(req: NextRequest) {
             include: {
                 bookingItems: { include: { court: true, teacher: true }, orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { courtId: 'asc' }] },
                 participants: true,
+                payments: { orderBy: { createdAt: 'desc' } },
             },
         })
         if (!booking) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
@@ -411,8 +414,15 @@ export async function PATCH(req: NextRequest) {
         const beforeAudit = {
             status: booking.status,
             totalAmount: booking.totalAmount,
+            paymentMethod: booking.payments[0]?.method || null,
             items: booking.bookingItems.map(summarizeAuditBookingItem),
             participants: booking.participants.map(summarizeAuditParticipant),
+        }
+
+        if (updateData.paymentMethod !== undefined && updateData.paymentMethod !== null && updateData.paymentMethod !== '') {
+            if (!EDITABLE_PAYMENT_METHODS.has(String(updateData.paymentMethod))) {
+                return NextResponse.json({ error: 'วิธีชำระเงินไม่ถูกต้อง' }, { status: 400 })
+            }
         }
 
         // Update participants if provided
@@ -544,6 +554,40 @@ export async function PATCH(req: NextRequest) {
             include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true, lineUserId: true } } },
         })
 
+        if (updateData.paymentMethod) {
+            const latestPayment = await prisma.payment.findFirst({
+                where: { bookingId },
+                orderBy: { createdAt: 'desc' },
+            })
+
+            if (latestPayment) {
+                await prisma.payment.update({
+                    where: { id: latestPayment.id },
+                    data: {
+                        method: updateData.paymentMethod,
+                        bankName: updateData.paymentMethod === 'BANK_TRANSFER' ? latestPayment.bankName : null,
+                        amount: updated.totalAmount,
+                    },
+                })
+            } else {
+                await prisma.payment.create({
+                    data: {
+                        bookingId,
+                        userId: booking.userId,
+                        method: updateData.paymentMethod,
+                        amount: updated.totalAmount,
+                        status: updated.status === 'CONFIRMED' ? 'VERIFIED' : 'PENDING',
+                    },
+                })
+            }
+        }
+
+        const updatedWithPayments = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true, lineUserId: true } } },
+        })
+        if (!updatedWithPayments) return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
+
         await prisma.auditLog.create({
             data: {
                 userId: user.id, action: 'BOOKING_UPDATE', entityType: 'booking', entityId: bookingId,
@@ -551,16 +595,19 @@ export async function PATCH(req: NextRequest) {
                 details: JSON.stringify({
                     bookingNumber: booking.bookingNumber,
                     changes: {
-                        ...(beforeAudit.status !== updated.status && { status: { from: beforeAudit.status, to: updated.status } }),
-                        ...(beforeAudit.totalAmount !== updated.totalAmount && { totalAmount: { from: beforeAudit.totalAmount, to: updated.totalAmount } }),
+                        ...(beforeAudit.status !== updatedWithPayments.status && { status: { from: beforeAudit.status, to: updatedWithPayments.status } }),
+                        ...(beforeAudit.totalAmount !== updatedWithPayments.totalAmount && { totalAmount: { from: beforeAudit.totalAmount, to: updatedWithPayments.totalAmount } }),
+                        ...(beforeAudit.paymentMethod !== (updatedWithPayments.payments[0]?.method || null) && {
+                            paymentMethod: { from: beforeAudit.paymentMethod, to: updatedWithPayments.payments[0]?.method || null },
+                        }),
                         bookingItems: {
                             before: beforeAudit.items,
-                            after: updated.bookingItems.map(summarizeAuditBookingItem),
+                            after: updatedWithPayments.bookingItems.map(summarizeAuditBookingItem),
                         },
                         ...(updateData.participants && {
                             participants: {
                                 before: beforeAudit.participants,
-                                after: updated.participants.map(summarizeAuditParticipant),
+                                after: updatedWithPayments.participants.map(summarizeAuditParticipant),
                             },
                         }),
                     },
@@ -571,25 +618,25 @@ export async function PATCH(req: NextRequest) {
         })
 
         publishRealtimeEvent({
-            type: updated.status === 'CANCELLED' ? 'booking_cancelled' : 'booking_updated',
-            bookingId: updated.id,
-            bookingNumber: updated.bookingNumber,
-            status: updated.status,
+            type: updatedWithPayments.status === 'CANCELLED' ? 'booking_cancelled' : 'booking_updated',
+            bookingId: updatedWithPayments.id,
+            bookingNumber: updatedWithPayments.bookingNumber,
+            status: updatedWithPayments.status,
             source: 'admin',
-            affectedDates: [...new Set(updated.bookingItems.map(item => item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0]))],
-            courtIds: [...new Set(updated.bookingItems.map(item => item.courtId))],
-            message: updated.status === 'CANCELLED' ? 'booking cancelled' : 'booking updated',
+            affectedDates: [...new Set(updatedWithPayments.bookingItems.map(item => item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0]))],
+            courtIds: [...new Set(updatedWithPayments.bookingItems.map(item => item.courtId))],
+            message: updatedWithPayments.status === 'CANCELLED' ? 'booking cancelled' : 'booking updated',
         })
 
         // Only send LINE notification if date/time/court actually changed (not for trainer-only changes)
         const hasScheduleChange = scheduleChanged
 
-        if (updated.user?.lineUserId && hasScheduleChange) {
+        if (updatedWithPayments.user?.lineUserId && hasScheduleChange) {
             const templates = await getLineBookingTemplates()
             const message = buildLineUpdateMessage(templates.update, {
-                bookingNumber: updated.bookingNumber,
-                customerName: updated.user.name,
-                items: updated.bookingItems.map(item => {
+                bookingNumber: updatedWithPayments.bookingNumber,
+                customerName: updatedWithPayments.user.name,
+                items: updatedWithPayments.bookingItems.map(item => {
                     const hasOriginal = Boolean(item.originalCourtId || item.originalDate || item.originalStartTime || item.originalEndTime)
 
                     return {
@@ -608,13 +655,13 @@ export async function PATCH(req: NextRequest) {
                             : null,
                     }
                 }),
-                totalAmount: updated.totalAmount,
+                totalAmount: updatedWithPayments.totalAmount,
             })
 
-            sendLinePush(updated.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE update:', err))
+            sendLinePush(updatedWithPayments.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE update:', err))
         }
 
-        return NextResponse.json({ booking: updated })
+        return NextResponse.json({ booking: updatedWithPayments })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         // Handle unique constraint violation (race condition)

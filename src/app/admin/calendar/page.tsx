@@ -31,6 +31,17 @@ interface Venue { id: string; name: string }
 interface Customer { id: string; name: string; email: string; phone: string }
 interface Teacher { id: string; name: string; specialty: string | null; isActive: boolean; workStatus: string }
 
+const paymentMethodMap: Record<string, string> = {
+    PROMPTPAY: '📱 พร้อมเพย์',
+    QR_PROMPTPAY: '📱 QR พร้อมเพย์',
+    BANK_TRANSFER: '🏦 โอนเงิน',
+    CASH: '💵 เงินสด',
+    CREDIT_CARD: '💳 บัตรเครดิต',
+    PACKAGE: '📦 แพ็คเกจ',
+}
+
+const paymentMethodOptions = ['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'] as const
+
 export default function CalendarPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -56,6 +67,7 @@ export default function CalendarPage() {
     const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string; shoeSize: string }>>([])
     const [editBookingItems, setEditBookingItems] = useState<Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
     const [editStatus, setEditStatus] = useState('')
+    const [editPaymentMethod, setEditPaymentMethod] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
     // Calendar availability data (from /api/availability/calendar)
@@ -231,6 +243,7 @@ export default function CalendarPage() {
             return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
         }))
         setEditStatus(booking.status)
+        setEditPaymentMethod(booking.payments[0]?.method || '')
         setEditAmount(booking.totalAmount)
     }
 
@@ -312,6 +325,7 @@ export default function CalendarPage() {
                 body: JSON.stringify({
                     bookingId: viewBooking.id,
                     status: editStatus,
+                    paymentMethod: editPaymentMethod || undefined,
                     totalAmount: editAmount,
                     participants: editParticipants.map(p => ({
                         name: p.name,
@@ -1325,13 +1339,24 @@ export default function CalendarPage() {
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email?.endsWith('@line.local') ? <span style={{ color: '#999' }}>ไม่มี (LINE)</span> : viewBooking.user?.email}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH')}</div>
-                                {viewBooking.payments[0] && (
-                                    <div><strong>วิธีชำระ:</strong> {
-                                        viewBooking.payments[0].method === 'CASH' ? '💵 เงินสด'
-                                        : viewBooking.payments[0].method === 'BANK_TRANSFER' ? `🏦 ธนาคาร${viewBooking.payments[0].bankName ? ' (' + viewBooking.payments[0].bankName + ')' : ''}`
-                                        : viewBooking.payments[0].method === 'CREDIT_CARD' ? '💳 บัตรเครดิต'
-                                        : viewBooking.payments[0].method === 'PROMPTPAY' ? '📱 พร้อมเพย์' : viewBooking.payments[0].method
-                                    }</div>
+                                {(viewBooking.payments[0] || editMode) && (
+                                    <div>
+                                        <strong>วิธีชำระ:</strong>{' '}
+                                        {editMode ? (
+                                            <select
+                                                value={editPaymentMethod}
+                                                onChange={e => setEditPaymentMethod(e.target.value)}
+                                                style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--a-border)', marginLeft: '8px' }}
+                                            >
+                                                <option value="">-- เลือกวิธีชำระ --</option>
+                                                {paymentMethodOptions.map(method => (
+                                                    <option key={method} value={method}>{paymentMethodMap[method] || method}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            paymentMethodMap[viewBooking.payments[0]?.method || ''] || viewBooking.payments[0]?.method || '-'
+                                        )}
+                                    </div>
                                 )}
                                 {editMode && (
                                     <div style={{ gridColumn: '1 / -1' }}>
