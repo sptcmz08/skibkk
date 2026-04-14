@@ -103,6 +103,8 @@ export async function GET(req: NextRequest) {
             const date = searchParams.get('date')
             const status = searchParams.get('status')
             const search = searchParams.get('search')
+            const from = searchParams.get('from')
+            const to = searchParams.get('to')
 
             const where: Record<string, unknown> = {}
             if (status) where.status = status
@@ -113,7 +115,13 @@ export async function GET(req: NextRequest) {
                     { bookingNumber: { contains: search } },
                 ]
             }
-            if (date) {
+            if (from || to) {
+                const normalizedFrom = (from || to) as string
+                const normalizedTo = (to || from) as string
+                const startOfRange = new Date(`${normalizedFrom}T00:00:00Z`)
+                const endOfRange = new Date(`${normalizedTo}T23:59:59Z`)
+                where.bookingItems = { some: { date: { gte: startOfRange, lte: endOfRange } } }
+            } else if (date) {
                 // Match @db.Date field — use wide UTC range that covers any timezone
                 const startOfDay = new Date(date + 'T00:00:00Z')
                 const endOfDay = new Date(date + 'T23:59:59Z')
@@ -122,7 +130,7 @@ export async function GET(req: NextRequest) {
 
             // Month filter for calendar view: ?month=2026-03
             const monthParam = searchParams.get('month')
-            if (monthParam && !date) {
+            if (monthParam && !date && !from && !to) {
                 const [y, m] = monthParam.split('-').map(Number)
                 // Use timezone-aware dates to match @db.Date field properly
                 const startDate = new Date(`${y}-${String(m).padStart(2, '0')}-01T00:00:00Z`)

@@ -46,6 +46,8 @@ export default function BookingsManagement() {
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [sourceFilter, setSourceFilter] = useState<string>('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [viewSlip, setViewSlip] = useState<string | null>(null)
     const [editMode, setEditMode] = useState(false)
@@ -75,6 +77,10 @@ export default function BookingsManagement() {
             const params = new URLSearchParams()
             if (search) params.set('search', search)
             if (statusFilter) params.set('status', statusFilter)
+            const normalizedFrom = dateFrom && dateTo && dateFrom > dateTo ? dateTo : dateFrom
+            const normalizedTo = dateFrom && dateTo && dateFrom > dateTo ? dateFrom : dateTo
+            if (normalizedFrom) params.set('from', normalizedFrom)
+            if (normalizedTo) params.set('to', normalizedTo)
             const res = await fetch(`/api/bookings?take=500&${params.toString()}`, { cache: 'no-store' })
             const data = await res.json()
             let list: Booking[] = data.bookings || []
@@ -338,6 +344,22 @@ export default function BookingsManagement() {
                         <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--a-text-muted)' }} />
                         <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="ค้นหาชื่อ / เบอร์โทร / เลขจอง" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
+                    <input
+                        className="admin-input"
+                        type="date"
+                        style={{ width: '170px' }}
+                        value={dateFrom}
+                        onChange={e => setDateFrom(e.target.value)}
+                        title="จากวันที่"
+                    />
+                    <input
+                        className="admin-input"
+                        type="date"
+                        style={{ width: '170px' }}
+                        value={dateTo}
+                        onChange={e => setDateTo(e.target.value)}
+                        title="ถึงวันที่"
+                    />
                     <select className="admin-input" style={{ width: '160px' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">สถานะทั้งหมด</option>
                         <option value="PENDING">🟡 รอชำระเงิน</option>
@@ -349,6 +371,16 @@ export default function BookingsManagement() {
                         <option value="web">🌐 จากเว็บไซต์</option>
                         <option value="admin">👤 จาก Admin</option>
                     </select>
+                    {(dateFrom || dateTo) && (
+                        <button
+                            type="button"
+                            className="btn-admin-outline"
+                            style={{ padding: '10px 14px', fontSize: '13px' }}
+                            onClick={() => { setDateFrom(''); setDateTo('') }}
+                        >
+                            ล้างช่วงวันที่
+                        </button>
+                    )}
                 </div>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '10px', fontSize: '12px' }}>
                     <span style={{ padding: '4px 10px', borderRadius: '6px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>🌐 เว็บ: {fromWeb}</span>

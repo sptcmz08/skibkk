@@ -23,6 +23,11 @@ interface DaySummary {
     totalAmount: number
 }
 
+interface RevenueRangeSummary {
+    totalAmount: number
+    bookingHours: number
+}
+
 interface Court {
     id: string; name: string; sportType: string; venueId: string | null
     operatingHours?: Array<{ dayOfWeek: string; openTime: string; closeTime: string; isClosed: boolean }>
@@ -96,6 +101,12 @@ export default function CalendarPage() {
     const [pendingCalendarAction, setPendingCalendarAction] = useState<{ message: string; action: () => void } | null>(null)
     const [sportTypes, setSportTypes] = useState<string[]>([])
     const [bookingHistory, setBookingHistory] = useState<any[]>([])
+    const initialRangeFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const initialRangeTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`
+    const [revenueFrom, setRevenueFrom] = useState(initialRangeFrom)
+    const [revenueTo, setRevenueTo] = useState(initialRangeTo)
+    const [revenueSummary, setRevenueSummary] = useState<RevenueRangeSummary>({ totalAmount: 0, bookingHours: 0 })
+    const [loadingRevenueSummary, setLoadingRevenueSummary] = useState(false)
 
     const formatDateInputDisplay = (dateStr: string) => {
         if (!dateStr) return ''
@@ -390,6 +401,43 @@ export default function CalendarPage() {
         }
     }, [viewYear, viewMonth, selectedVenueId])
 
+    const fetchRevenueSummary = useCallback(async () => {
+        const normalizedFrom = revenueFrom && revenueTo && revenueFrom > revenueTo ? revenueTo : revenueFrom
+        const normalizedTo = revenueFrom && revenueTo && revenueFrom > revenueTo ? revenueFrom : revenueTo
+        if (!normalizedFrom || !normalizedTo) {
+            setRevenueSummary({ totalAmount: 0, bookingHours: 0 })
+            return
+        }
+
+        setLoadingRevenueSummary(true)
+        try {
+            const params = new URLSearchParams({ take: '1000', from: normalizedFrom, to: normalizedTo })
+            const res = await fetch(`/api/bookings?${params.toString()}`, { cache: 'no-store' })
+            const data = await res.json()
+            const allBookings: Booking[] = data.bookings || []
+            const activeBookings = allBookings.filter(b => b.status !== 'CANCELLED')
+            const venueCourtIds = selectedVenueId
+                ? new Set(courts.filter(c => c.venueId === selectedVenueId).map(c => c.id))
+                : null
+
+            let totalAmount = 0
+            let bookingHours = 0
+            activeBookings.forEach(booking => {
+                booking.bookingItems.forEach(item => {
+                    if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
+                    totalAmount += item.price || 0
+                    bookingHours += 1
+                })
+            })
+
+            setRevenueSummary({ totalAmount, bookingHours })
+        } catch {
+            setRevenueSummary({ totalAmount: 0, bookingHours: 0 })
+        } finally {
+            setLoadingRevenueSummary(false)
+        }
+    }, [revenueFrom, revenueTo, selectedVenueId, courts])
+
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
     // Fetch courts for edit dropdown
@@ -419,6 +467,10 @@ export default function CalendarPage() {
         const intervalId = setInterval(fetchCalendarAvailability, 15000)
         return () => clearInterval(intervalId)
     }, [fetchCalendarAvailability])
+
+    useEffect(() => {
+        fetchRevenueSummary()
+    }, [fetchRevenueSummary])
 
     const knownBookingIds = useRef<Set<string>>(new Set())
     
@@ -475,6 +527,7 @@ export default function CalendarPage() {
             fetchMonthlySummary()
             fetchCalendarAvailability()
         }
+        fetchRevenueSummary()
 
         if (event.type === 'booking_created' && matchesSelectedDate) {
             toast.success('มีการจองใหม่เข้ามาแบบ real-time', { duration: 3500, icon: '🔔', style: { border: '1px solid #10b981', padding: '16px', color: '#10b981' } })
@@ -485,7 +538,7 @@ export default function CalendarPage() {
         if (event.type === 'booking_cancelled' && matchesSelectedDate) {
             toast('มีการยกเลิกรายการจอง ระบบอัปเดตแล้ว', { duration: 3000, icon: '🔔' })
         }
-    }, [selectedDate, viewYear, viewMonth, refetchBookings, fetchMonthlySummary, fetchCalendarAvailability]))
+    }, [selectedDate, viewYear, viewMonth, refetchBookings, fetchMonthlySummary, fetchCalendarAvailability, fetchRevenueSummary]))
 
     // Fetch courts for booking modal (duplicate removed - already fetched above)
 
@@ -645,6 +698,7 @@ export default function CalendarPage() {
                     })
                     setDaySummaries(summaries)
                 }
+                await fetchRevenueSummary()
             } else {
                 const err = await res.json().catch(() => ({}))
                 toast.error(err.error || 'จองไม่สำเร็จ')
@@ -689,6 +743,36 @@ export default function CalendarPage() {
                     <button onClick={openNewBooking} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Plus size={18} /> จองให้ลูกค้า
                     </button>
+                </div>
+            </div>
+
+            <div className="admin-card" style={{ marginBottom: '16px', padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--a-text)' }}>สรุปรวมรายได้การจองตามช่วงวันที่</div>
+                        <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
+                            รวมจากยอดเงินในแต่ละช่องวันที่ (ไม่รวมรายการยกเลิก)
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input className="admin-input" type="date" value={revenueFrom} onChange={e => setRevenueFrom(e.target.value)} style={{ width: '170px' }} />
+                        <span style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ถึง</span>
+                        <input className="admin-input" type="date" value={revenueTo} onChange={e => setRevenueTo(e.target.value)} style={{ width: '170px' }} />
+                    </div>
+                </div>
+                <div style={{ marginTop: '12px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--a-border)' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>รายได้รวมช่วงที่เลือก</div>
+                        <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--a-primary)' }}>
+                            {loadingRevenueSummary ? '...' : `฿${revenueSummary.totalAmount.toLocaleString()}`}
+                        </div>
+                    </div>
+                    <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--a-border)' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ชั่วโมงการจองรวม</div>
+                        <div style={{ fontSize: '24px', fontWeight: 800, color: '#00b894' }}>
+                            {loadingRevenueSummary ? '...' : `${revenueSummary.bookingHours.toLocaleString()} ชม.`}
+                        </div>
+                    </div>
                 </div>
             </div>
 
