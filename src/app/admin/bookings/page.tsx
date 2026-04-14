@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number
-    createdAt: string; createdByAdmin: boolean; isBookerLearner: boolean; notes: string | null
+    createdAt: string; updatedAt?: string; createdByAdmin: boolean; isBookerLearner: boolean; notes: string | null
     user: { id: string; name: string; email: string; phone: string }
     bookingItems: Array<{ id?: string; court: { name: string; venue?: { name: string } | null }; courtId: string; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
@@ -574,7 +574,7 @@ export default function BookingsManagement() {
                                                     startTime: persistedItem.startTime,
                                                     endTime: persistedItem.endTime,
                                                     price: persistedItem.price,
-                                                    createdAt: viewBooking.updatedAt || viewBooking.createdAt
+                                                    createdAt: (viewBooking as any).updatedAt || viewBooking.createdAt
                                                 })
                                             }
 

@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Booking {
-    id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean; createdByAdmin: boolean
+    id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; updatedAt?: string; isBookerLearner: boolean; createdByAdmin: boolean
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
