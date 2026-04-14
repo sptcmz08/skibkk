@@ -61,6 +61,7 @@ const summarizeAuditParticipant = (participant: {
     phone?: string | null
     height?: number | null
     weight?: number | null
+    shoeSize?: string | null
     isBooker?: boolean | null
 }) => ({
     id: participant.id,
@@ -69,6 +70,7 @@ const summarizeAuditParticipant = (participant: {
     phone: participant.phone || null,
     height: participant.height || null,
     weight: participant.weight || null,
+    shoeSize: participant.shoeSize || null,
     isBooker: Boolean(participant.isBooker),
 })
 
@@ -417,13 +419,14 @@ export async function PATCH(req: NextRequest) {
         if (updateData.participants && Array.isArray(updateData.participants)) {
             await prisma.participant.deleteMany({ where: { bookingId } })
             await prisma.participant.createMany({
-                data: updateData.participants.map((p: { name: string; sportType: string; phone?: string; height?: number; weight?: number; isBooker?: boolean }) => ({
+                data: updateData.participants.map((p: { name: string; sportType: string; phone?: string; height?: number; weight?: number; shoeSize?: string; isBooker?: boolean }) => ({
                     bookingId,
                     name: p.name,
                     sportType: p.sportType || '-',
                     phone: p.phone || '',
                     height: p.height ? parseFloat(String(p.height)) : null,
                     weight: p.weight ? parseFloat(String(p.weight)) : null,
+                    shoeSize: p.shoeSize || null,
                     isBooker: p.isBooker || false,
                 })),
             })

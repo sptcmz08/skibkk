@@ -10,6 +10,7 @@ const summarizeParticipantForAudit = (participant: {
     phone?: string | null
     height?: number | null
     weight?: number | null
+    shoeSize?: string | null
     isBooker?: boolean | null
 }) => ({
     id: participant.id,
@@ -18,6 +19,7 @@ const summarizeParticipantForAudit = (participant: {
     phone: participant.phone || null,
     height: participant.height || null,
     weight: participant.weight || null,
+    shoeSize: participant.shoeSize || null,
     isBooker: Boolean(participant.isBooker),
 })
 
@@ -204,6 +206,7 @@ export async function PATCH(
                                     phone: participant.phone || null,
                                     height: typeof participant.height === 'number' ? participant.height : null,
                                     weight: typeof participant.weight === 'number' ? participant.weight : null,
+                                    shoeSize: typeof participant.shoeSize === 'string' ? participant.shoeSize : null,
                                     isBooker: booking.participants.find(existing => existing.id === participant.id)?.isBooker || false,
                                 })),
                             },

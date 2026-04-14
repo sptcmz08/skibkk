@@ -12,7 +12,7 @@ interface Booking {
     createdAt: string; createdByAdmin: boolean; isBookerLearner: boolean; notes: string | null
     user: { id: string; name: string; email: string; phone: string }
     bookingItems: Array<{ id?: string; court: { name: string; venue?: { name: string } | null }; courtId: string; date: string; startTime: string; endTime: string; price: number; teacher?: { name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
-    participants: Array<{ name: string; sportType: string; phone: string }>
+    participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
     payments: Array<{ id: string; method: string; status: string; amount: number; slipUrl: string | null; createdAt: string; verifiedAt: string | null }>
 }
 
@@ -228,7 +228,7 @@ export default function BookingsManagement() {
                     </div>
                     <select className="admin-input" style={{ width: '160px' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">สถานะทั้งหมด</option>
-                        <option value="PENDING">🟡 รอชำระ</option>
+                        <option value="PENDING">🟡 รอชำระเงิน</option>
                         <option value="CONFIRMED">🟢 ยืนยัน</option>
                         <option value="CANCELLED">🔴 ยกเลิก</option>
                     </select>
@@ -541,9 +541,15 @@ export default function BookingsManagement() {
                                 <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>👥 ผู้เรียน ({viewBooking.participants.length})</h3>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
                                     {viewBooking.participants.map((p, i) => (
-                                        <span key={i} style={{ padding: '6px 12px', borderRadius: '6px', background: '#f3f4f6', fontSize: '13px' }}>
-                                            <strong>{p.name}</strong> — {p.sportType} {p.phone && `| ${p.phone}`}
-                                        </span>
+                                        <div key={i} style={{ padding: '8px 14px', borderRadius: '10px', background: '#f3f4f6', fontSize: '13px', width: '100%', marginBottom: '4px' }}>
+                                            <strong>{p.name}</strong> — {p.sportType}
+                                            <div style={{ display: 'flex', gap: '8px', color: 'var(--a-text-secondary)', fontSize: '12px', marginTop: '2px' }}>
+                                                {p.height && <span>📏 {p.height} ซม.</span>}
+                                                {p.weight && <span>⚖️ {p.weight} กก.</span>}
+                                                {p.shoeSize && <span>👟 Size: {p.shoeSize}</span>}
+                                                {p.phone && <span>📞 {p.phone}</span>}
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             </>
@@ -642,4 +648,3 @@ export default function BookingsManagement() {
         </div></FadeIn>
     )
 }
-

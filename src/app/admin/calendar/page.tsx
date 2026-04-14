@@ -13,7 +13,7 @@ interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; isBookerLearner: boolean; createdByAdmin: boolean
     user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
-    participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null }>
+    participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
 }
 
@@ -53,7 +53,7 @@ export default function CalendarPage() {
     const [loading, setLoading] = useState(false)
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
-    const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string }>>([])
+    const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string; shoeSize: string }>>([])
     const [editBookingItems, setEditBookingItems] = useState<Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
@@ -75,7 +75,7 @@ export default function CalendarPage() {
     const [availSlots, setAvailSlots] = useState<Array<{ startTime: string; endTime: string; price: number; available: boolean; status: string }>>([])
     const [loadingAvail, setLoadingAvail] = useState(false)
     // Participants (unlimited for admin)
-    const [bookParticipants, setBookParticipants] = useState<Array<{ name: string; sportType: string; phone: string }>>([{ name: '', sportType: '', phone: '' }])
+    const [bookParticipants, setBookParticipants] = useState<Array<{ name: string; sportType: string; phone: string; shoeSize: string }>>([{ name: '', sportType: '', phone: '', shoeSize: '' }])
     // Booking status: CONFIRMED=paid, PENDING=unpaid
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [venues, setVenues] = useState<Venue[]>([])
@@ -108,7 +108,14 @@ export default function CalendarPage() {
     const openBookingModal = (booking: Booking) => {
         setViewBooking(booking)
         setEditMode(false)
-        setEditParticipants(booking.participants.map(p => ({ name: p.name, sportType: p.sportType, phone: p.phone || '', height: p.height ? String(p.height) : '', weight: p.weight ? String(p.weight) : '' })))
+        setEditParticipants(booking.participants.map(p => ({
+            name: p.name,
+            sportType: p.sportType,
+            phone: p.phone || '',
+            height: p.height ? String(p.height) : '',
+            weight: p.weight ? String(p.weight) : '',
+            shoeSize: p.shoeSize || '',
+        })))
         setEditBookingItems(booking.bookingItems.map(item => {
             const dateStr = toDateBangkok(item.date)
             return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
@@ -202,6 +209,7 @@ export default function CalendarPage() {
                         phone: p.phone || '',
                         height: p.height ? parseFloat(p.height) : null,
                         weight: p.weight ? parseFloat(p.weight) : null,
+                        shoeSize: p.shoeSize || null,
                     })),
                     bookingItems: editBookingItems,
                 }),
@@ -428,7 +436,7 @@ export default function CalendarPage() {
     }
 
     // Participant management
-    const addParticipant = () => setBookParticipants(prev => [...prev, { name: '', sportType: '', phone: '' }])
+    const addParticipant = () => setBookParticipants(prev => [...prev, { name: '', sportType: '', phone: '', shoeSize: '' }])
     const removeParticipant = (idx: number) => setBookParticipants(prev => prev.filter((_, i) => i !== idx))
     const updateParticipant = (idx: number, field: string, value: string) => {
         setBookParticipants(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
@@ -443,7 +451,7 @@ export default function CalendarPage() {
         setBookTimes([])
         setAvailSlots([])
         setCustomers([])
-        setBookParticipants([{ name: '', sportType: '', phone: '' }])
+        setBookParticipants([{ name: '', sportType: '', phone: '', shoeSize: '' }])
         setBookStatus('CONFIRMED')
         setShowBookModal(true)
     }
@@ -554,7 +562,7 @@ export default function CalendarPage() {
                             {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                         </select>
                     )}
-                    <button onClick={() => router.push('/admin/book')} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={openNewBooking} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Plus size={18} /> จองให้ลูกค้า
                     </button>
                 </div>
@@ -1059,8 +1067,8 @@ export default function CalendarPage() {
                                                                 const heightPx = (endH - startH) * ROW_H
                                                                 const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
-                                                                const sportTypes = cb.booking.participants.map(p => p.sportType).filter(Boolean)
-                                                                const sportLabel = sportTypes[0] || ''
+                                                                const sportTypesArr = cb.booking.participants.map(p => p.sportType).filter(Boolean)
+                                                                const sportLabel = sportTypesArr[0] || ''
                                                                 // Build per-hour teacher map for this block's time range
                                                                 const teacherByHour: Array<{ time: string; name: string }> = []
                                                                 cb.booking.bookingItems
@@ -1408,7 +1416,7 @@ export default function CalendarPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', marginTop: '16px' }}>
                             <h3 style={{ fontWeight: 700, fontSize: '15px' }}>ผู้เรียน</h3>
                             {editMode && (
-                                <button onClick={() => setEditParticipants(prev => [...prev, { name: '', sportType: '', phone: '', height: '', weight: '' }])}
+                                <button onClick={() => setEditParticipants(prev => [...prev, { name: '', sportType: '', phone: '', height: '', weight: '', shoeSize: '' }])}
                                     style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                     + เพิ่มผู้เรียน
                                 </button>
@@ -1439,13 +1447,16 @@ export default function CalendarPage() {
                                                 ))}
                                             </select>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
                                             <input value={(p as any).height || ''} onChange={e => {
                                                 const u = [...editParticipants]; u[i] = { ...u[i], height: e.target.value }; setEditParticipants(u)
-                                            }} placeholder="ส่วนสูง (ซม.)" className="admin-input" style={{ fontSize: '13px' }} />
+                                            }} placeholder="สูง(ซม.)" className="admin-input" style={{ fontSize: '13px' }} />
                                             <input value={(p as any).weight || ''} onChange={e => {
                                                 const u = [...editParticipants]; u[i] = { ...u[i], weight: e.target.value }; setEditParticipants(u)
-                                            }} placeholder="น้ำหนัก (กก.)" className="admin-input" style={{ fontSize: '13px' }} />
+                                            }} placeholder="หนัก(กก.)" className="admin-input" style={{ fontSize: '13px' }} />
+                                            <input value={(p as any).shoeSize || ''} onChange={e => {
+                                                const u = [...editParticipants]; u[i] = { ...u[i], shoeSize: e.target.value }; setEditParticipants(u)
+                                            }} placeholder="Size" className="admin-input" style={{ fontSize: '13px' }} />
                                             <input value={p.phone} onChange={e => {
                                                 const u = [...editParticipants]; u[i] = { ...u[i], phone: e.target.value }; setEditParticipants(u)
                                             }} placeholder="เบอร์โทร" className="admin-input" style={{ fontSize: '13px' }} />
@@ -1456,6 +1467,7 @@ export default function CalendarPage() {
                                         <strong>{p.name}</strong> - {p.sportType}
                                         {(p as any).height && ` | ${(p as any).height} ซม.`}
                                         {(p as any).weight && ` | ${(p as any).weight} กก.`}
+                                        {(p as any).shoeSize && ` | Size: ${(p as any).shoeSize}`}
                                         {p.phone && ` | ${p.phone}`}
                                     </>
                                 )}
@@ -1662,13 +1674,14 @@ export default function CalendarPage() {
                                 <button onClick={addParticipant} type="button" style={{ fontSize: '13px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ เพิ่มผู้เรียน</button>
                             </label>
                             {bookParticipants.map((p, i) => (
-                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 30px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 70px 100px 30px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
                                     <input className="admin-input" placeholder="ชื่อ" value={p.name} onChange={e => updateParticipant(i, 'name', e.target.value)} style={{ fontSize: '13px' }} />
                                     <select className="admin-input" value={p.sportType} onChange={e => updateParticipant(i, 'sportType', e.target.value)} style={{ fontSize: '13px' }}>
                                         <option value="">ประเภท</option>
                                         <option value="สกี้">⛷️ สกี้</option>
                                         <option value="สโนว์บอร์ด">🏂 สโนว์บอร์ด</option>
                                     </select>
+                                    <input className="admin-input" placeholder="Size" value={p.shoeSize} onChange={e => updateParticipant(i, 'shoeSize', e.target.value)} style={{ fontSize: '13px' }} />
                                     <input className="admin-input" placeholder="เบอร์" value={p.phone} onChange={e => updateParticipant(i, 'phone', e.target.value)} style={{ fontSize: '13px' }} />
                                     {bookParticipants.length > 1 && (
                                         <button onClick={() => removeParticipant(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e17055', fontSize: '16px', padding: 0 }}>✕</button>

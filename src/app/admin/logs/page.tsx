@@ -70,7 +70,14 @@ export default function LogsPage() {
     }
 
     const formatAuditParticipant = (participant: Record<string, unknown>) => {
-        const parts = [participant.name || '-', participant.sportType, participant.phone, participant.height ? `${participant.height} ซม.` : null, participant.weight ? `${participant.weight} กก.` : null]
+        const parts = [
+            participant.name || '-',
+            participant.sportType,
+            participant.phone,
+            participant.height ? `${participant.height} ซม.` : null,
+            participant.weight ? `${participant.weight} กก.` : null,
+            participant.shoeSize ? `Size: ${participant.shoeSize}` : null
+        ]
         return parts.filter(Boolean).join(' | ')
     }
 
