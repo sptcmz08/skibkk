@@ -9,6 +9,7 @@ type DatePickerInputProps = {
     style?: CSSProperties
     className?: string
     placeholder?: string
+    popupPlacement?: 'auto' | 'top' | 'bottom'
 }
 
 function formatDisplayDate(value: string) {
@@ -41,11 +42,13 @@ export default function DatePickerInput({
     style,
     className = 'admin-input',
     placeholder = 'วัน/เดือน/ปี',
+    popupPlacement = 'auto',
 }: DatePickerInputProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const selectedDate = useMemo(() => parseDate(value), [value])
     const [open, setOpen] = useState(false)
     const [viewDate, setViewDate] = useState(() => selectedDate || new Date())
+    const [resolvedPlacement, setResolvedPlacement] = useState<'top' | 'bottom'>('bottom')
 
     useEffect(() => {
         if (!open) return
@@ -65,6 +68,25 @@ export default function DatePickerInput({
             document.removeEventListener('keydown', handleKeyDown)
         }
     }, [open])
+
+    useEffect(() => {
+        if (!open) return
+
+        if (popupPlacement === 'top' || popupPlacement === 'bottom') {
+            setResolvedPlacement(popupPlacement)
+            return
+        }
+
+        const triggerRect = containerRef.current?.getBoundingClientRect()
+        if (!triggerRect) return
+
+        const estimatedCalendarHeight = 320
+        const spaceBelow = window.innerHeight - triggerRect.bottom
+        const spaceAbove = triggerRect.top
+        const shouldOpenTop = spaceBelow < estimatedCalendarHeight && spaceAbove > spaceBelow
+
+        setResolvedPlacement(shouldOpenTop ? 'top' : 'bottom')
+    }, [open, popupPlacement])
 
     const calendarDays = useMemo(() => {
         const firstOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
@@ -148,7 +170,7 @@ export default function DatePickerInput({
                     aria-label={placeholder}
                     style={{
                         position: 'absolute',
-                        top: 'calc(100% + 6px)',
+                        ...(resolvedPlacement === 'top' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
                         left: 0,
                         width: '280px',
                         maxWidth: 'calc(100vw - 32px)',
