@@ -198,6 +198,7 @@ model BookingItem {
   price             Float
   teacherId         String?
   evaluationSent    Boolean  @default(false)
+  reminderSentAt    DateTime?
   originalCourtId   String?
   originalDate      DateTime? @db.Date
   originalStartTime String?
