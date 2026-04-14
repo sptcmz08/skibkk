@@ -37,6 +37,7 @@ export default function PackagesPage() {
     const [showAssign, setShowAssign] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<CustomerResult[]>([])
+    const [allCustomers, setAllCustomers] = useState<CustomerResult[]>([])
     const [selectedCustomer, setSelectedCustomer] = useState<CustomerResult | null>(null)
     const [selectedPkgId, setSelectedPkgId] = useState<string>('')
     const [assigning, setAssigning] = useState(false)
@@ -58,6 +59,20 @@ export default function PackagesPage() {
     }
 
     useEffect(() => { fetchData() }, [])
+
+    useEffect(() => {
+        if (!showAssign) return
+        const loadAllCustomers = async () => {
+            try {
+                const res = await fetch('/api/users?role=CUSTOMER&take=500', { cache: 'no-store' })
+                const data = await res.json()
+                setAllCustomers(data.users || [])
+            } catch {
+                setAllCustomers([])
+            }
+        }
+        loadAllCustomers()
+    }, [showAssign])
 
     const handleSave = async () => {
         if (!form.name || !form.totalHours || !form.price) { toast.error('กรุณากรอกข้อมูลให้ครบ'); return }
@@ -322,6 +337,27 @@ export default function PackagesPage() {
 
                         {/* Search customer */}
                         <div className="input-group" style={{ marginBottom: '16px' }}>
+                            <label style={{ color: 'var(--a-text-secondary)' }}>เลือกลูกค้าจากรายการทั้งหมด</label>
+                            <select
+                                className="admin-input"
+                                value={selectedCustomer?.id || ''}
+                                onChange={e => {
+                                    const customer = allCustomers.find(c => c.id === e.target.value) || null
+                                    setSelectedCustomer(customer)
+                                    if (customer) {
+                                        setSearchQuery(customer.name)
+                                        setSearchResults([])
+                                    }
+                                }}
+                                style={{ marginBottom: '8px' }}
+                            >
+                                <option value="">-- เลือกลูกค้า --</option>
+                                {allCustomers.map(c => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name} ({c.phone || c.email})
+                                    </option>
+                                ))}
+                            </select>
                             <label style={{ color: 'var(--a-text-secondary)' }}>ค้นหาลูกค้า (ชื่อ / เบอร์โทร / อีเมล)</label>
                             <div style={{ position: 'relative' }}>
                                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />

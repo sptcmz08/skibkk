@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
 
         const search = searchParams.get('search') || ''
         const role = searchParams.get('role') || ''
+        const takeParam = parseInt(searchParams.get('take') || '', 10)
 
         const where: Record<string, unknown> = {}
         if (search) {
@@ -37,6 +38,10 @@ export async function GET(req: NextRequest) {
             where.role = { in: ['ADMIN', 'STAFF', 'SUPERUSER'] }
         }
 
+        const take = Number.isFinite(takeParam) && takeParam > 0
+            ? Math.min(takeParam, 1000)
+            : (listAll ? 100 : 20)
+
         const users = await prisma.user.findMany({
             where,
             select: {
@@ -44,7 +49,7 @@ export async function GET(req: NextRequest) {
                 role: true, isActive: true, createdAt: true,
                 _count: { select: { bookings: true } },
             },
-            take: listAll ? 100 : 20,
+            take,
             orderBy: { createdAt: 'desc' },
         })
 

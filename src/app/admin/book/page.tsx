@@ -116,6 +116,12 @@ function VenueBadge({ name, image, onClick }: { name: string; image?: string | n
 }
 
 interface Customer { id: string; name: string; email: string; phone: string }
+interface UserPackageOption {
+    id: string
+    remainingHours: number
+    expiresAt: string
+    package: { id: string; name: string; totalHours: number }
+}
 
 function AdminBookInner() {
     const searchParams = useSearchParams()
@@ -148,8 +154,10 @@ function AdminBookInner() {
     const [newBookerLineId, setNewBookerLineId] = useState('')
     const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string; shoeSize: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '', shoeSize: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CREDIT_CARD'>('CASH')
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CREDIT_CARD' | 'PACKAGE'>('CASH')
     const [bankName, setBankName] = useState('')
+    const [customerPackages, setCustomerPackages] = useState<UserPackageOption[]>([])
+    const [selectedUserPackageId, setSelectedUserPackageId] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
     const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -167,6 +175,27 @@ function AdminBookInner() {
         }, bookSearch ? 200 : 0)
         return () => clearTimeout(t)
     }, [bookSearch, isNewCustomer])
+
+    useEffect(() => {
+        const loadPackages = async () => {
+            if (!bookCustomer?.id) {
+                setCustomerPackages([])
+                setSelectedUserPackageId('')
+                return
+            }
+            try {
+                const res = await fetch(`/api/admin/user-packages?userId=${bookCustomer.id}`, { cache: 'no-store' })
+                const data = await res.json()
+                const active = (data.userPackages || []).filter((pkg: UserPackageOption) => pkg.remainingHours > 0 && new Date(pkg.expiresAt) > new Date())
+                setCustomerPackages(active)
+                if (active.length === 0) setSelectedUserPackageId('')
+                else setSelectedUserPackageId(prev => active.some((p: UserPackageOption) => p.id === prev) ? prev : active[0].id)
+            } catch {
+                setCustomerPackages([])
+            }
+        }
+        loadPackages()
+    }, [bookCustomer?.id])
 
     // Load venues
     useEffect(() => {
@@ -421,6 +450,13 @@ function AdminBookInner() {
     const handleBookingClick = () => {
         if (!hasCustomer) { toast.error('กรุณากรอกชื่อผู้จอง'); return }
         if (cart.length === 0) { toast.error('กรุณาเลือกเวลา'); return }
+        if (paymentMethod === 'PACKAGE') {
+            if (!bookCustomer) { toast.error('ชำระด้วยแพ็คเกจต้องเลือกลูกค้าเดิม'); return }
+            if (!selectedUserPackageId) { toast.error('กรุณาเลือกแพ็คเกจที่ต้องการใช้'); return }
+            const selectedPkg = customerPackages.find(pkg => pkg.id === selectedUserPackageId)
+            if (!selectedPkg) { toast.error('ไม่พบแพ็คเกจที่เลือก'); return }
+            if (selectedPkg.remainingHours < cart.length) { toast.error('ชั่วโมงแพ็คเกจไม่เพียงพอ'); return }
+        }
         const validParts = participants.filter(p => p.name.trim())
         if (validParts.length === 0) { toast.error('กรุณากรอกชื่อผู้เรียนอย่างน้อย 1 คน'); return }
         setShowConfirmModal(true)
@@ -430,11 +466,12 @@ function AdminBookInner() {
         setShowConfirmModal(false)
         const validParts = participants.filter(p => p.name.trim())
         const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
+        const payableAmount = paymentMethod === 'PACKAGE' ? 0 : totalAmount
 
         setSubmitting(true)
         try {
             const body: any = {
-                items: cart, totalAmount, isBookerLearner,
+                items: cart, totalAmount: payableAmount, isBookerLearner,
                 participants: validParts.map((p, i) => ({
                     name: p.name,
                     sportType: p.sportType,
@@ -445,8 +482,10 @@ function AdminBookInner() {
                     isBooker: i === 0,
                 })),
                 createdByAdmin: true,
-                paymentMethod,
-                bankName: paymentMethod === 'BANK_TRANSFER' ? bankName : null,
+                ...(paymentMethod !== 'PACKAGE' && {
+                    paymentMethod,
+                    bankName: paymentMethod === 'BANK_TRANSFER' ? bankName : null,
+                }),
             }
             if (bookCustomer) body.userId = bookCustomer.id
             else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim(); body.guestLineId = newBookerLineId.trim() || null }
@@ -454,7 +493,21 @@ function AdminBookInner() {
             const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (res.ok) {
                 const data = await res.json()
-                await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
+                if (paymentMethod === 'PACKAGE') {
+                    const consumeRes = await fetch('/api/admin/user-packages', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userPackageId: selectedUserPackageId, bookingId: data.booking.id, hoursToDeduct: cart.length }),
+                    })
+                    if (!consumeRes.ok) {
+                        const consumeErr = await consumeRes.json().catch(() => ({}))
+                        await fetch(`/api/bookings/${data.booking.id}`, { method: 'DELETE' }).catch(() => { })
+                        toast.error(consumeErr.error || 'ตัดแพ็คเกจไม่สำเร็จ')
+                        return
+                    }
+                } else {
+                    await fetch('/api/bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: data.booking.id, status: bookStatus }) })
+                }
                 // Release locks after successful booking
                 const sessionId = getSessionId('admin')
                 fetch('/api/locks', {
@@ -462,7 +515,7 @@ function AdminBookInner() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId }),
                 }).catch(() => { })
-                toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ'}`)
+                toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${paymentMethod === 'PACKAGE' ? 'ใช้แพ็คเกจ' : (bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ')}`)
                 // Redirect to calendar page with the booked date + venue (Bug 6.8)
                 const bookedDate = cart[0]?.date || selectedDate
                 const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
@@ -793,6 +846,7 @@ function AdminBookInner() {
 
     // ── STEP 4: กรอกข้อมูลผู้จอง + ผู้เรียน + ยืนยัน ─────────────────
     const total = cart.reduce((s, i) => s + i.price, 0)
+    const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
             <StepWizard step={4} />
@@ -827,7 +881,7 @@ function AdminBookInner() {
                     ))}
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '2px solid var(--a-border)', fontWeight: 800, fontSize: '18px' }}>
                         <span>ยอดรวม</span>
-                        <span style={{ fontFamily: "'Inter'", color: '#f5a623' }}>฿{total.toLocaleString()}</span>
+                        <span style={{ fontFamily: "'Inter'", color: '#f5a623' }}>฿{payableTotal.toLocaleString()}</span>
                     </div>
                 </div>
 
@@ -945,6 +999,7 @@ function AdminBookInner() {
                             { key: 'CASH' as const, label: '💵 เงินสด', color: '#27ae60' },
                             { key: 'BANK_TRANSFER' as const, label: '🏦 ธนาคาร', color: '#2196F3' },
                             { key: 'CREDIT_CARD' as const, label: '💳 บัตรเครดิต', color: '#9b59b6' },
+                            { key: 'PACKAGE' as const, label: '📦 แพ็คเกจ', color: '#f5a623' },
                         ]).map(m => (
                             <button key={m.key} onClick={() => setPaymentMethod(m.key)} style={{
                                 flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '13px',
@@ -963,6 +1018,23 @@ function AdminBookInner() {
                             <option value="">-- เลือกธนาคาร --</option>
                             {THAI_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
                         </select>
+                    )}
+                    {paymentMethod === 'PACKAGE' && (
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                            {!bookCustomer ? (
+                                <div style={{ fontSize: '13px', color: '#e17055' }}>กรุณาเลือกลูกค้าเดิมก่อนใช้แพ็คเกจ</div>
+                            ) : customerPackages.length === 0 ? (
+                                <div style={{ fontSize: '13px', color: '#e17055' }}>ลูกค้ารายนี้ไม่มีแพ็คเกจที่ใช้งานได้</div>
+                            ) : (
+                                <select className="admin-input" value={selectedUserPackageId} onChange={e => setSelectedUserPackageId(e.target.value)}>
+                                    {customerPackages.map(pkg => (
+                                        <option key={pkg.id} value={pkg.id}>
+                                            {pkg.package.name} — เหลือ {pkg.remainingHours}/{pkg.package.totalHours} ชม. (หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
                     )}
                 </div>
 
@@ -985,16 +1057,17 @@ function AdminBookInner() {
 
                 {/* Submit */}
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={handleBookingClick} disabled={submitting || !hasCustomer}
+                    onClick={handleBookingClick} disabled={submitting || !hasCustomer || (paymentMethod === 'PACKAGE' && (!bookCustomer || !selectedUserPackageId))}
                     className="btn-admin"
                     style={{ width: '100%', padding: '16px', fontSize: '17px', fontWeight: 700, marginBottom: '40px' }}>
-                    {submitting ? 'กำลังจอง...' : `ยืนยันการจอง (${cart.length} รายการ · ฿${total.toLocaleString()})`}
+                    {submitting ? 'กำลังจอง...' : `ยืนยันการจอง (${cart.length} รายการ · ฿${payableTotal.toLocaleString()})`}
                 </motion.button>
             </motion.div>
 
             {/* Confirmation Modal */}
             {showConfirmModal && (() => {
                 const totalAmount = cart.reduce((sum, i) => sum + i.price, 0)
+                const payableAmount = paymentMethod === 'PACKAGE' ? 0 : totalAmount
                 const courtNames = [...new Set(cart.map(c => c.courtName))]
                 const bookerName = bookCustomer?.name || newBookerName || '-'
                 const validParts = participants.filter(p => p.name.trim())
@@ -1082,8 +1155,9 @@ function AdminBookInner() {
                                 {/* Total */}
                                 <div style={{ marginTop: '20px', padding: '16px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(245,166,35,0.08), rgba(245,166,35,0.18))', border: '1px solid rgba(245,166,35,0.2)', textAlign: 'center' }}>
                                     <div style={{ fontSize: '12px', color: '#b07d18', fontWeight: 600, marginBottom: '4px' }}>ยอดรวมทั้งหมด</div>
-                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#f5a623', letterSpacing: '-1px' }}>฿{totalAmount.toLocaleString()}</div>
+                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#f5a623', letterSpacing: '-1px' }}>฿{payableAmount.toLocaleString()}</div>
                                     <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '2px' }}>{cart.length} รายการ</div>
+                                    {paymentMethod === 'PACKAGE' && <div style={{ fontSize: '12px', color: '#27ae60', fontWeight: 700, marginTop: '6px' }}>✅ ใช้แพ็คเกจในการจอง</div>}
                                 </div>
                             </div>
 
