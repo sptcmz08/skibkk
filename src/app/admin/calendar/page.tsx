@@ -96,6 +96,104 @@ export default function CalendarPage() {
         return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
     }
 
+    type BookingItemHistoryState = {
+        id?: string
+        courtName?: string
+        courtId?: string
+        date: string | Date
+        startTime: string
+        endTime: string
+        price: number
+        createdAt: string
+    }
+
+    const normalizeDateOnly = (value: unknown) => {
+        if (!value) return ''
+        return String(value).split('T')[0]
+    }
+
+    const isSameHistoryState = (left: Partial<BookingItemHistoryState>, right: Partial<BookingItemHistoryState>) => {
+        if (left.id && right.id) return left.id === right.id
+        return left.courtId === right.courtId &&
+            normalizeDateOnly(left.date) === normalizeDateOnly(right.date) &&
+            left.startTime === right.startTime &&
+            left.endTime === right.endTime
+    }
+
+    const buildBookingItemTimeline = (
+        seed: Partial<BookingItemHistoryState>,
+        includeCurrentState: BookingItemHistoryState | null
+    ): BookingItemHistoryState[] => {
+        const timeline: BookingItemHistoryState[] = []
+        let cursor: Partial<BookingItemHistoryState> = { ...seed }
+
+        if (includeCurrentState) {
+            timeline.push(includeCurrentState)
+            cursor = {
+                id: includeCurrentState.id,
+                courtId: includeCurrentState.courtId,
+                date: includeCurrentState.date,
+                startTime: includeCurrentState.startTime,
+                endTime: includeCurrentState.endTime,
+            }
+        }
+
+        bookingHistory.forEach(log => {
+            if (log.action !== 'BOOKING_UPDATE' && log.action !== 'BOOKING_CREATE') return
+
+            try {
+                const details = JSON.parse(log.details || '{}')
+
+                if (log.action === 'BOOKING_UPDATE') {
+                    const beforeItems = Array.isArray(details.changes?.bookingItems?.before) ? details.changes.bookingItems.before : []
+                    const afterItems = Array.isArray(details.changes?.bookingItems?.after) ? details.changes.bookingItems.after : []
+
+                    const afterIndex = afterItems.findIndex((afterItem: any) => isSameHistoryState({
+                        id: afterItem?.id,
+                        courtId: afterItem?.courtId,
+                        date: afterItem?.date,
+                        startTime: afterItem?.startTime,
+                        endTime: afterItem?.endTime,
+                    }, cursor))
+                    if (afterIndex < 0) return
+
+                    const previousByIndex = beforeItems[afterIndex]
+                    const previousById = cursor.id ? beforeItems.find((beforeItem: any) => beforeItem?.id === cursor.id) : null
+                    const previousState = previousByIndex || previousById
+                    if (!previousState) return
+
+                    const nextState: BookingItemHistoryState = { ...previousState, createdAt: log.createdAt }
+                    const last = timeline[timeline.length - 1]
+                    if (!last || !isSameHistoryState(last, nextState)) timeline.push(nextState)
+
+                    cursor = {
+                        id: previousState.id || cursor.id,
+                        courtId: previousState.courtId,
+                        date: previousState.date,
+                        startTime: previousState.startTime,
+                        endTime: previousState.endTime,
+                    }
+                } else {
+                    const createdItems = Array.isArray(details.items) ? details.items : []
+                    const createdState = createdItems.find((createdItem: any) => isSameHistoryState({
+                        id: createdItem?.id,
+                        courtId: createdItem?.courtId,
+                        date: createdItem?.date,
+                        startTime: createdItem?.startTime,
+                        endTime: createdItem?.endTime,
+                    }, cursor))
+                    if (!createdState) return
+
+                    const nextState: BookingItemHistoryState = { ...createdState, createdAt: log.createdAt }
+                    const last = timeline[timeline.length - 1]
+                    if (!last || !isSameHistoryState(last, nextState)) timeline.push(nextState)
+                }
+            } catch { /* skip malformed logs */ }
+        })
+
+        return timeline
+    }
+
     const openEditDatePicker = (index: number) => {
         const input = editDateInputRefs.current[index]
         if (!input) return
@@ -1392,56 +1490,27 @@ export default function CalendarPage() {
                                                 editItem.startTime !== persistedItem.startTime ||
                                                 editItem.endTime !== persistedItem.endTime
 
-                                            // Extract history from audit logs
-                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
-                                            
-                                            // 1. If currently being edited, the state currently in database is the most recent "original"
-                                            if (hasPendingChange) {
-                                                historicalStates.push({
-                                                    courtName: persistedItem.court?.name || courts.find(c => c.id === persistedItem.courtId)?.name,
+                                            const historicalStates = buildBookingItemTimeline(
+                                                {
+                                                    id: editItem.id,
                                                     courtId: persistedItem.courtId,
                                                     date: persistedItem.date,
                                                     startTime: persistedItem.startTime,
                                                     endTime: persistedItem.endTime,
-                                                    price: persistedItem.price,
-                                                    createdAt: viewBooking.updatedAt || viewBooking.createdAt
-                                                })
-                                            }
-
-                                            // 2. Fetch from audit logs (already ordered newest to oldest)
-                                            bookingHistory.forEach(log => {
-                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
-                                                    try {
-                                                        const details = JSON.parse(log.details || '{}')
-                                                        const items = log.action === 'BOOKING_UPDATE' 
-                                                            ? (details.changes?.bookingItems?.before || [])
-                                                            : (details.items || [])
-                                                        
-                                                        const persistedItemDateStr = (persistedItem.date as any) instanceof Date
-                                                            ? (persistedItem.date as any).toISOString().split('T')[0]
-                                                            : String(persistedItem.date).split('T')[0]
-
-                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === persistedItem.courtId && prevItem.startTime === persistedItem.startTime && prevItem.date === persistedItemDateStr))
-                                                        
-                                                        if (pastState) {
-                                                            // Avoid identical consecutive snapshots
-                                                            const last = historicalStates[historicalStates.length - 1]
-                                                            const isDuplicate = last && 
-                                                                last.courtId === pastState.courtId && 
-                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
-                                                                last.startTime === pastState.startTime && 
-                                                                last.endTime === pastState.endTime
-                                                            
-                                                            if (!isDuplicate) {
-                                                                historicalStates.push({
-                                                                    ...pastState,
-                                                                    createdAt: log.createdAt
-                                                                })
-                                                            }
-                                                        }
-                                                    } catch (e) { /* skip malformed logs */ }
-                                                }
-                                            })
+                                                },
+                                                hasPendingChange
+                                                    ? {
+                                                        id: editItem.id,
+                                                        courtName: persistedItem.court?.name || courts.find(c => c.id === persistedItem.courtId)?.name,
+                                                        courtId: persistedItem.courtId,
+                                                        date: persistedItem.date,
+                                                        startTime: persistedItem.startTime,
+                                                        endTime: persistedItem.endTime,
+                                                        price: persistedItem.price,
+                                                        createdAt: viewBooking.updatedAt || viewBooking.createdAt,
+                                                    }
+                                                    : null
+                                            )
 
                                             if (historicalStates.length === 0) return null
 
@@ -1483,36 +1552,16 @@ export default function CalendarPage() {
                                         {/* Show full change history from audit logs (Read-only view) */}
                                         {(() => {
                                             const editItem = item as any
-                                            const historicalStates: Array<{ courtName?: string; courtId?: string; date: string | Date; startTime: string; endTime: string; price: number; createdAt: string }> = []
-                                            
-                                            bookingHistory.forEach(log => {
-                                                if (log.action === 'BOOKING_UPDATE' || log.action === 'BOOKING_CREATE') {
-                                                    try {
-                                                        const details = JSON.parse(log.details || '{}')
-                                                        const items = log.action === 'BOOKING_UPDATE' 
-                                                            ? (details.changes?.bookingItems?.before || [])
-                                                            : (details.items || [])
-                                                        
-                                                        const pastState = items.find((prevItem: any) => prevItem.id === editItem.id || (prevItem.courtId === (item as any).courtId && prevItem.startTime === (item as any).startTime && prevItem.date === (item as any).date))
-                                                        
-                                                        if (pastState) {
-                                                            const last = historicalStates[historicalStates.length - 1]
-                                                            const isDuplicate = last && 
-                                                                last.courtId === pastState.courtId && 
-                                                                String(last.date).split('T')[0] === String(pastState.date).split('T')[0] && 
-                                                                last.startTime === pastState.startTime && 
-                                                                last.endTime === pastState.endTime
-                                                            
-                                                            if (!isDuplicate) {
-                                                                historicalStates.push({
-                                                                    ...pastState,
-                                                                    createdAt: log.createdAt
-                                                                })
-                                                            }
-                                                        }
-                                                    } catch (e) { }
-                                                }
-                                            })
+                                            const historicalStates = buildBookingItemTimeline(
+                                                {
+                                                    id: editItem.id,
+                                                    courtId: (item as any).courtId,
+                                                    date: (item as any).date,
+                                                    startTime: (item as any).startTime,
+                                                    endTime: (item as any).endTime,
+                                                },
+                                                null
+                                            )
 
                                             if (historicalStates.length === 0) return null
 
