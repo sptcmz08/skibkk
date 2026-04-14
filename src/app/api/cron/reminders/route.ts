@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendLineBookingReminder } from '@/lib/line-messaging'
+import { buildLineReminderMessage } from '@/lib/line-booking-notify'
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -93,6 +94,12 @@ export async function GET(req: NextRequest) {
         const dueItems = await findDueReminderItems(reminderStartMs, reminderEndMs)
         const itemsByBooking = groupItemsByBooking(dueItems)
 
+        // Fetch custom template
+        const settings = await prisma.siteSetting.findMany()
+        const settingsMap: Record<string, string> = {}
+        settings.forEach(s => settingsMap[s.key] = s.value)
+        const reminderTemplate = settingsMap['line_booking_reminder_template']
+
         let sentCount = 0
         let failCount = 0
         let skippedCount = 0
@@ -112,7 +119,7 @@ export async function GET(req: NextRequest) {
                 continue
             }
 
-            const result = await sendLineBookingReminder(booking.user.lineUserId, {
+            const message = buildLineReminderMessage(reminderTemplate, {
                 bookingNumber: booking.bookingNumber,
                 customerName: booking.user.name,
                 items: items.map(item => ({
@@ -124,6 +131,8 @@ export async function GET(req: NextRequest) {
                 })),
                 totalAmount: booking.totalAmount,
             })
+
+            const result = await sendLineBookingReminder(booking.user.lineUserId, message)
 
             if (result.success) {
                 sentCount++

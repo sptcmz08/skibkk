@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
-import { DEFAULT_LINE_CONFIRMATION_NOTE, DEFAULT_LINE_UPDATE_NOTE, normalizeLineEditableNote } from '@/lib/line-booking-notify'
+import { DEFAULT_LINE_CONFIRMATION_NOTE, DEFAULT_LINE_UPDATE_NOTE, DEFAULT_LINE_REMINDER_NOTE, normalizeLineEditableNote } from '@/lib/line-booking-notify'
 
 export default function AdminSettingsPage() {
     const [logo, setLogo] = useState('')
@@ -27,6 +27,7 @@ export default function AdminSettingsPage() {
     const [invoiceRemarkNote, setInvoiceRemarkNote] = useState('ราคาดังกล่าวรวมภาษีมูลค่าเพิ่ม 7% แล้ว\nขอบคุณที่ใช้บริการ SKI BKK')
     const [lineBookingConfirmationTemplate, setLineBookingConfirmationTemplate] = useState(DEFAULT_LINE_CONFIRMATION_NOTE)
     const [lineBookingUpdateTemplate, setLineBookingUpdateTemplate] = useState(DEFAULT_LINE_UPDATE_NOTE)
+    const [lineBookingReminderTemplate, setLineBookingReminderTemplate] = useState(DEFAULT_LINE_REMINDER_NOTE)
     const logoInputRef = useRef<HTMLInputElement>(null)
     const qrInputRef = useRef<HTMLInputElement>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
@@ -51,6 +52,7 @@ export default function AdminSettingsPage() {
                 if (data.invoice_remark_note) setInvoiceRemarkNote(data.invoice_remark_note)
                 if (data.line_booking_confirmation_template) setLineBookingConfirmationTemplate(normalizeLineEditableNote(data.line_booking_confirmation_template, DEFAULT_LINE_CONFIRMATION_NOTE))
                 if (data.line_booking_update_template) setLineBookingUpdateTemplate(normalizeLineEditableNote(data.line_booking_update_template, DEFAULT_LINE_UPDATE_NOTE))
+                if (data.line_booking_reminder_template) setLineBookingReminderTemplate(normalizeLineEditableNote(data.line_booking_reminder_template, DEFAULT_LINE_REMINDER_NOTE))
             })
             .catch(() => { })
         fetch('/api/closed-dates').then(r => r.json()).then(d => setClosedDates(d.dates || [])).catch(() => { })
@@ -421,9 +423,9 @@ export default function AdminSettingsPage() {
             <div style={cardStyle}>
                 <h2 style={sectionTitle}><FileText size={20} color="#00b894" /> ข้อความ LINE แจ้งเตือน</h2>
                 <p style={{ fontSize: '13px', color: '#636e72', marginBottom: '16px', lineHeight: 1.7 }}>
-                    ปรับแต่งข้อความที่ส่งถึงลูกค้าผ่าน LINE เมื่อมีการยืนยัน หรืออัปเดตการจอง
+                    ปรับแต่งข้อความที่ส่งถึงลูกค้าผ่าน LINE เมื่อมีการยืนยัน อัปเดต หรือแจ้งเตือนล่วงหน้า
                     <br />
-                    ข้อความจะแสดงต่อท้าย รายละเอียดการจอง เวลา และราคาอัตโนมัติ
+                    <span style={{ color: 'var(--a-primary)', fontWeight: 600 }}>💡 ข้อมูลที่ระบบดึงให้อัตโนมัติ (แก้ไขไม่ได้):</span> เลขจอง, ชื่อลูกค้า, ชื่อสนาม, วันที่ และเวลา
                 </p>
 
                 <div style={{ display: 'grid', gap: '16px', marginBottom: '14px' }}>
@@ -447,6 +449,16 @@ export default function AdminSettingsPage() {
                             onChange={e => setLineBookingUpdateTemplate(e.target.value)}
                         />
                     </div>
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>ข้อความแจ้งเตือนล่วงหน้า (Reminder)</div>
+                        <textarea
+                            className="admin-input"
+                            rows={10}
+                            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }}
+                            value={lineBookingReminderTemplate}
+                            onChange={e => setLineBookingReminderTemplate(e.target.value)}
+                        />
+                    </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -454,12 +466,14 @@ export default function AdminSettingsPage() {
                         await Promise.all([
                             saveSetting('line_booking_confirmation_template', lineBookingConfirmationTemplate),
                             saveSetting('line_booking_update_template', lineBookingUpdateTemplate),
+                            saveSetting('line_booking_reminder_template', lineBookingReminderTemplate),
                         ])
                         toast.success('บันทึกข้อความ LINE สำเร็จ')
                     }}>บันทึกข้อความ LINE</button>
                     <button className="btn-admin-outline" onClick={() => {
                         setLineBookingConfirmationTemplate(DEFAULT_LINE_CONFIRMATION_NOTE)
                         setLineBookingUpdateTemplate(DEFAULT_LINE_UPDATE_NOTE)
+                        setLineBookingReminderTemplate(DEFAULT_LINE_REMINDER_NOTE)
                     }}>คืนค่าเริ่มต้น</button>
                 </div>
             </div>

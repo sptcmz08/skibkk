@@ -7,6 +7,15 @@ export const DEFAULT_LINE_UPDATE_NOTE = `รายการจองของค
 
 หากมีข้อสงสัย กรุณาติดต่อ LINE Official ของร้านได้เลย`
 
+export const DEFAULT_LINE_REMINDER_NOTE = `📍 สถานที่: SKI BKK ซอยรามอินทรา40 กทม.
+
+📌 เตรียมตัวก่อนมาเล่น:
+• มาถึงก่อนเวลาจองอย่างน้อย 15 นาที
+• สวมชุดกีฬาที่เหมาะสม
+• เตรียมถุงเท้ายาวสำหรับสกี/สโนว์บอร์ด
+
+แผนที่: https://maps.app.goo.gl/K73h3Wgm3Kx2dv6R9`
+
 type BookingNotifyData = {
     bookingNumber: string
     customerName: string
@@ -68,4 +77,12 @@ export const buildLineUpdateMessage = (
 ) => {
     const safeNote = normalizeLineEditableNote(note, DEFAULT_LINE_UPDATE_NOTE)
     return `🔄 มีการแก้ไขการจอง\n#${data.bookingNumber}\n\nสวัสดีคุณ ${data.customerName}\n${safeNote}\n\n${formatItemsText(data.items)}`
+}
+
+export const buildLineReminderMessage = (
+    note: string | null | undefined,
+    data: BookingNotifyData,
+) => {
+    const safeNote = normalizeLineEditableNote(note, DEFAULT_LINE_REMINDER_NOTE)
+    return `📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!\n\nสวัสดีคุณ ${data.customerName}\nหมายเลขจอง: #${data.bookingNumber}\n\n${formatItemsText(data.items)}\n\n${safeNote}`
 }

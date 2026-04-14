@@ -68,18 +68,7 @@ export async function sendLineBookingConfirmation(lineUserId: string, data: {
 /**
  * Send booking reminder via LINE (1 day before)
  */
-export async function sendLineBookingReminder(lineUserId: string, data: {
-    bookingNumber: string
-    customerName: string
-    items: Array<{ courtName: string; date: string; startTime: string; endTime: string; price: number }>
-    totalAmount: number
-}) {
-    const itemsText = data.items.map(item =>
-        `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}`
-    ).join('\n\n')
-
-    const message = `📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!\n\nสวัสดีคุณ ${data.customerName}\nหมายเลขจอง: #${data.bookingNumber}\n\n${itemsText}\n\n📍 สถานที่: SKI BKK ซอยรามอินทรา40 กทม.\n\n📌 เตรียมตัวก่อนมาเล่น:\n• มาถึงก่อนเวลาจองอย่างน้อย 15 นาที\n• สวมชุดกีฬาที่เหมาะสม\n• เตรียมถุงเท้ายาวสำหรับสกี/สโนว์บอร์ด\n\nแผนที่: https://maps.app.goo.gl/K73h3Wgm3Kx2dv6R9`
-
+export async function sendLineBookingReminder(lineUserId: string, message: string) {
     return sendLinePush(lineUserId, [{ type: 'text', text: message }])
 }
 
