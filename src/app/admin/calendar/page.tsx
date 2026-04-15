@@ -424,6 +424,8 @@ export default function CalendarPage() {
             let bookingHours = 0
             activeBookings.forEach(booking => {
                 booking.bookingItems.forEach(item => {
+                    const itemDate = toDateBangkok(item.date)
+                    if (itemDate < normalizedFrom || itemDate > normalizedTo) return
                     if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
                     totalAmount += item.price || 0
                     bookingHours += 1
