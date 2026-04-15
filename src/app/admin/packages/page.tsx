@@ -220,9 +220,9 @@ export default function PackagesPage() {
                                             )}
                                             {(pkg.validFrom || pkg.validTo) && (
                                                 <div style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    📅 {pkg.validFrom ? new Date(pkg.validFrom).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                                    📅 {pkg.validFrom ? formatDateDMY(pkg.validFrom) : '...'}
                                                     {' — '}
-                                                    {pkg.validTo ? new Date(pkg.validTo).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '...'}
+                                                    {pkg.validTo ? formatDateDMY(pkg.validTo) : '...'}
                                                 </div>
                                             )}
                                         </div>
@@ -301,8 +301,8 @@ export default function PackagesPage() {
                                                     {up.remainingHours}/{up.package.totalHours} ชม.
                                                 </span>
                                             </td>
-                                            <td>{new Date(up.purchasedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
-                                            <td>{new Date(up.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                            <td>{formatDateDMY(up.purchasedAt)}</td>
+                                            <td>{formatDateDMY(up.expiresAt)}</td>
                                             <td>
                                                 {expired ? (
                                                     <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '12px', background: '#fde8e8', color: '#e74c3c', fontWeight: 600 }}>หมดอายุ</span>

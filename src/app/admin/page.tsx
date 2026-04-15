@@ -125,7 +125,7 @@ export default function AdminDashboard() {
                         <tbody>
                             {dailySummary.map(d => (
                                 <tr key={d.date} onClick={() => goToDate(d.date)} style={{ cursor: 'pointer' }}>
-                                    <td style={{ fontWeight: 600 }}>{new Date(d.date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                                    <td style={{ fontWeight: 600 }}>{new Date(d.date).toLocaleDateString('th-TH', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                     <td style={{ textAlign: 'center' }}>{d.count} จอง</td>
                                     <td style={{ textAlign: 'center' }}>{d.hours} ชม.</td>
                                     <td style={{ textAlign: 'right', fontWeight: 600 }}>฿{Math.round(d.revenue).toLocaleString()}</td>
@@ -200,7 +200,7 @@ export default function AdminDashboard() {
                                             <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{b.user?.phone}</div>
                                         </td>
                                         <td>{b.bookingItems[0]?.court?.name || '-'}</td>
-                                        <td>{b.bookingItems[0]?.date ? new Date(b.bookingItems[0].date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) : '-'}</td>
+                                        <td>{b.bookingItems[0]?.date ? new Date(b.bookingItems[0].date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</td>
                                         <td>{b.bookingItems[0] ? `${b.bookingItems[0].startTime}-${b.bookingItems[0].endTime}` : '-'}</td>
                                         <td style={{ fontWeight: 700 }}>฿{b.totalAmount.toLocaleString()}</td>
                                         <td>{statusBadge(b.status)}</td>

@@ -167,7 +167,7 @@ export default function UsersPage() {
                                         <td>{u.email}</td>
                                         <td><span style={{ padding: '2px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: c.bg, color: c.text }}>{u.role}</span></td>
                                         <td><span className={`badge ${u.isActive ? 'badge-success' : 'badge-danger'}`}>{u.isActive ? 'Active' : 'Disabled'}</span></td>
-                                        <td>{new Date(u.createdAt).toLocaleDateString('th-TH')}</td>
+                                        <td>{new Date(u.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '6px' }}>
                                                 <button onClick={() => openEditModal(u)} style={{ padding: '4px 8px', background: 'var(--a-primary-light)', border: 'none', borderRadius: '6px', color: 'var(--a-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600 }}>

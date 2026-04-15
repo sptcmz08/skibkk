@@ -1029,7 +1029,7 @@ function AdminBookInner() {
                                 <select className="admin-input" value={selectedUserPackageId} onChange={e => setSelectedUserPackageId(e.target.value)}>
                                     {customerPackages.map(pkg => (
                                         <option key={pkg.id} value={pkg.id}>
-                                            {pkg.package.name} — เหลือ {pkg.remainingHours}/{pkg.package.totalHours} ชม. (หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
+                                            {pkg.package.name} — เหลือ {pkg.remainingHours}/{pkg.package.totalHours} ชม. (หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })})
                                         </option>
                                     ))}
                                 </select>

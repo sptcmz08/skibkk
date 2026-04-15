@@ -958,7 +958,7 @@ export default function InvoicesPage() {
                                             {b.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
                                         </span>
                                     </td>
-                                    <td>{new Date(b.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                    <td>{new Date(b.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '6px' }}>
                                             <button onClick={() => selectBooking(b, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">

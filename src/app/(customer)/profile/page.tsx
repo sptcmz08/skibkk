@@ -290,7 +290,7 @@ export default function ProfilePage() {
                                                 #{booking.bookingNumber}
                                             </span>
                                             <span style={{ color: 'var(--c-text-muted)', fontSize: '12px' }}>
-                                                {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -315,7 +315,7 @@ export default function ProfilePage() {
                                             <MapPin size={14} style={{ color: 'var(--c-primary)', flexShrink: 0 }} />
                                             <span style={{ fontWeight: 600, color: 'var(--c-text)' }}>{item.court.name}</span>
                                             <span style={{ opacity: 0.4 }}>•</span>
-                                            <span>{new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                                            <span>{new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                                             <span>{item.startTime}-{item.endTime}</span>
                                             <span style={{ marginLeft: 'auto', fontWeight: 700, fontFamily: "'Inter'", color: 'var(--c-text)' }}>฿{item.price.toLocaleString()}</span>
                                         </div>
@@ -419,7 +419,7 @@ export default function ProfilePage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
                                         <div>
                                             <div style={{ fontWeight: 800, fontSize: '17px' }}>{pkg.package.name}</div>
-                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>ซื้อเมื่อ {new Date(pkg.purchasedAt).toLocaleDateString('th-TH')} • หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH')}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>ซื้อเมื่อ {new Date(pkg.purchasedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} • หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                                         </div>
                                         <div style={{ fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>
                                             เหลือ {pkg.remainingHours} / {pkg.package.totalHours} ชม.

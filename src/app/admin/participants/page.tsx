@@ -145,7 +145,7 @@ export default function ParticipantsPage() {
                                     #{booking.bookingNumber}
                                 </span>
                                 <span style={{ color: 'var(--a-text-muted)', fontSize: '13px', marginLeft: '12px' }}>
-                                    {booking.user.name} • {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    {booking.user.name} • {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </span>
                             </div>
                             <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>

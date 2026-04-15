@@ -91,7 +91,7 @@ export default function CartPage() {
 
     const formatDate = (dateStr: string) => {
         const d = new Date(dateStr)
-        return d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+        return d.toLocaleDateString('th-TH', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
     }
 
     // Group by date
@@ -246,7 +246,7 @@ export default function CartPage() {
                                     }}>
                                         <Calendar size={20} style={{ color: '#B38600' }} />
                                         <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--c-text)' }}>
-                                            {new Date(date).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                            {new Date(date).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                         </span>
                                         <span style={{
                                             fontSize: '13px',

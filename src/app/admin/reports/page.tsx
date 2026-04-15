@@ -120,7 +120,7 @@ export default function ReportsPage() {
                             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>ไม่มีข้อมูลในช่วงที่เลือก</td></tr>
                         ) : dailyData.map(([date, data]) => (
                             <tr key={date}>
-                                <td style={{ fontWeight: 600 }}>{new Date(date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                                <td style={{ fontWeight: 600 }}>{new Date(date).toLocaleDateString('th-TH', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                 <td>{data.bookings} จอง</td>
                                 <td>{data.hours} ชม.</td>
                                 <td style={{ fontWeight: 700 }}>฿{data.revenue.toLocaleString()}</td>

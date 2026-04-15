@@ -194,7 +194,7 @@ export default function EvaluationsPage() {
                             </tr>
                         ) : filteredEvals.map(ev => (
                             <tr key={ev.id}>
-                                <td style={{ fontSize: '13px' }}>{new Date(ev.submittedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</td>
+                                <td style={{ fontSize: '13px' }}>{new Date(ev.submittedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                 <td>{ev.evaluatorName || '-'}</td>
                                 <td style={{ fontWeight: 600 }}>{ev.teacher.name}</td>
                                 <td>{ratingLabels[ev.trainingQuality || 0] || '-'}</td>

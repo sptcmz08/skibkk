@@ -132,7 +132,7 @@ export default function TeacherReportPage() {
                         ) : dailyData.map(([date, items]) => (
                             items.map((item, i) => (
                                 <tr key={`${date}-${i}`}>
-                                    {i === 0 && <td rowSpan={items.length} style={{ fontWeight: 600, verticalAlign: 'top' }}>{new Date(date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</td>}
+                                    {i === 0 && <td rowSpan={items.length} style={{ fontWeight: 600, verticalAlign: 'top' }}>{new Date(date).toLocaleDateString('th-TH', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>}
                                     <td>{item.startTime} - {item.endTime}</td>
                                     <td style={{ fontWeight: 600 }}>{item.teacherName}</td>
                                     <td>{item.courtName}</td>

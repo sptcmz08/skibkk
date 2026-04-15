@@ -50,7 +50,7 @@ export default function LogsPage() {
 
     const formatDate = (dateStr: string) => {
         const d = new Date(dateStr)
-        return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) +
+        return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
             ' ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
     }
 

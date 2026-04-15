@@ -505,7 +505,7 @@ export default function AdminSettingsPage() {
                         {closedDates.map(d => (
                             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
                                 <div>
-                                    <span style={{ fontWeight: 700 }}>{new Date(d.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                    <span style={{ fontWeight: 700 }}>{new Date(d.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                                     {d.reason && <span style={{ color: '#636e72', marginLeft: '12px', fontSize: '13px' }}>{d.reason}</span>}
                                 </div>
                                 <button onClick={async () => {

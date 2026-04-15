@@ -293,7 +293,7 @@ export default function CustomersPage() {
                                     <div><strong>ลูกค้า:</strong> {editBooking.user?.name || selectedCustomer.name}</div>
                                     <div><strong>โทร:</strong> {editBooking.user?.phone || selectedCustomer.phone || '-'}</div>
                                     <div><strong>อีเมล:</strong> {editBooking.user?.email || selectedCustomer.email || '-'}</div>
-                                    <div><strong>วันที่สร้าง:</strong> {new Date(editBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div><strong>วันที่สร้าง:</strong> {new Date(editBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                     <div style={{ gridColumn: '1 / -1' }}><strong>วันที่จอง:</strong> {getBookingDateGroups(editBooking.bookingItems).map(group => group.formattedDate).join(', ')}</div>
                                     <div style={{ flex: 1, minWidth: '140px' }}>
                                         <strong style={{ fontSize: '13px' }}>สถานะ:</strong>
@@ -357,7 +357,7 @@ export default function CustomersPage() {
                                                 <div>
                                                     <span style={{ fontWeight: 600 }}>{paymentMethodMap[payment.method] || payment.method}</span>
                                                     <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginLeft: '8px' }}>
-                                                        {new Date(payment.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        {new Date(payment.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

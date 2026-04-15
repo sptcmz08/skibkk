@@ -45,7 +45,7 @@ export default function AvailabilityPage() {
                     <Calendar size={20} style={{ color: 'var(--a-primary)' }} />
                     <DatePickerInput value={selectedDate} onChange={setSelectedDate} style={{ width: '170px', fontWeight: 600 }} />
                     <span style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>
-                        {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                 </div>
                 <button onClick={() => changeDate(1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronRight size={18} /></button>

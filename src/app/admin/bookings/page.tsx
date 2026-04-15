@@ -69,7 +69,7 @@ export default function BookingsManagement() {
     }
 
     const formatShortDateTH = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+        return new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
     }
 
     const fetchBookings = useCallback(async () => {
@@ -430,7 +430,7 @@ export default function BookingsManagement() {
                                                     <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{b.user?.phone || ''}</div>
                                                 </td>
                                                 <td style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
-                                                    {firstItem ? new Date(firstItem.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) : '-'}
+                                                    {firstItem ? new Date(firstItem.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                                                 </td>
                                                 <td>
                                                     <div style={{ fontSize: '13px' }}>{firstItem?.court?.name || '-'}</div>
@@ -547,7 +547,7 @@ export default function BookingsManagement() {
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.name}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone || '-'}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email || '-'}</div>
-                                <div><strong>วันที่สร้าง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                <div><strong>วันที่สร้าง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                 {editMode && (
                                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
                                         <div style={{ flex: 1, minWidth: '140px' }}>
@@ -623,7 +623,7 @@ export default function BookingsManagement() {
                                             </div>
                                         ) : (
                                             <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
-                                                {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {item.startTime} - {item.endTime}
+                                                {new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} | {item.startTime} - {item.endTime}
                                             </div>
                                         )}
                                         {/* Show full change history from audit logs (Read-only view) */}
@@ -659,7 +659,7 @@ export default function BookingsManagement() {
                                                                 📌 ข้อมูลเดิม: {state.courtName || state.courtId} | {formatShortDateTH(String(state.date))} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
                                                             </span>
                                                             <span style={{ fontSize: '9px', opacity: 0.7 }}>
-                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -722,7 +722,7 @@ export default function BookingsManagement() {
                                                                 📌 {sIdx === 0 && hasPendingChange ? 'ข้อมูลปัจจุบัน (ก่อนแก้):' : 'ข้อมูลเดิม:'} {state.courtName || state.courtId} | {formatShortDateTH(String(state.date))} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
                                                             </span>
                                                             <span style={{ fontSize: '9px', opacity: 0.7 }}>
-                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -798,7 +798,7 @@ export default function BookingsManagement() {
                                             <div>
                                                 <span style={{ fontWeight: 600 }}>{paymentMethodMap[pay.method] || pay.method}</span>
                                                 <span style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginLeft: '8px' }}>
-                                                    {new Date(pay.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(pay.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

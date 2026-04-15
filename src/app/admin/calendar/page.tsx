@@ -117,7 +117,7 @@ export default function CalendarPage() {
     }
 
     const formatShortDateTH = (dateStr: string | Date) => {
-        return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+        return new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
     }
 
     type BookingItemHistoryState = {
@@ -923,7 +923,7 @@ export default function CalendarPage() {
                             </button>
                             <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                                 <Calendar size={18} style={{ color: 'var(--a-primary)' }} />
-                                {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </h3>
                             {calAvail[selectedDate]?.status === 'closed' && (
                                 <span className="badge" style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
@@ -1425,7 +1425,7 @@ export default function CalendarPage() {
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.lineDisplayName || viewBooking.user?.name}{viewBooking.user?.lineDisplayName && viewBooking.user?.name !== viewBooking.user?.lineDisplayName ? ` (${viewBooking.user?.name})` : ''}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email?.endsWith('@line.local') ? <span style={{ color: '#999' }}>ไม่มี (LINE)</span> : viewBooking.user?.email}</div>
-                                <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH')}</div>
+                                <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                                 {(viewBooking.payments[0] || editMode) && (
                                     <div>
                                         <strong>วิธีชำระ:</strong>{' '}
@@ -1644,7 +1644,7 @@ export default function CalendarPage() {
                                                                 📌 {sIdx === 0 && hasPendingChange ? 'ข้อมูลปัจจุบัน (ก่อนแก้):' : 'ข้อมูลเดิม:'} {state.courtName || courts.find(c => c.id === state.courtId)?.name || state.courtId} | {formatShortDateTH(state.date)} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
                                                             </span>
                                                             <span style={{ fontSize: '9px', opacity: 0.7 }}>
-                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -1656,7 +1656,7 @@ export default function CalendarPage() {
                                     <>
                                         <div style={{ fontWeight: 600 }}>{(item as any).court?.name || courts.find(c => c.id === (item as any).courtId)?.name}</div>
                                         <div style={{ color: 'var(--a-text-secondary)' }}>
-                                            {new Date((item as any).date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}
+                                            {new Date((item as any).date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}
                                         </div>
                                         {(item as any).teacher && (
                                             <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '4px' }}>👨‍🏫 ครู: {(item as any).teacher.name}</div>
@@ -1695,7 +1695,7 @@ export default function CalendarPage() {
                                                                 📌 ข้อมูลเดิม: {state.courtName || courts.find(c => c.id === state.courtId)?.name || state.courtId} | {formatShortDateTH(state.date)} | {state.startTime}-{state.endTime} | ฿{state.price?.toLocaleString()}
                                                             </span>
                                                             <span style={{ fontSize: '9px', opacity: 0.7 }}>
-                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(state.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(state.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -1874,7 +1874,7 @@ export default function CalendarPage() {
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                                     {bookDates.map(d => (
                                         <span key={d} style={{ padding: '4px 10px', borderRadius: '6px', background: 'var(--a-primary)', color: 'white', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            {new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                                            {new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                             <button onClick={() => toggleBookDate(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', padding: 0, fontSize: '14px', lineHeight: 1 }}>×</button>
                                         </span>
                                     ))}

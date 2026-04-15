@@ -769,7 +769,7 @@ export default function BookingPage() {
                         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>สรุปการจอง</h3>
                         {[...cart].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map((item, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < cart.length - 1 ? '1px solid var(--c-border)' : 'none', fontSize: '14px' }}>
-                                <span>{item.courtName} • {new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} {item.startTime}-{item.endTime}</span>
+                                <span>{item.courtName} • {new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {item.startTime}-{item.endTime}</span>
                                 <span style={{ fontWeight: 600 }}>฿{item.price.toLocaleString()}</span>
                             </div>
                         ))}
@@ -811,7 +811,7 @@ export default function BookingPage() {
                                         <div style={{ fontWeight: 700 }}>{pkg.package.name}</div>
                                         <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginTop: '4px', display: 'flex', gap: '16px' }}>
                                             <span>เหลือ {pkg.remainingHours} ชม.</span>
-                                            <span>หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                                            <span>หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                                         </div>
                                         {pkg.remainingHours < cart.length && (
                                             <div style={{ fontSize: '12px', color: '#e17055', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>

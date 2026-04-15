@@ -248,7 +248,7 @@ export default function BookingDetailPage() {
                             #{booking.bookingNumber}
                         </div>
                         <div style={{ fontSize: '13px', color: 'var(--c-text-muted)' }}>
-                            จองเมื่อ {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            จองเมื่อ {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                     <div style={{
@@ -298,7 +298,7 @@ export default function BookingDetailPage() {
                         }}>
                             <Calendar size={14} style={{ color: 'var(--c-primary)' }} />
                             <span style={{ fontWeight: 700, fontSize: '14px' }}>
-                                {new Date(dateStr).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                {new Date(dateStr).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </span>
                         </div>
                         {items.map((item, j) => (
@@ -563,7 +563,7 @@ export default function BookingDetailPage() {
                                             {pay.bankName && <span style={{ color: 'var(--c-text-muted)', fontWeight: 500 }}> ({pay.bankName})</span>}
                                         </div>
                                         <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginTop: '2px' }}>
-                                            {new Date(pay.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            {new Date(pay.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
