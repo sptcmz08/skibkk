@@ -5,7 +5,7 @@ import ConfirmModal from '@/components/ConfirmModal'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect } from 'react'
-import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2 } from 'lucide-react'
+import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface PackageItem {
@@ -19,6 +19,20 @@ interface UserPkg {
     id: string; remainingHours: number; purchasedAt: string; expiresAt: string
     user: { id: string; name: string; email: string; phone: string }
     package: { id: string; name: string; totalHours: number; price: number }
+    usageSummary?: {
+        usedCount: number
+        usedHours: number
+        remainingHours: number
+    }
+    usageRecords?: Array<{
+        paymentId: string
+        bookingId: string
+        bookingNumber: string
+        usedAt: string
+        hoursUsed: number
+        bookingDates: string[]
+        bookingTimes: string[]
+    }>
 }
 
 interface CustomerResult {
@@ -43,6 +57,7 @@ export default function PackagesPage() {
     const [assigning, setAssigning] = useState(false)
     const [pendingDeletePkg, setPendingDeletePkg] = useState<string | null>(null)
     const [pendingDeleteUserPkg, setPendingDeleteUserPkg] = useState<string | null>(null)
+    const [viewUsage, setViewUsage] = useState<UserPkg | null>(null)
 
     const fetchData = async () => {
         setLoading(true)
@@ -251,6 +266,7 @@ export default function PackagesPage() {
                                 <tr>
                                     <th>ลูกค้า</th>
                                     <th>แพ็คเกจ</th>
+                                    <th>ใช้ไป</th>
                                     <th>ชม.เหลือ</th>
                                     <th>วันที่ซื้อ</th>
                                     <th>หมดอายุ</th>
@@ -270,6 +286,11 @@ export default function PackagesPage() {
                                             </td>
                                             <td>{up.package.name}</td>
                                             <td>
+                                                <span style={{ fontWeight: 700, color: 'var(--a-text)' }}>
+                                                    {up.usageSummary?.usedCount || 0} ครั้ง ({up.usageSummary?.usedHours || 0} ชม.)
+                                                </span>
+                                            </td>
+                                            <td>
                                                 <span style={{ fontWeight: 700, color: empty ? 'var(--a-danger)' : 'var(--a-text)' }}>
                                                     {up.remainingHours}/{up.package.totalHours} ชม.
                                                 </span>
@@ -286,7 +307,16 @@ export default function PackagesPage() {
                                                 )}
                                             </td>
                                             <td>
-                                                <button onClick={() => setPendingDeleteUserPkg(up.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-danger)' }}><Trash2 size={14} /></button>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <button
+                                                        onClick={() => setViewUsage(up)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-primary)' }}
+                                                        title="ดูประวัติการใช้งานแพ็คเกจ"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    <button onClick={() => setPendingDeleteUserPkg(up.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-danger)' }}><Trash2 size={14} /></button>
+                                                </div>
                                             </td>
                                         </tr>
                                     )
@@ -420,6 +450,74 @@ export default function PackagesPage() {
                             <button onClick={handleAssign} className="btn-admin" disabled={assigning || !selectedCustomer || !selectedPkgId}>
                                 {assigning ? 'กำลังบันทึก...' : <><UserPlus size={16} /> มอบแพ็คเกจ</>}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {viewUsage && (
+                <div className="modal-overlay" onClick={() => setViewUsage(null)}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <div>
+                                <h2 style={{ fontSize: '20px', fontWeight: 700 }}>การใช้แพ็คเกจของลูกค้า</h2>
+                                <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px' }}>
+                                    {viewUsage.user.name} • {viewUsage.package.name}
+                                </div>
+                            </div>
+                            <button onClick={() => setViewUsage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                            <div className="admin-card" style={{ padding: '12px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>จำนวนครั้งที่ใช้</div>
+                                <div style={{ fontWeight: 800, fontSize: '22px' }}>{viewUsage.usageSummary?.usedCount || 0} ครั้ง</div>
+                            </div>
+                            <div className="admin-card" style={{ padding: '12px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ชั่วโมงที่ใช้รวม</div>
+                                <div style={{ fontWeight: 800, fontSize: '22px' }}>{viewUsage.usageSummary?.usedHours || 0} ชม.</div>
+                            </div>
+                            <div className="admin-card" style={{ padding: '12px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ชั่วโมงคงเหลือ</div>
+                                <div style={{ fontWeight: 800, fontSize: '22px', color: 'var(--a-primary)' }}>{viewUsage.remainingHours} ชม.</div>
+                            </div>
+                        </div>
+
+                        {!viewUsage.usageRecords || viewUsage.usageRecords.length === 0 ? (
+                            <div style={{ padding: '22px', border: '1px solid var(--a-border)', borderRadius: '10px', textAlign: 'center', color: 'var(--a-text-muted)' }}>
+                                ยังไม่มีประวัติการใช้แพ็คเกจ
+                            </div>
+                        ) : (
+                            <div style={{ maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--a-border)', borderRadius: '10px' }}>
+                                <table className="admin-table" style={{ width: '100%' }}>
+                                    <thead>
+                                        <tr>
+                                            <th>ครั้งที่</th>
+                                            <th>เลขจอง</th>
+                                            <th>วันที่ใช้</th>
+                                            <th>เวลา</th>
+                                            <th>ใช้ (ชม.)</th>
+                                            <th>บันทึกเมื่อ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {viewUsage.usageRecords.map((record, idx) => (
+                                            <tr key={record.paymentId}>
+                                                <td>{idx + 1}</td>
+                                                <td style={{ fontWeight: 700 }}>{record.bookingNumber}</td>
+                                                <td>{record.bookingDates.join(', ')}</td>
+                                                <td>{record.bookingTimes.join(', ')}</td>
+                                                <td style={{ fontWeight: 700 }}>{record.hoursUsed}</td>
+                                                <td>{new Date(record.usedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                            <button onClick={() => setViewUsage(null)} className="btn-admin-outline">ปิด</button>
                         </div>
                     </div>
                 </div>

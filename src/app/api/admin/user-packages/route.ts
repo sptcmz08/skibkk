@@ -26,7 +26,79 @@ export async function GET(req: NextRequest) {
             },
             orderBy: { purchasedAt: 'desc' },
         })
-        return NextResponse.json({ userPackages })
+
+        const usageByPackageId: Record<string, Array<{
+            paymentId: string
+            bookingId: string
+            bookingNumber: string
+            usedAt: string
+            hoursUsed: number
+            bookingDates: string[]
+            bookingTimes: string[]
+        }>> = {}
+
+        await Promise.all(userPackages.map(async (up) => {
+            const payments = await prisma.payment.findMany({
+                where: {
+                    userId: up.userId,
+                    packageId: up.packageId,
+                    method: 'PACKAGE',
+                    booking: { status: { not: 'CANCELLED' } },
+                },
+                include: {
+                    booking: {
+                        select: {
+                            id: true,
+                            bookingNumber: true,
+                            bookingItems: {
+                                select: { date: true, startTime: true, endTime: true },
+                                orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+                            },
+                        },
+                    },
+                },
+                orderBy: { createdAt: 'desc' },
+            })
+
+            const packageStart = toDateOnlyUTC(up.purchasedAt)
+            const packageEnd = toDateOnlyUTC(up.expiresAt)
+            const usageRecords = payments
+                .filter(payment => payment.booking && payment.booking.bookingItems.some(item => {
+                    const bookingDate = toDateOnlyUTC(item.date)
+                    return bookingDate >= packageStart && bookingDate <= packageEnd
+                }))
+                .map(payment => {
+                    const bookingDates = [...new Set(payment.booking.bookingItems.map(item => toDateOnlyUTC(item.date)))]
+                    const bookingTimes = payment.booking.bookingItems.map(item => `${item.startTime}-${item.endTime}`)
+                    return {
+                        paymentId: payment.id,
+                        bookingId: payment.booking.id,
+                        bookingNumber: payment.booking.bookingNumber,
+                        usedAt: payment.createdAt.toISOString(),
+                        hoursUsed: payment.booking.bookingItems.length,
+                        bookingDates,
+                        bookingTimes,
+                    }
+                })
+
+            usageByPackageId[up.id] = usageRecords
+        }))
+
+        const userPackagesWithUsage = userPackages.map(up => {
+            const usageRecords = usageByPackageId[up.id] || []
+            const usedHours = usageRecords.reduce((sum, record) => sum + record.hoursUsed, 0)
+            return {
+                ...up,
+                usageSummary: {
+                    usedCount: usageRecords.length,
+                    usedHours,
+                    remainingHours: up.remainingHours,
+                },
+                usageRecords,
+            }
+        })
+
+        return NextResponse.json({ userPackages: userPackagesWithUsage })
     } catch (error) {
         console.error('GET /api/admin/user-packages error:', error)
         return NextResponse.json({ userPackages: [] })
