@@ -5,6 +5,7 @@ import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,27 @@ export async function POST(req: NextRequest) {
 
         if (userPkg.expiresAt < new Date()) {
             return NextResponse.json({ error: 'แพ็คเกจหมดอายุแล้ว' }, { status: 400 })
+        }
+
+        if (bookingId) {
+            const booking = await prisma.booking.findUnique({
+                where: { id: bookingId },
+                include: { bookingItems: { select: { date: true } } },
+            })
+            if (!booking || booking.userId !== user.id) {
+                return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
+            }
+
+            const packageStart = toDateOnlyUTC(userPkg.purchasedAt)
+            const packageEnd = toDateOnlyUTC(userPkg.expiresAt)
+            const outOfRangeDate = booking.bookingItems
+                .map(item => toDateOnlyUTC(item.date))
+                .find(date => date < packageStart || date > packageEnd)
+            if (outOfRangeDate) {
+                return NextResponse.json({
+                    error: `วันที่จอง ${outOfRangeDate} อยู่นอกช่วงแพ็คเกจ (${packageStart} - ${packageEnd})`,
+                }, { status: 400 })
+            }
         }
 
         await prisma.$transaction(async tx => {
