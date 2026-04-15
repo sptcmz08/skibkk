@@ -2,6 +2,7 @@
 
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react'
@@ -757,9 +758,9 @@ export default function CalendarPage() {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input className="admin-input" type="date" value={revenueFrom} onChange={e => setRevenueFrom(e.target.value)} style={{ width: '170px' }} />
+                        <DatePickerInput value={revenueFrom} onChange={setRevenueFrom} style={{ width: '170px' }} placeholder="จากวันที่" />
                         <span style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>ถึง</span>
-                        <input className="admin-input" type="date" value={revenueTo} onChange={e => setRevenueTo(e.target.value)} style={{ width: '170px' }} />
+                        <DatePickerInput value={revenueTo} onChange={setRevenueTo} style={{ width: '170px' }} placeholder="ถึงวันที่" />
                     </div>
                 </div>
                 <div style={{ marginTop: '12px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

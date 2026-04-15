@@ -1,6 +1,7 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Calendar, Eye, X, MapPin, Clock, CreditCard, Image, ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, Edit2, Save, Trash2 } from 'lucide-react'
@@ -344,21 +345,17 @@ export default function BookingsManagement() {
                         <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--a-text-muted)' }} />
                         <input className="admin-input" style={{ paddingLeft: '36px' }} placeholder="ค้นหาชื่อ / เบอร์โทร / เลขจอง" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <input
-                        className="admin-input"
-                        type="date"
-                        style={{ width: '170px' }}
+                    <DatePickerInput
                         value={dateFrom}
-                        onChange={e => setDateFrom(e.target.value)}
-                        title="จากวันที่"
-                    />
-                    <input
-                        className="admin-input"
-                        type="date"
+                        onChange={setDateFrom}
                         style={{ width: '170px' }}
+                        placeholder="จากวันที่"
+                    />
+                    <DatePickerInput
                         value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        title="ถึงวันที่"
+                        onChange={setDateTo}
+                        style={{ width: '170px' }}
+                        placeholder="ถึงวันที่"
                     />
                     <select className="admin-input" style={{ width: '160px' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">สถานะทั้งหมด</option>
