@@ -8,6 +8,14 @@ export const dynamic = 'force-dynamic'
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
 const toDateTime = (value: Date | string) => new Date(value)
+const generatePackageSaleNumber = () => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const d = String(now.getDate()).padStart(2, '0')
+    const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    return `PKG${y}${m}${d}${rand}`
+}
 
 // GET — list all user-packages (admin view)
 export async function GET(req: NextRequest) {
@@ -107,7 +115,7 @@ export async function GET(req: NextRequest) {
 // POST — assign a package to a customer
 export async function POST(req: NextRequest) {
     try {
-        await requireAdmin()
+        const admin = await requireAdmin()
         const { userId, packageId } = await req.json()
         if (!userId || !packageId) {
             return NextResponse.json({ error: 'ต้องระบุ userId และ packageId' }, { status: 400 })
@@ -132,6 +140,33 @@ export async function POST(req: NextRequest) {
             include: {
                 user: { select: { name: true } },
                 package: { select: { name: true } },
+            },
+        })
+
+        await prisma.auditLog.create({
+            data: {
+                userId: admin.id,
+                action: 'PACKAGE_ASSIGN',
+                entityType: 'user_package',
+                entityId: userPackage.id,
+                details: JSON.stringify({
+                    saleNumber: generatePackageSaleNumber(),
+                    customer: {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                        phone: user.phone,
+                    },
+                    package: {
+                        id: pkg.id,
+                        name: pkg.name,
+                        totalHours: pkg.totalHours,
+                        price: pkg.price,
+                        validDays: pkg.validDays,
+                    },
+                    purchasedAt: new Date().toISOString(),
+                    expiresAt: expiresAt.toISOString(),
+                }),
             },
         })
 

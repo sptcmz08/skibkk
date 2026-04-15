@@ -18,6 +18,18 @@ interface Booking {
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
     invoice?: { id: string; invoiceNumber: string; isIssued: boolean; issuedAt: string } | null
 }
+interface PackageSaleEntry {
+    id: string
+    saleNumber: string
+    createdAt: string
+    customerName: string
+    customerEmail: string
+    customerPhone: string
+    packageName: string
+    totalHours: number
+    price: number
+    expiresAt: string
+}
 
 type DocType = 'full' | 'short'
 
@@ -67,6 +79,7 @@ function EditNumber({ value, onChange, style, editMode }: { value: number; onCha
 
 export default function InvoicesPage() {
     const [bookings, setBookings] = useState<Booking[]>([])
+    const [packageSales, setPackageSales] = useState<PackageSaleEntry[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [dateFrom, setDateFrom] = useState('')
@@ -103,8 +116,28 @@ export default function InvoicesPage() {
         Promise.all([
             fetch('/api/bookings').then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
-        ]).then(([bookingData, settings]) => {
+            fetch('/api/audit-logs?action=PACKAGE_ASSIGN&entityType=user_package&limit=500', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ logs: [] })),
+        ]).then(([bookingData, settings, auditData]) => {
             setBookings((bookingData.bookings || []).filter((b: Booking) => b.status !== 'CANCELLED'))
+            const saleLogs = Array.isArray(auditData?.logs) ? auditData.logs : []
+            const mappedSales: PackageSaleEntry[] = saleLogs.map((log: any) => {
+                const details = (() => {
+                    try { return JSON.parse(log.details || '{}') } catch { return {} }
+                })()
+                return {
+                    id: log.id,
+                    saleNumber: details.saleNumber || `PKG-${log.id?.slice(0, 8) || 'N/A'}`,
+                    createdAt: details.purchasedAt || log.createdAt,
+                    customerName: details.customer?.name || '-',
+                    customerEmail: details.customer?.email || '-',
+                    customerPhone: details.customer?.phone || '-',
+                    packageName: details.package?.name || '-',
+                    totalHours: Number(details.package?.totalHours || 0),
+                    price: Number(details.package?.price || 0),
+                    expiresAt: details.expiresAt || log.createdAt,
+                }
+            })
+            setPackageSales(mappedSales)
             const nextDefaults = {
                 companyName: settings.invoice_company_name || INVOICE_DEFAULTS.companyName,
                 companyAddress1: settings.invoice_company_address1 || INVOICE_DEFAULTS.companyAddress1,
@@ -137,6 +170,18 @@ export default function InvoicesPage() {
             const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
             if (bDate > dateTo) return false
         }
+        return true
+    })
+    const filteredPackageSales = packageSales.filter(sale => {
+        const term = search.toLowerCase()
+        const matchSearch = !term ||
+            sale.saleNumber.toLowerCase().includes(term) ||
+            sale.customerName.toLowerCase().includes(term) ||
+            sale.packageName.toLowerCase().includes(term)
+        if (!matchSearch) return false
+        const saleDate = new Date(sale.createdAt).toISOString().slice(0, 10)
+        if (dateFrom && saleDate < dateFrom) return false
+        if (dateTo && saleDate > dateTo) return false
         return true
     })
 
@@ -972,6 +1017,43 @@ export default function InvoicesPage() {
                                 </tr>
                             )
                         })}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="admin-card" style={{ marginTop: '16px' }}>
+                <div className="admin-card-header">
+                    <h3 className="admin-card-title">รายการขายแพ็คเกจ (ลูกค้าซื้อแพ็คเกจ)</h3>
+                </div>
+                <table className="admin-table">
+                    <thead>
+                        <tr>
+                            <th>เลขที่เอกสาร</th>
+                            <th>ลูกค้า</th>
+                            <th>แพ็คเกจ</th>
+                            <th>จำนวนชั่วโมง</th>
+                            <th>ยอดเงิน</th>
+                            <th>วันที่ขาย</th>
+                            <th>หมดอายุ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredPackageSales.length === 0 ? (
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: 'var(--a-text-muted)' }}>ยังไม่มีข้อมูลขายแพ็คเกจ</td></tr>
+                        ) : filteredPackageSales.map(sale => (
+                            <tr key={sale.id}>
+                                <td style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{sale.saleNumber}</td>
+                                <td>
+                                    <div style={{ fontWeight: 600 }}>{sale.customerName}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{sale.customerPhone !== '-' ? sale.customerPhone : sale.customerEmail}</div>
+                                </td>
+                                <td>{sale.packageName}</td>
+                                <td>{sale.totalHours} ชม.</td>
+                                <td style={{ fontWeight: 700 }}>฿{sale.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                <td>{new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                <td>{new Date(sale.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
