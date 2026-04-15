@@ -7,6 +7,7 @@ import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/
 export const dynamic = 'force-dynamic'
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
+const toDateTime = (value: Date | string) => new Date(value)
 
 // GET — list all user-packages (admin view)
 export async function GET(req: NextRequest) {
@@ -43,7 +44,10 @@ export async function GET(req: NextRequest) {
                     userId: up.userId,
                     packageId: up.packageId,
                     method: 'PACKAGE',
-                    booking: { status: { not: 'CANCELLED' } },
+                    createdAt: {
+                        gte: toDateTime(up.purchasedAt),
+                        lte: toDateTime(up.expiresAt),
+                    },
                 },
                 include: {
                     booking: {
@@ -60,15 +64,10 @@ export async function GET(req: NextRequest) {
                 orderBy: { createdAt: 'desc' },
             })
 
-            const packageStart = toDateOnlyUTC(up.purchasedAt)
-            const packageEnd = toDateOnlyUTC(up.expiresAt)
             const usageRecords = payments
-                .filter(payment => payment.booking && payment.booking.bookingItems.some(item => {
-                    const bookingDate = toDateOnlyUTC(item.date)
-                    return bookingDate >= packageStart && bookingDate <= packageEnd
-                }))
+                .filter(payment => payment.booking)
                 .map(payment => {
-                    const bookingDates = [...new Set(payment.booking.bookingItems.map(item => toDateOnlyUTC(item.date)))]
+                    const bookingDates = [...new Set(payment.booking.bookingItems.map(item => toDateOnlyUTC(item.date)))].sort((a, b) => a.localeCompare(b))
                     const bookingTimes = payment.booking.bookingItems.map(item => `${item.startTime}-${item.endTime}`)
                     return {
                         paymentId: payment.id,
@@ -86,7 +85,7 @@ export async function GET(req: NextRequest) {
 
         const userPackagesWithUsage = userPackages.map(up => {
             const usageRecords = usageByPackageId[up.id] || []
-            const usedHours = usageRecords.reduce((sum, record) => sum + record.hoursUsed, 0)
+            const usedHours = Math.max(0, up.package.totalHours - up.remainingHours)
             return {
                 ...up,
                 usageSummary: {

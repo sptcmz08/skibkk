@@ -27,6 +27,7 @@ interface PackageUsage {
     id: string
     amount: number
     packageId: string | null
+    userPackageId?: string | null
     createdAt: string
     booking: {
         bookingNumber: string
@@ -412,7 +413,7 @@ export default function ProfilePage() {
                                 ยังไม่มีแพ็คเกจ
                             </div>
                         ) : packages.map(pkg => {
-                            const packageUsages = packageUsage.filter(log => log.packageId === pkg.package.id)
+                            const packageUsages = packageUsage.filter(log => (log.userPackageId || null) === pkg.id)
                             return (
                                 <div key={pkg.id} style={{ background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)', borderRadius: '18px', padding: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
@@ -434,7 +435,7 @@ export default function ProfilePage() {
                                                     <div key={usage.id} style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '12px' }}>
                                                         <div style={{ fontWeight: 700 }}>#{usage.booking.bookingNumber} • ใช้แพ็คเกจ ({usage.booking.bookingItems.length} ชม.)</div>
                                                         <div style={{ color: 'var(--c-text-muted)', marginTop: '2px' }}>
-                                                            {usage.booking.bookingItems.map(item => `${new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} ${item.startTime}-${item.endTime} ${item.court.name}`).join(' | ')}
+                                                            {usage.booking.bookingItems.map(item => `${new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${item.startTime}-${item.endTime} ${item.court.name}`).join(' | ')}
                                                         </div>
                                                     </div>
                                                 ))}

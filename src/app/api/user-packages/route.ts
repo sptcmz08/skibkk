@@ -49,7 +49,35 @@ export async function GET(req: NextRequest) {
             orderBy: { createdAt: 'desc' },
         })
 
-        return NextResponse.json({ packages, usage })
+        const packagesWithUsage = packages.map(pkg => {
+            const packageUsage = usage.filter(log =>
+                log.packageId === pkg.packageId &&
+                log.createdAt >= pkg.purchasedAt &&
+                log.createdAt <= pkg.expiresAt
+            )
+            return {
+                ...pkg,
+                usageSummary: {
+                    usedCount: packageUsage.length,
+                    usedHours: Math.max(0, pkg.package.totalHours - pkg.remainingHours),
+                    remainingHours: pkg.remainingHours,
+                },
+            }
+        })
+
+        const usageWithPackageRef = usage.map(log => {
+            const ownerPackage = packages.find(pkg =>
+                pkg.packageId === log.packageId &&
+                log.createdAt >= pkg.purchasedAt &&
+                log.createdAt <= pkg.expiresAt
+            )
+            return {
+                ...log,
+                userPackageId: ownerPackage?.id || null,
+            }
+        })
+
+        return NextResponse.json({ packages: packagesWithUsage, usage: usageWithPackageRef })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })

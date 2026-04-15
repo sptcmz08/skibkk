@@ -35,6 +35,12 @@ interface UserPkg {
     }>
 }
 
+const formatDateDMY = (value: string) => {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return value
+    return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 interface CustomerResult {
     id: string; name: string; email: string; phone: string
 }
@@ -505,10 +511,10 @@ export default function PackagesPage() {
                                             <tr key={record.paymentId}>
                                                 <td>{idx + 1}</td>
                                                 <td style={{ fontWeight: 700 }}>{record.bookingNumber}</td>
-                                                <td>{record.bookingDates.join(', ')}</td>
+                                                <td>{record.bookingDates.map(formatDateDMY).join(', ')}</td>
                                                 <td>{record.bookingTimes.join(', ')}</td>
                                                 <td style={{ fontWeight: 700 }}>{record.hoursUsed}</td>
-                                                <td>{new Date(record.usedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                                                <td>{new Date(record.usedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                                             </tr>
                                         ))}
                                     </tbody>
