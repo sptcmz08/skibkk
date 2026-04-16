@@ -8,6 +8,7 @@ import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save,
 import toast from 'react-hot-toast'
 import XLSX from 'xlsx-js-style'
 import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
+import { formatPackageSaleInvoiceNumber, parsePackageSaleAuditDetails, type PackageSaleInvoiceRecord } from '@/lib/package-sale-invoice'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -17,6 +18,13 @@ interface Booking {
     participants: Array<{ name: string; sportType: string }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
     invoice?: { id: string; invoiceNumber: string; isIssued: boolean; issuedAt: string } | null
+}
+interface UserPackageInvoiceSource {
+    id: string
+    purchasedAt: string
+    expiresAt: string
+    user: { name: string; email: string; phone: string }
+    package: { name: string; totalHours: number; price: number }
 }
 interface PackageSaleEntry {
     id: string
@@ -29,6 +37,7 @@ interface PackageSaleEntry {
     totalHours: number
     price: number
     expiresAt: string
+    invoice?: PackageSaleInvoiceRecord | null
 }
 
 type DocType = 'full' | 'short'
@@ -85,6 +94,7 @@ export default function InvoicesPage() {
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+    const [selectedPackageSale, setSelectedPackageSale] = useState<PackageSaleEntry | null>(null)
     const [docType, setDocType] = useState<DocType>('full')
     const [editMode, setEditMode] = useState(false)
     const printRef = useRef<HTMLDivElement>(null)
@@ -117,24 +127,31 @@ export default function InvoicesPage() {
             fetch('/api/bookings').then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
             fetch('/api/audit-logs?action=PACKAGE_ASSIGN&entityType=user_package&limit=500', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ logs: [] })),
-        ]).then(([bookingData, settings, auditData]) => {
-            setBookings((bookingData.bookings || []).filter((b: Booking) => b.status !== 'CANCELLED'))
+            fetch('/api/admin/user-packages', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ userPackages: [] })),
+        ]).then(([bookingData, settings, auditData, userPackageData]) => {
+            setBookings((bookingData.bookings || []).filter((b: Booking) => {
+                if (b.status === 'CANCELLED') return false
+                const isPackageBooking = b.payments?.some(payment => payment.method === 'PACKAGE') || b.totalAmount <= 0
+                return !isPackageBooking
+            }))
             const saleLogs = Array.isArray(auditData?.logs) ? auditData.logs : []
-            const mappedSales: PackageSaleEntry[] = saleLogs.map((log: any) => {
-                const details = (() => {
-                    try { return JSON.parse(log.details || '{}') } catch { return {} }
-                })()
+            const userPackages = Array.isArray(userPackageData?.userPackages) ? userPackageData.userPackages as UserPackageInvoiceSource[] : []
+            const userPackageById = new Map(userPackages.map(userPackage => [userPackage.id, userPackage]))
+            const mappedSales: PackageSaleEntry[] = saleLogs.map((log: { id: string; entityId?: string; details?: string | null; createdAt: string }) => {
+                const details = parsePackageSaleAuditDetails(log.details)
+                const linkedUserPackage = log.entityId ? userPackageById.get(log.entityId) : undefined
                 return {
                     id: log.id,
                     saleNumber: details.saleNumber || `PKG-${log.id?.slice(0, 8) || 'N/A'}`,
-                    createdAt: details.purchasedAt || log.createdAt,
-                    customerName: details.customer?.name || '-',
-                    customerEmail: details.customer?.email || '-',
-                    customerPhone: details.customer?.phone || '-',
-                    packageName: details.package?.name || '-',
-                    totalHours: Number(details.package?.totalHours || 0),
-                    price: Number(details.package?.price || 0),
-                    expiresAt: details.expiresAt || log.createdAt,
+                    createdAt: details.purchasedAt || linkedUserPackage?.purchasedAt || log.createdAt,
+                    customerName: details.customer?.name || linkedUserPackage?.user.name || '-',
+                    customerEmail: details.customer?.email || linkedUserPackage?.user.email || '-',
+                    customerPhone: details.customer?.phone || linkedUserPackage?.user.phone || '-',
+                    packageName: details.package?.name || linkedUserPackage?.package.name || '-',
+                    totalHours: Number(details.package?.totalHours || linkedUserPackage?.package.totalHours || 0),
+                    price: Number(details.package?.price || linkedUserPackage?.package.price || 0),
+                    expiresAt: details.expiresAt || linkedUserPackage?.expiresAt || log.createdAt,
+                    invoice: details.invoice || null,
                 }
             })
             setPackageSales(mappedSales)
@@ -176,6 +193,7 @@ export default function InvoicesPage() {
         const term = search.toLowerCase()
         const matchSearch = !term ||
             sale.saleNumber.toLowerCase().includes(term) ||
+            (sale.invoice?.invoiceNumber || '').toLowerCase().includes(term) ||
             sale.customerName.toLowerCase().includes(term) ||
             sale.packageName.toLowerCase().includes(term)
         if (!matchSearch) return false
@@ -191,6 +209,20 @@ export default function InvoicesPage() {
         const uniqueDates = [...new Set(bookingItems.map(item => item.date.split('T')[0]))].sort()
         return uniqueDates.length > 0 ? uniqueDates.map(formatShortDate).join(', ') : '-'
     }
+    const closeDetailView = () => {
+        setSelectedBooking(null)
+        setSelectedPackageSale(null)
+        setEditMode(false)
+    }
+    const getPackageSaleItems = (sale: PackageSaleEntry): EditableItem[] => ([
+        {
+            description: sale.packageName,
+            detail: `ซื้อแพ็กเกจ ${sale.totalHours} ชั่วโมง`,
+            qty: 1,
+            unitPrice: sale.price,
+        },
+    ])
+    const getPackageSalePaymentNote = () => 'ขายแพ็กเกจให้ลูกค้า • ชำระเงินเรียบร้อยแล้ว'
 
     // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
@@ -361,6 +393,7 @@ export default function InvoicesPage() {
     // Populate editable fields when booking is selected
     const selectBooking = async (b: Booking, type: DocType) => {
         setSelectedBooking(b)
+        setSelectedPackageSale(null)
         setDocType(type)
         setEditMode(false)
 
@@ -433,9 +466,64 @@ export default function InvoicesPage() {
         setIsIssued(Boolean(b.invoice?.isIssued))
     }
 
+    const selectPackageSale = async (sale: PackageSaleEntry, type: DocType) => {
+        setSelectedPackageSale(sale)
+        setSelectedBooking(null)
+        setDocType(type)
+        setEditMode(false)
+
+        try {
+            const res = await fetch(`/api/package-sale-invoices?logId=${sale.id}`)
+            const data = await res.json()
+            if (data.invoice?.customData) {
+                const cd = data.invoice.customData as Record<string, unknown>
+                setIsIssued(Boolean(data.invoice.isIssued))
+                setCompanyName((cd.companyName as string) || invoiceDefaults.companyName)
+                setCompanyAddress1((cd.companyAddress1 as string) || invoiceDefaults.companyAddress1)
+                setCompanyAddress2((cd.companyAddress2 as string) || invoiceDefaults.companyAddress2)
+                setCompanyPhone((cd.companyPhone as string) || invoiceDefaults.companyPhone)
+                setCompanyTaxId((cd.companyTaxId as string) || invoiceDefaults.companyTaxId)
+                setCustomerName((cd.customerName as string) || sale.customerName)
+                setCustomerEmail((cd.customerEmail as string) || sale.customerEmail)
+                setCustomerPhone((cd.customerPhone as string) || (sale.customerPhone !== '-' ? sale.customerPhone : ''))
+                setInvoiceNo((cd.invoiceNo as string) || data.invoice.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber))
+                setIssueDate((cd.issueDate as string) || formatThaiDate(sale.createdAt))
+                setRefNo((cd.refNo as string) || sale.saleNumber)
+                setItems((cd.items as EditableItem[]) || getPackageSaleItems(sale))
+                setPaymentNote((cd.paymentNote as string) || getPackageSalePaymentNote())
+                setRemarkNote((cd.remarkNote as string) || invoiceDefaults.remarkNote)
+                setPayerName((cd.payerName as string) || '')
+                setPayerDate((cd.payerDate as string) || '')
+                setReceiverName((cd.receiverName as string) || '')
+                setReceiverDate((cd.receiverDate as string) || '')
+                return
+            }
+        } catch { /* ignore, fall through to defaults */ }
+
+        setCustomerName(sale.customerName)
+        setCustomerEmail(sale.customerEmail !== '-' ? sale.customerEmail : '')
+        setCustomerPhone(sale.customerPhone !== '-' ? sale.customerPhone : '')
+        setInvoiceNo(sale.invoice?.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber))
+        setIssueDate(formatThaiDate(sale.createdAt))
+        setRefNo(sale.saleNumber)
+        setItems(getPackageSaleItems(sale))
+        setPaymentNote(getPackageSalePaymentNote())
+        setCompanyName(invoiceDefaults.companyName)
+        setCompanyAddress1(invoiceDefaults.companyAddress1)
+        setCompanyAddress2(invoiceDefaults.companyAddress2)
+        setCompanyPhone(invoiceDefaults.companyPhone)
+        setCompanyTaxId(invoiceDefaults.companyTaxId)
+        setRemarkNote(invoiceDefaults.remarkNote)
+        setPayerName('')
+        setPayerDate('')
+        setReceiverName('')
+        setReceiverDate('')
+        setIsIssued(Boolean(sale.invoice?.isIssued))
+    }
+
     // Save invoice data to server
     const saveInvoiceData = async () => {
-        if (!selectedBooking) return
+        if (!selectedBooking && !selectedPackageSale) return
         setSavingInvoice(true)
         try {
             const customData = {
@@ -445,45 +533,65 @@ export default function InvoicesPage() {
                 items, paymentNote, remarkNote,
                 payerName, payerDate, receiverName, receiverDate,
             }
-            const res = await fetch('/api/invoices', {
+            const endpoint = selectedBooking ? '/api/invoices' : '/api/package-sale-invoices'
+            const payload = selectedBooking ? {
+                bookingId: selectedBooking.id,
+                invoiceNumber: invoiceNo,
+                totalAmount: beforeVat,
+                vatAmount: vat,
+                grandTotal: itemTotal,
+                customData,
+                isIssued,
+            } : {
+                logId: selectedPackageSale?.id,
+                invoiceNumber: invoiceNo,
+                totalAmount: beforeVat,
+                vatAmount: vat,
+                grandTotal: itemTotal,
+                customData,
+                isIssued,
+            }
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bookingId: selectedBooking.id,
-                    invoiceNumber: invoiceNo,
-                    totalAmount: beforeVat,
-                    vatAmount: vat,
-                    grandTotal: itemTotal,
-                    customData,
-                    isIssued,
-                }),
+                body: JSON.stringify(payload),
             })
             if (res.ok) {
                 const data = await res.json()
-                setBookings(current => current.map(booking => booking.id === selectedBooking.id
-                    ? {
-                        ...booking,
+                if (selectedBooking) {
+                    setBookings(current => current.map(booking => booking.id === selectedBooking.id
+                        ? {
+                            ...booking,
+                            invoice: data.invoice ? {
+                                id: data.invoice.id,
+                                invoiceNumber: data.invoice.invoiceNumber,
+                                isIssued: data.invoice.isIssued,
+                                issuedAt: data.invoice.issuedAt,
+                            } : booking.invoice,
+                        }
+                        : booking))
+                    setSelectedBooking(current => current ? {
+                        ...current,
                         invoice: data.invoice ? {
                             id: data.invoice.id,
                             invoiceNumber: data.invoice.invoiceNumber,
                             isIssued: data.invoice.isIssued,
                             issuedAt: data.invoice.issuedAt,
-                        } : booking.invoice,
-                    }
-                    : booking))
-                setSelectedBooking(current => current ? {
-                    ...current,
-                    invoice: data.invoice ? {
-                        id: data.invoice.id,
-                        invoiceNumber: data.invoice.invoiceNumber,
-                        isIssued: data.invoice.isIssued,
-                        issuedAt: data.invoice.issuedAt,
-                    } : current.invoice,
-                } : current)
+                        } : current.invoice,
+                    } : current)
+                }
+                if (selectedPackageSale) {
+                    const nextInvoice = data.invoice as PackageSaleInvoiceRecord | null
+                    setPackageSales(current => current.map(sale => sale.id === selectedPackageSale.id
+                        ? { ...sale, invoice: nextInvoice }
+                        : sale))
+                    setSelectedPackageSale(current => current ? { ...current, invoice: nextInvoice } : current)
+                }
                 toast.success('บันทึกข้อมูลใบกำกับภาษีสำเร็จ')
                 setEditMode(false)
             } else {
-                toast.error('บันทึกไม่สำเร็จ')
+                const data = await res.json().catch(() => null)
+                toast.error(data?.error || 'บันทึกไม่สำเร็จ')
             }
         } catch {
             toast.error('เกิดข้อผิดพลาดในการบันทึก')
@@ -554,12 +662,12 @@ export default function InvoicesPage() {
     // EditField and EditNumber are defined outside the component to prevent focus loss
 
     // ── Invoice/Receipt detail view ──
-    if (selectedBooking) {
+    if (selectedBooking || selectedPackageSale) {
         return (
             <div>
                 {/* Toolbar */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                    <button onClick={() => { setSelectedBooking(null); setEditMode(false) }} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={closeDetailView} className="btn-admin-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <ChevronLeft size={16} /> กลับ
                     </button>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -919,7 +1027,7 @@ export default function InvoicesPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>ใบกำกับภาษี / ใบเสร็จรับเงิน</h2>
-                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ออกใบกำกับภาษีและใบเสร็จรับเงินจากรายการจอง</p>
+                    <p style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>ออกใบกำกับภาษีและใบเสร็จรับเงินจากรายการจองและการขายแพ็กเกจ</p>
                 </div>
                 <button onClick={handleExportExcel} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '14px', background: '#16a34a' }}>
                     <Download size={16} /> Export Excel
@@ -939,7 +1047,7 @@ export default function InvoicesPage() {
                 </div>
                 <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
                     <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--a-text-muted)' }} />
-                    <input className="admin-input" style={{ width: '100%', paddingLeft: '36px' }} placeholder="ค้นหาเลขจอง / ชื่อลูกค้า" value={search} onChange={e => setSearch(e.target.value)} />
+                    <input className="admin-input" style={{ width: '100%', paddingLeft: '36px' }} placeholder="ค้นหาเลขจอง / เลขขายแพ็กเกจ / ชื่อลูกค้า" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
             </div>
 
@@ -1035,14 +1143,23 @@ export default function InvoicesPage() {
                             <th>ยอดเงิน</th>
                             <th>วันที่ขาย</th>
                             <th>หมดอายุ</th>
+                            <th>สถานะใบกำกับ</th>
+                            <th>จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filteredPackageSales.length === 0 ? (
-                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: 'var(--a-text-muted)' }}>ยังไม่มีข้อมูลขายแพ็คเกจ</td></tr>
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '28px', color: 'var(--a-text-muted)' }}>ยังไม่มีข้อมูลขายแพ็คเกจ</td></tr>
                         ) : filteredPackageSales.map(sale => (
                             <tr key={sale.id}>
-                                <td style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{sale.saleNumber}</td>
+                                <td>
+                                    <div style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{sale.saleNumber}</div>
+                                    {sale.invoice?.invoiceNumber && (
+                                        <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '4px' }}>
+                                            ใบกำกับ: {sale.invoice.invoiceNumber}
+                                        </div>
+                                    )}
+                                </td>
                                 <td>
                                     <div style={{ fontWeight: 600 }}>{sale.customerName}</div>
                                     <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{sale.customerPhone !== '-' ? sale.customerPhone : sale.customerEmail}</div>
@@ -1052,6 +1169,31 @@ export default function InvoicesPage() {
                                 <td style={{ fontWeight: 700 }}>฿{sale.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                 <td>{new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                                 <td>{new Date(sale.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                <td>
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        padding: '4px 10px',
+                                        borderRadius: '999px',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                        background: sale.invoice?.isIssued ? '#dcfce7' : '#f3f4f6',
+                                        color: sale.invoice?.isIssued ? '#166534' : '#6b7280',
+                                    }}>
+                                        {sale.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button onClick={() => selectPackageSale(sale, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">
+                                            <FileText size={14} />
+                                        </button>
+                                        <button onClick={() => selectPackageSale(sale, 'short')} className="btn-admin-outline" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบเสร็จแบบย่อ">
+                                            <Receipt size={14} />
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
