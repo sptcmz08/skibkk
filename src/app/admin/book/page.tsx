@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPackageBookingWindow, formatPackageDate } from '@/lib/package-window'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, MapPin, ArrowRight, ArrowLeft, Check, Trash2, ChevronLeft, ChevronRight, Search, Plus, UserPlus } from 'lucide-react'
@@ -120,7 +121,7 @@ interface UserPackageOption {
     id: string
     remainingHours: number
     expiresAt: string
-    package: { id: string; name: string; totalHours: number }
+    package: { id: string; name: string; totalHours: number; validFrom?: string | null; validTo?: string | null }
 }
 
 function AdminBookInner() {
@@ -1029,7 +1030,9 @@ function AdminBookInner() {
                                 <select className="admin-input" value={selectedUserPackageId} onChange={e => setSelectedUserPackageId(e.target.value)}>
                                     {customerPackages.map(pkg => (
                                         <option key={pkg.id} value={pkg.id}>
-                                            {pkg.package.name} — เหลือ {pkg.remainingHours}/{pkg.package.totalHours} ชม. (หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })})
+                                            {pkg.package.name}
+                                            {formatPackageBookingWindow(pkg.package.validFrom, pkg.package.validTo) ? ` — จองสนามได้วันที่ ${formatPackageBookingWindow(pkg.package.validFrom, pkg.package.validTo)}` : ''}
+                                            {` — เหลือ ${pkg.remainingHours}/${pkg.package.totalHours} ชม. (หมดอายุ ${formatPackageDate(pkg.expiresAt)})`}
                                         </option>
                                     ))}
                                 </select>

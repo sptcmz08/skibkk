@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPackageBookingWindow, formatPackageDate } from '@/lib/package-window'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -29,7 +30,7 @@ export default function BookingPage() {
     const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
     const [slipFile, setSlipFile] = useState<File | null>(null)
     const [slipPreview, setSlipPreview] = useState<string | null>(null)
-    const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string } }>>([])
+    const [userPackages, setUserPackages] = useState<Array<{ id: string; remainingHours: number; expiresAt: string; package: { name: string; validFrom?: string | null; validTo?: string | null } }>>([])
     const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
     const [showTerms, setShowTerms] = useState(false)
     const [termsText, setTermsText] = useState('')
@@ -797,27 +798,62 @@ export default function BookingPage() {
                                 >
                                     <div style={{ fontWeight: 700 }}>ชำระเงินปกติ ฿{total.toLocaleString()}</div>
                                 </button>
-                                {userPackages.map(pkg => (
-                                    <button
-                                        key={pkg.id}
-                                        onClick={() => { setPaymentMethod('PACKAGE'); setSelectedPackageId(pkg.id) }}
-                                        style={{
-                                            padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
-                                            border: selectedPackageId === pkg.id ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
-                                            background: selectedPackageId === pkg.id ? 'rgba(250,204,21,0.15)' : 'transparent',
-                                            color: 'var(--c-text)', fontFamily: 'inherit',
-                                        }}
-                                    >
-                                        <div style={{ fontWeight: 700 }}>{pkg.package.name}</div>
-                                        <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginTop: '4px', display: 'flex', gap: '16px' }}>
-                                            <span>เหลือ {pkg.remainingHours} ชม.</span>
-                                            <span>หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
-                                        </div>
-                                        {pkg.remainingHours < cart.length && (
-                                            <div style={{ fontSize: '12px', color: '#e17055', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>
-                                        )}
-                                    </button>
-                                ))}
+                                {userPackages.map(pkg => {
+                                    const bookingWindow = formatPackageBookingWindow(pkg.package.validFrom, pkg.package.validTo)
+                                    return (
+                                        <button
+                                            key={pkg.id}
+                                            onClick={() => { setPaymentMethod('PACKAGE'); setSelectedPackageId(pkg.id) }}
+                                            style={{
+                                                padding: '12px 16px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
+                                                border: selectedPackageId === pkg.id ? '2px solid var(--c-primary)' : '1px solid var(--c-glass-border)',
+                                                background: selectedPackageId === pkg.id ? 'rgba(250,204,21,0.15)' : 'transparent',
+                                                color: 'var(--c-text)', fontFamily: 'inherit',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700 }}>{pkg.package.name}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {bookingWindow && (
+                                                    <div style={{
+                                                        padding: '7px 9px',
+                                                        borderRadius: '8px',
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                        border: '1px solid rgba(255,255,255,0.06)',
+                                                        lineHeight: 1.35,
+                                                    }}>
+                                                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--c-text-secondary)', marginBottom: '2px' }}>
+                                                            จองสนามได้วันที่
+                                                        </div>
+                                                        <div>{bookingWindow}</div>
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span style={{
+                                                        padding: '5px 8px',
+                                                        borderRadius: '999px',
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                        border: '1px solid rgba(255,255,255,0.06)',
+                                                        lineHeight: 1.2,
+                                                    }}>
+                                                        เหลือ {pkg.remainingHours} ชม.
+                                                    </span>
+                                                    <span style={{
+                                                        padding: '5px 8px',
+                                                        borderRadius: '999px',
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                        border: '1px solid rgba(255,255,255,0.06)',
+                                                        lineHeight: 1.2,
+                                                    }}>
+                                                        หมดอายุ {formatPackageDate(pkg.expiresAt)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {pkg.remainingHours < cart.length && (
+                                                <div style={{ fontSize: '12px', color: '#e17055', marginTop: '4px' }}>⚠️ ชั่วโมงไม่เพียงพอ</div>
+                                            )}
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}

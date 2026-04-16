@@ -91,7 +91,7 @@ export default function BookingsManagement() {
             setPage(0)
         } catch { toast.error('โหลดข้อมูลไม่สำเร็จ') }
         finally { setLoading(false) }
-    }, [search, statusFilter, sourceFilter])
+    }, [search, statusFilter, sourceFilter, dateFrom, dateTo])
 
     useEffect(() => {
         const t = setTimeout(fetchBookings, 300)

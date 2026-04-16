@@ -3,6 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 import ConfirmModal from '@/components/ConfirmModal'
 import DatePickerInput from '@/components/DatePickerInput'
+import { formatPackageBookingWindow, formatPackageDate } from '@/lib/package-window'
 
 import { useState, useEffect } from 'react'
 import { Package, Plus, Trash2, Users, Clock, X, Save, Search, UserPlus, Edit2, Eye } from 'lucide-react'
@@ -18,7 +19,7 @@ interface PackageItem {
 interface UserPkg {
     id: string; remainingHours: number; purchasedAt: string; expiresAt: string
     user: { id: string; name: string; email: string; phone: string }
-    package: { id: string; name: string; totalHours: number; price: number }
+    package: { id: string; name: string; totalHours: number; price: number; validFrom: string | null; validTo: string | null }
     usageSummary?: {
         usedCount: number
         usedHours: number
@@ -174,6 +175,10 @@ export default function PackagesPage() {
     }
 
     const isExpired = (d: string) => new Date(d) < new Date()
+    const getBookingWindowLabel = (validFrom: string | null, validTo: string | null) => {
+        const window = formatPackageBookingWindow(validFrom, validTo)
+        return window ? `จองสนามได้วันที่ ${window}` : null
+    }
 
     if (loading) return <div style={{ textAlign: 'center', padding: '80px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)' }} /></div>
 
@@ -200,11 +205,13 @@ export default function PackagesPage() {
                 <div className="admin-card" style={{ padding: '60px', textAlign: 'center' }}>
                     <Package size={48} style={{ color: '#ccc', marginBottom: '12px' }} />
                     <p style={{ color: 'var(--a-text-muted)', fontWeight: 600 }}>ยังไม่มีแพ็คเกจ</p>
-                    <p style={{ color: 'var(--a-text-muted)', fontSize: '13px' }}>กดปุ่ม "เพิ่มแพ็คเกจ" เพื่อสร้างแพ็คเกจใหม่</p>
+                    <p style={{ color: 'var(--a-text-muted)', fontSize: '13px' }}>กดปุ่ม &quot;เพิ่มแพ็คเกจ&quot; เพื่อสร้างแพ็คเกจใหม่</p>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginBottom: '36px' }}>
-                    {packages.map(pkg => (
+                    {packages.map(pkg => {
+                        const bookingWindowLabel = getBookingWindowLabel(pkg.validFrom, pkg.validTo)
+                        return (
                         <div key={pkg.id} className="admin-card" style={{ padding: '0', overflow: 'hidden' }}>
                             {/* Header */}
                             <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--a-border)' }}>
@@ -217,13 +224,6 @@ export default function PackagesPage() {
                                             <h3 style={{ fontWeight: 700, fontSize: '17px', color: 'var(--a-text)', lineHeight: 1.3, marginBottom: '4px' }}>{pkg.name}</h3>
                                             {pkg.description && (
                                                 <p style={{ fontSize: '13px', color: 'var(--a-text-muted)', lineHeight: 1.4, margin: 0 }}>{pkg.description}</p>
-                                            )}
-                                            {(pkg.validFrom || pkg.validTo) && (
-                                                <div style={{ fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    📅 {pkg.validFrom ? formatDateDMY(pkg.validFrom) : '...'}
-                                                    {' — '}
-                                                    {pkg.validTo ? formatDateDMY(pkg.validTo) : '...'}
-                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -249,12 +249,17 @@ export default function PackagesPage() {
                                 </div>
                             </div>
                             {/* Footer */}
-                            <div style={{ padding: '10px 20px', background: '#fafafa', borderTop: '1px solid var(--a-border)', fontSize: '12px', color: 'var(--a-text-muted)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                                <Clock size={12} /> อายุแพ็คเกจ {pkg.validDays} วัน
+                            <div style={{ padding: '12px 20px', background: '#fafafa', borderTop: '1px solid var(--a-border)', fontSize: '12px', color: 'var(--a-text-muted)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '4px', textAlign: 'center' }}>
+                                {bookingWindowLabel ? (
+                                    <span>{bookingWindowLabel}</span>
+                                ) : (
+                                    <span><Clock size={12} style={{ marginRight: '6px', verticalAlign: 'text-bottom' }} />อายุแพ็คเกจ {pkg.validDays} วัน</span>
+                                )}
+                                <span><Clock size={12} style={{ marginRight: '6px', verticalAlign: 'text-bottom' }} />หมดอายุ {pkg.validTo ? formatPackageDate(pkg.validTo) : `${pkg.validDays} วันหลังมอบแพ็คเกจ`}</span>
                                 {!pkg.isActive && <span style={{ color: 'var(--a-danger)', fontWeight: 700 }}>⛔ ปิดใช้งาน</span>}
                             </div>
                         </div>
-                    ))}
+                    )})}
                 </div>
             )}
 
@@ -284,13 +289,19 @@ export default function PackagesPage() {
                                 {userPackages.map(up => {
                                     const expired = isExpired(up.expiresAt)
                                     const empty = up.remainingHours <= 0
+                                    const bookingWindowLabel = getBookingWindowLabel(up.package.validFrom, up.package.validTo)
                                     return (
                                         <tr key={up.id}>
                                             <td>
                                                 <div style={{ fontWeight: 600 }}>{up.user.name}</div>
                                                 <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{up.user.phone || up.user.email}</div>
                                             </td>
-                                            <td>{up.package.name}</td>
+                                            <td>
+                                                <div style={{ fontWeight: 600 }}>{up.package.name}</div>
+                                                {bookingWindowLabel && (
+                                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '4px' }}>{bookingWindowLabel}</div>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span style={{ fontWeight: 700, color: 'var(--a-text)' }}>
                                                     {up.usageSummary?.usedCount || 0} ครั้ง ({up.usageSummary?.usedHours || 0} ชม.)
@@ -302,7 +313,14 @@ export default function PackagesPage() {
                                                 </span>
                                             </td>
                                             <td>{formatDateDMY(up.purchasedAt)}</td>
-                                            <td>{formatDateDMY(up.expiresAt)}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    {bookingWindowLabel && (
+                                                        <span style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{bookingWindowLabel}</span>
+                                                    )}
+                                                    <span style={{ fontWeight: 600, color: 'var(--a-text)' }}>หมดอายุ {formatPackageDate(up.expiresAt)}</span>
+                                                </div>
+                                            </td>
                                             <td>
                                                 {expired ? (
                                                     <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '12px', background: '#fde8e8', color: '#e74c3c', fontWeight: 600 }}>หมดอายุ</span>
@@ -445,6 +463,9 @@ export default function PackagesPage() {
                                                 <span style={{ fontWeight: 700, color: 'var(--a-primary)' }}>฿{pkg.price.toLocaleString()}</span>
                                             </div>
                                             <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>{pkg.totalHours} ชม. • อายุ {pkg.validDays} วัน</div>
+                                            {getBookingWindowLabel(pkg.validFrom, pkg.validTo) && (
+                                                <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>{getBookingWindowLabel(pkg.validFrom, pkg.validTo)}</div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

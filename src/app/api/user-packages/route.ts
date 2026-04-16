@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
+import { resolvePackageBookingWindow } from '@/lib/package-window'
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
@@ -121,8 +122,14 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'ไม่พบการจอง' }, { status: 404 })
             }
 
-            const packageStart = toDateOnlyUTC(userPkg.purchasedAt)
-            const packageEnd = toDateOnlyUTC(userPkg.expiresAt)
+            const bookingWindow = resolvePackageBookingWindow(
+                userPkg.package?.validFrom,
+                userPkg.package?.validTo,
+                userPkg.purchasedAt,
+                userPkg.expiresAt
+            )
+            const packageStart = bookingWindow.start ? toDateOnlyUTC(bookingWindow.start) : toDateOnlyUTC(userPkg.purchasedAt)
+            const packageEnd = bookingWindow.end ? toDateOnlyUTC(bookingWindow.end) : toDateOnlyUTC(userPkg.expiresAt)
             const outOfRangeDate = booking.bookingItems
                 .map(item => toDateOnlyUTC(item.date))
                 .find(date => date < packageStart || date > packageEnd)

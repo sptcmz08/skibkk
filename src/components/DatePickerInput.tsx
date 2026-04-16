@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 
 type DatePickerInputProps = {
     value: string
@@ -45,16 +46,20 @@ export default function DatePickerInput({
     popupPlacement = 'auto',
 }: DatePickerInputProps) {
     const containerRef = useRef<HTMLDivElement>(null)
+    const popupRef = useRef<HTMLDivElement>(null)
     const selectedDate = useMemo(() => parseDate(value), [value])
     const [open, setOpen] = useState(false)
     const [viewDate, setViewDate] = useState(() => selectedDate || new Date())
     const [resolvedPlacement, setResolvedPlacement] = useState<'top' | 'bottom'>('bottom')
+    const [popupStyle, setPopupStyle] = useState<CSSProperties | null>(null)
 
     useEffect(() => {
         if (!open) return
 
         const handlePointerDown = (event: PointerEvent) => {
-            if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+            const target = event.target as Node
+            if (containerRef.current?.contains(target) || popupRef.current?.contains(target)) return
+            setOpen(false)
         }
 
         const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -72,20 +77,58 @@ export default function DatePickerInput({
     useEffect(() => {
         if (!open) return
 
-        if (popupPlacement === 'top' || popupPlacement === 'bottom') {
-            setResolvedPlacement(popupPlacement)
-            return
+        const updatePopupPosition = () => {
+            const triggerRect = containerRef.current?.getBoundingClientRect()
+            if (!triggerRect) return
+
+            const horizontalMargin = 16
+            const popupWidth = Math.min(Math.max(triggerRect.width, 280), window.innerWidth - horizontalMargin * 2)
+            const popupHeight = popupRef.current?.offsetHeight || 320
+            const spaceBelow = window.innerHeight - triggerRect.bottom
+            const spaceAbove = triggerRect.top
+
+            let placement: 'top' | 'bottom'
+            if (popupPlacement === 'top' || popupPlacement === 'bottom') {
+                placement = popupPlacement
+            } else {
+                placement = spaceBelow < popupHeight && spaceAbove > spaceBelow ? 'top' : 'bottom'
+            }
+
+            setResolvedPlacement(placement)
+
+            const left = Math.min(
+                Math.max(horizontalMargin, triggerRect.left),
+                window.innerWidth - popupWidth - horizontalMargin
+            )
+            const top = placement === 'top'
+                ? Math.max(horizontalMargin, triggerRect.top - popupHeight - 6)
+                : Math.min(window.innerHeight - popupHeight - horizontalMargin, triggerRect.bottom + 6)
+
+            setPopupStyle({
+                position: 'fixed',
+                top,
+                left,
+                width: popupWidth,
+                maxWidth: `calc(100vw - ${horizontalMargin * 2}px)`,
+                padding: '12px',
+                background: '#fff',
+                color: 'var(--a-text)',
+                border: '1px solid var(--a-border)',
+                borderRadius: '8px',
+                boxShadow: '0 14px 32px rgba(15, 23, 42, 0.18)',
+                zIndex: 350,
+            })
         }
 
-        const triggerRect = containerRef.current?.getBoundingClientRect()
-        if (!triggerRect) return
-
-        const estimatedCalendarHeight = 320
-        const spaceBelow = window.innerHeight - triggerRect.bottom
-        const spaceAbove = triggerRect.top
-        const shouldOpenTop = spaceBelow < estimatedCalendarHeight && spaceAbove > spaceBelow
-
-        setResolvedPlacement(shouldOpenTop ? 'top' : 'bottom')
+        updatePopupPosition()
+        const rafId = window.requestAnimationFrame(updatePopupPosition)
+        window.addEventListener('resize', updatePopupPosition)
+        window.addEventListener('scroll', updatePopupPosition, true)
+        return () => {
+            window.cancelAnimationFrame(rafId)
+            window.removeEventListener('resize', updatePopupPosition)
+            window.removeEventListener('scroll', updatePopupPosition, true)
+        }
     }, [open, popupPlacement])
 
     const calendarDays = useMemo(() => {
@@ -164,24 +207,13 @@ export default function DatePickerInput({
                 ▼
             </button>
 
-            {open && (
+            {open && typeof document !== 'undefined' && popupStyle && createPortal(
                 <div
+                    ref={popupRef}
                     role="dialog"
                     aria-label={placeholder}
-                    style={{
-                        position: 'absolute',
-                        ...(resolvedPlacement === 'top' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
-                        left: 0,
-                        width: '280px',
-                        maxWidth: 'calc(100vw - 32px)',
-                        padding: '12px',
-                        background: '#fff',
-                        color: 'var(--a-text)',
-                        border: '1px solid var(--a-border)',
-                        borderRadius: '8px',
-                        boxShadow: '0 14px 32px rgba(15, 23, 42, 0.18)',
-                        zIndex: 300,
-                    }}
+                    data-placement={resolvedPlacement}
+                    style={popupStyle}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <button type="button" onClick={() => changeMonth(-1)} style={calendarNavButtonStyle}>‹</button>
@@ -227,7 +259,8 @@ export default function DatePickerInput({
                             )
                         })}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )

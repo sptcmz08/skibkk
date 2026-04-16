@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPackageBookingWindow, formatPackageDate } from '@/lib/package-window'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { User, Calendar, Clock, MapPin, Package, Settings, History, Mail, Phone, Shield, ChevronRight, Sparkles, Save, Pencil } from 'lucide-react'
@@ -21,7 +22,7 @@ interface UserPackage {
     remainingHours: number
     purchasedAt: string
     expiresAt: string
-    package: { id: string; name: string; totalHours: number; price: number }
+    package: { id: string; name: string; totalHours: number; price: number; validFrom: string | null; validTo: string | null }
 }
 interface PackageUsage {
     id: string
@@ -414,12 +415,16 @@ export default function ProfilePage() {
                             </div>
                         ) : packages.map(pkg => {
                             const packageUsages = packageUsage.filter(log => (log.userPackageId || null) === pkg.id)
+                            const bookingWindow = formatPackageBookingWindow(pkg.package.validFrom, pkg.package.validTo)
                             return (
                                 <div key={pkg.id} style={{ background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)', borderRadius: '18px', padding: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
                                         <div>
                                             <div style={{ fontWeight: 800, fontSize: '17px' }}>{pkg.package.name}</div>
-                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>ซื้อเมื่อ {new Date(pkg.purchasedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} • หมดอายุ {new Date(pkg.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                                {bookingWindow && <span>จองสนามได้วันที่ {bookingWindow}</span>}
+                                                <span>ซื้อเมื่อ {formatPackageDate(pkg.purchasedAt)} • หมดอายุ {formatPackageDate(pkg.expiresAt)}</span>
+                                            </div>
                                         </div>
                                         <div style={{ fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>
                                             เหลือ {pkg.remainingHours} / {pkg.package.totalHours} ชม.
