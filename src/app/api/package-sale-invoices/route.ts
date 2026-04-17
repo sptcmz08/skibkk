@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import {
-    formatPackageSaleNumberFromUserPackageId,
     parsePackageSaleAuditDetails,
     type PackageSaleAuditDetails,
 } from '@/lib/package-sale-invoice'
+import { generateNextPackageSaleNumber } from '@/lib/document-number-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,8 +45,8 @@ const buildPackageSaleDetails = (userPackage: {
     expiresAt: Date
     user: { id: string; name: string; email: string; phone: string }
     package: { id: string; name: string; totalHours: number; price: number; validDays: number }
-}): PackageSaleAuditDetails => ({
-    saleNumber: formatPackageSaleNumberFromUserPackageId(userPackage.id),
+}, saleNumber: string): PackageSaleAuditDetails => ({
+    saleNumber,
     customer: {
         id: userPackage.user.id,
         name: userPackage.user.name,
@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
         const {
             logId,
             userPackageId,
+            saleNumber,
             invoiceNumber,
             totalAmount,
             vatAmount,
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
         } = body as {
             logId?: string
             userPackageId?: string
+            saleNumber?: string
             invoiceNumber?: string
             totalAmount?: number
             vatAmount?: number
@@ -150,7 +152,10 @@ export async function POST(req: NextRequest) {
             if (!userPackage) {
                 return NextResponse.json({ error: 'ไม่พบข้อมูลแพ็คเกจลูกค้า' }, { status: 404 })
             }
-            seedDetails = buildPackageSaleDetails(userPackage)
+            const requestedSaleNumber = typeof saleNumber === 'string' && /^PKG-\d{10}$/.test(saleNumber)
+                ? saleNumber
+                : null
+            seedDetails = buildPackageSaleDetails(userPackage, requestedSaleNumber || await generateNextPackageSaleNumber())
             saleLog = await prisma.auditLog.create({
                 data: {
                     userId: user.id,

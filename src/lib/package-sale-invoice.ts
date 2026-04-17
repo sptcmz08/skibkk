@@ -43,6 +43,13 @@ export const parsePackageSaleAuditDetails = (raw: string | null | undefined): Pa
     }
 }
 
-export const formatPackageSaleInvoiceNumber = (saleNumber: string) => `INV-${saleNumber}`
+export const formatPackageSaleInvoiceNumber = (saleNumber: string) => saleNumber
 
 export const formatPackageSaleNumberFromUserPackageId = (userPackageId: string) => `PKG-${userPackageId.slice(0, 8).toUpperCase()}`
+
+export const formatPackageSaleNumberFromDateSequence = (date: Date | string, sequence: number) => {
+    const bangkokDate = new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+    const year = bangkokDate.getFullYear()
+    const month = String(bangkokDate.getMonth() + 1).padStart(2, '0')
+    return `PKG-${year}${month}${String(sequence).padStart(4, '0')}`
+}

@@ -4,20 +4,12 @@ import { requireAdmin } from '@/lib/auth'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
 import { resolvePackageBookingWindow } from '@/lib/package-window'
+import { generateNextPackageSaleNumber } from '@/lib/document-number-service'
 
 export const dynamic = 'force-dynamic'
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
 const toDateTime = (value: Date | string) => new Date(value)
-const generatePackageSaleNumber = () => {
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = String(now.getMonth() + 1).padStart(2, '0')
-    const d = String(now.getDate()).padStart(2, '0')
-    const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-    return `PKG${y}${m}${d}${rand}`
-}
-
 // GET — list all user-packages (admin view)
 export async function GET(req: NextRequest) {
     try {
@@ -132,7 +124,7 @@ export async function POST(req: NextRequest) {
         expiresAt.setDate(expiresAt.getDate() + pkg.validDays)
 
         const purchasedAt = new Date()
-        const saleNumber = generatePackageSaleNumber()
+        const saleNumber = await generateNextPackageSaleNumber()
         const userPackage = await prisma.$transaction(async tx => {
             const createdUserPackage = await tx.userPackage.create({
                 data: {

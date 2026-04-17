@@ -10,7 +10,7 @@ import XLSX from 'xlsx-js-style'
 import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
 import {
     formatPackageSaleInvoiceNumber,
-    formatPackageSaleNumberFromUserPackageId,
+    formatPackageSaleNumberFromDateSequence,
     parsePackageSaleAuditDetails,
     type PackageSaleInvoiceRecord,
 } from '@/lib/package-sale-invoice'
@@ -146,6 +146,25 @@ export default function InvoicesPage() {
                 : []
             const userPackages = Array.isArray(userPackageData?.userPackages) ? userPackageData.userPackages as UserPackageInvoiceSource[] : []
             const saleLogByUserPackageId = new Map(saleLogs.map(log => [log.entityId, log]).filter((entry): entry is [string, typeof saleLogs[number]] => Boolean(entry[0])))
+            const fallbackSequenceByMonth = new Map<string, number>()
+            const getPackageMonthKey = (value: string) => {
+                const date = new Date(new Date(value).toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+                return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`
+            }
+            for (const log of saleLogs) {
+                const details = parsePackageSaleAuditDetails(log.details)
+                const match = details.saleNumber?.match(/^PKG-(\d{6})(\d{4})$/)
+                if (!match) continue
+                fallbackSequenceByMonth.set(match[1], Math.max(fallbackSequenceByMonth.get(match[1]) || 0, Number(match[2])))
+            }
+            const fallbackSaleNumberByUserPackageId = new Map<string, string>()
+            for (const userPackage of [...userPackages].sort((a, b) => new Date(a.purchasedAt).getTime() - new Date(b.purchasedAt).getTime())) {
+                if (saleLogByUserPackageId.has(userPackage.id)) continue
+                const monthKey = getPackageMonthKey(userPackage.purchasedAt)
+                const nextFallbackSequence = (fallbackSequenceByMonth.get(monthKey) || 0) + 1
+                fallbackSequenceByMonth.set(monthKey, nextFallbackSequence)
+                fallbackSaleNumberByUserPackageId.set(userPackage.id, formatPackageSaleNumberFromDateSequence(userPackage.purchasedAt, nextFallbackSequence))
+            }
             const mappedSales: PackageSaleEntry[] = userPackages.map(userPackage => {
                 const log = saleLogByUserPackageId.get(userPackage.id)
                 const details = parsePackageSaleAuditDetails(log?.details)
@@ -153,7 +172,7 @@ export default function InvoicesPage() {
                     id: userPackage.id,
                     userPackageId: userPackage.id,
                     logId: log?.id || null,
-                    saleNumber: details.saleNumber || formatPackageSaleNumberFromUserPackageId(userPackage.id),
+                    saleNumber: details.saleNumber || fallbackSaleNumberByUserPackageId.get(userPackage.id) || formatPackageSaleNumberFromDateSequence(userPackage.purchasedAt, 1),
                     createdAt: details.purchasedAt || userPackage.purchasedAt,
                     customerName: details.customer?.name || userPackage.user.name || '-',
                     customerEmail: details.customer?.email || userPackage.user.email || '-',
@@ -204,7 +223,7 @@ export default function InvoicesPage() {
         const term = search.toLowerCase()
         const matchSearch = !term ||
             sale.saleNumber.toLowerCase().includes(term) ||
-            (sale.invoice?.invoiceNumber || '').toLowerCase().includes(term) ||
+            (sale.invoice?.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber)).toLowerCase().includes(term) ||
             sale.customerName.toLowerCase().includes(term) ||
             sale.packageName.toLowerCase().includes(term)
         if (!matchSearch) return false
@@ -234,6 +253,10 @@ export default function InvoicesPage() {
         },
     ])
     const getPackageSalePaymentNote = () => 'ขายแพ็กเกจให้ลูกค้า • ชำระเงินเรียบร้อยแล้ว'
+    const getPackageSaleDocumentNumber = (sale: PackageSaleEntry, savedInvoiceNumber?: string | null) => {
+        if (savedInvoiceNumber && !savedInvoiceNumber.startsWith('INV-')) return savedInvoiceNumber
+        return formatPackageSaleInvoiceNumber(sale.saleNumber)
+    }
 
     // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
@@ -499,7 +522,7 @@ export default function InvoicesPage() {
                 setCustomerName((cd.customerName as string) || sale.customerName)
                 setCustomerEmail((cd.customerEmail as string) || sale.customerEmail)
                 setCustomerPhone((cd.customerPhone as string) || (sale.customerPhone !== '-' ? sale.customerPhone : ''))
-                setInvoiceNo((cd.invoiceNo as string) || data.invoice.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber))
+                setInvoiceNo(getPackageSaleDocumentNumber(sale, (cd.invoiceNo as string) || data.invoice.invoiceNumber))
                 setIssueDate((cd.issueDate as string) || formatThaiDate(sale.createdAt))
                 setRefNo((cd.refNo as string) || sale.saleNumber)
                 setItems((cd.items as EditableItem[]) || getPackageSaleItems(sale))
@@ -516,7 +539,7 @@ export default function InvoicesPage() {
         setCustomerName(sale.customerName)
         setCustomerEmail(sale.customerEmail !== '-' ? sale.customerEmail : '')
         setCustomerPhone(sale.customerPhone !== '-' ? sale.customerPhone : '')
-        setInvoiceNo(sale.invoice?.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber))
+        setInvoiceNo(getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber))
         setIssueDate(formatThaiDate(sale.createdAt))
         setRefNo(sale.saleNumber)
         setItems(getPackageSaleItems(sale))
@@ -558,6 +581,7 @@ export default function InvoicesPage() {
             } : {
                 logId: selectedPackageSale?.logId || undefined,
                 userPackageId: selectedPackageSale?.userPackageId,
+                saleNumber: selectedPackageSale?.saleNumber,
                 invoiceNumber: invoiceNo,
                 totalAmount: beforeVat,
                 vatAmount: vat,
@@ -1165,13 +1189,15 @@ export default function InvoicesPage() {
                     <tbody>
                         {filteredPackageSales.length === 0 ? (
                             <tr><td colSpan={9} style={{ textAlign: 'center', padding: '28px', color: 'var(--a-text-muted)' }}>ยังไม่มีข้อมูลขายแพ็คเกจ</td></tr>
-                        ) : filteredPackageSales.map(sale => (
+                        ) : filteredPackageSales.map(sale => {
+                            const packageInvoiceNumber = getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber)
+                            return (
                             <tr key={sale.id}>
                                 <td>
-                                    <div style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{sale.saleNumber}</div>
-                                    {sale.invoice?.invoiceNumber && (
+                                    <div style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{packageInvoiceNumber}</div>
+                                    {sale.saleNumber !== packageInvoiceNumber && (
                                         <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '4px' }}>
-                                            ใบกำกับ: {sale.invoice.invoiceNumber}
+                                            อ้างอิง: {sale.saleNumber}
                                         </div>
                                     )}
                                 </td>
@@ -1210,7 +1236,7 @@ export default function InvoicesPage() {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                        )})}
                     </tbody>
                 </table>
             </div>

@@ -29,3 +29,34 @@ export async function generateNextBookingNumber() {
 
     return `${prefix}${String(maxSequence + 1).padStart(5, '0')}`
 }
+
+export async function generateNextPackageSaleNumber() {
+    const yearMonth = getBangkokYearMonth()
+    const prefix = `PKG-${yearMonth}`
+    const pattern = new RegExp(`^${prefix}(\\d{4})$`)
+
+    const logs = await prisma.auditLog.findMany({
+        where: {
+            action: 'PACKAGE_ASSIGN',
+            entityType: 'user_package',
+            details: { contains: prefix },
+        },
+        select: { details: true },
+    })
+
+    let maxSequence = 0
+    for (const log of logs) {
+        let saleNumber = ''
+        try {
+            const details = JSON.parse(log.details || '{}') as { saleNumber?: string }
+            saleNumber = details.saleNumber || ''
+        } catch {
+            continue
+        }
+        const match = saleNumber.match(pattern)
+        if (!match) continue
+        maxSequence = Math.max(maxSequence, parseInt(match[1], 10))
+    }
+
+    return `${prefix}${String(maxSequence + 1).padStart(4, '0')}`
+}
