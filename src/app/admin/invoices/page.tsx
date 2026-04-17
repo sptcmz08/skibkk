@@ -136,7 +136,8 @@ export default function InvoicesPage() {
             fetch('/api/audit-logs?action=PACKAGE_ASSIGN&entityType=user_package&limit=500', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ logs: [] })),
             fetch('/api/admin/user-packages', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ userPackages: [] })),
         ]).then(([bookingData, settings, auditData, userPackageData]) => {
-            setBookings((bookingData.bookings || []).filter((b: Booking) => {
+            const bookingRows = (bookingData.bookings || []) as Booking[]
+            setBookings(bookingRows.filter((b: Booking) => {
                 if (b.status === 'CANCELLED') return false
                 const isPackageBooking = b.payments?.some(payment => payment.method === 'PACKAGE') || b.totalAmount <= 0
                 return !isPackageBooking
@@ -151,11 +152,21 @@ export default function InvoicesPage() {
                 const date = new Date(new Date(value).toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
                 return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`
             }
-            for (const log of saleLogs) {
-                const details = parsePackageSaleAuditDetails(log.details)
-                const match = details.saleNumber?.match(/^PKG-(\d{6})(\d{4})$/)
+            for (const booking of bookingRows) {
+                const match = booking.bookingNumber.match(/^BK(\d{6})(\d{5})$/)
                 if (!match) continue
                 fallbackSequenceByMonth.set(match[1], Math.max(fallbackSequenceByMonth.get(match[1]) || 0, Number(match[2])))
+            }
+            for (const log of saleLogs) {
+                const details = parsePackageSaleAuditDetails(log.details)
+                const modernMatch = details.saleNumber?.match(/^PKG(\d{6})(\d{5})$/)
+                if (modernMatch) {
+                    fallbackSequenceByMonth.set(modernMatch[1], Math.max(fallbackSequenceByMonth.get(modernMatch[1]) || 0, Number(modernMatch[2])))
+                    continue
+                }
+                const legacyMatch = details.saleNumber?.match(/^PKG-(\d{6})(\d{4})$/)
+                if (!legacyMatch) continue
+                fallbackSequenceByMonth.set(legacyMatch[1], Math.max(fallbackSequenceByMonth.get(legacyMatch[1]) || 0, Number(legacyMatch[2])))
             }
             const fallbackSaleNumberByUserPackageId = new Map<string, string>()
             for (const userPackage of [...userPackages].sort((a, b) => new Date(a.purchasedAt).getTime() - new Date(b.purchasedAt).getTime())) {
@@ -168,11 +179,12 @@ export default function InvoicesPage() {
             const mappedSales: PackageSaleEntry[] = userPackages.map(userPackage => {
                 const log = saleLogByUserPackageId.get(userPackage.id)
                 const details = parsePackageSaleAuditDetails(log?.details)
+                const loggedSaleNumber = details.saleNumber && /^PKG\d{11}$/.test(details.saleNumber) ? details.saleNumber : ''
                 return {
                     id: userPackage.id,
                     userPackageId: userPackage.id,
                     logId: log?.id || null,
-                    saleNumber: details.saleNumber || fallbackSaleNumberByUserPackageId.get(userPackage.id) || formatPackageSaleNumberFromDateSequence(userPackage.purchasedAt, 1),
+                    saleNumber: loggedSaleNumber || fallbackSaleNumberByUserPackageId.get(userPackage.id) || formatPackageSaleNumberFromDateSequence(userPackage.purchasedAt, 1),
                     createdAt: details.purchasedAt || userPackage.purchasedAt,
                     customerName: details.customer?.name || userPackage.user.name || '-',
                     customerEmail: details.customer?.email || userPackage.user.email || '-',
@@ -254,13 +266,13 @@ export default function InvoicesPage() {
     ])
     const getPackageSalePaymentNote = () => 'ขายแพ็กเกจให้ลูกค้า • ชำระเงินเรียบร้อยแล้ว'
     const getPackageSaleDocumentNumber = (sale: PackageSaleEntry, savedInvoiceNumber?: string | null) => {
-        if (savedInvoiceNumber && !savedInvoiceNumber.startsWith('INV-')) return savedInvoiceNumber
+        if (savedInvoiceNumber && /^INV-\d{11}$/.test(savedInvoiceNumber)) return savedInvoiceNumber
         return formatPackageSaleInvoiceNumber(sale.saleNumber)
     }
 
     // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
-        if (filtered.length === 0) return toast.error('ไม่มีข้อมูลสำหรับ Export')
+        if (invoiceRows.length === 0) return toast.error('ไม่มีข้อมูลสำหรับ Export')
 
         const wb = XLSX.utils.book_new()
 
@@ -326,28 +338,39 @@ export default function InvoicesPage() {
         ])
 
         // Data rows
-        filtered.forEach((b, idx) => {
-            const beforeVat = Math.round((b.totalAmount / 1.07) * 100) / 100
-            const vatAmt = Math.round((b.totalAmount - beforeVat) * 100) / 100
-            const serviceDate = getServiceDatesText(b.bookingItems)
-            const payMethod = b.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (b.payments[0]?.method || '-')
-            const payAmount = b.payments[0]?.amount || b.totalAmount
-            const uniqueCourts = [...new Set(b.bookingItems.map(i => i.court.name))]
-            const sportType = b.participants[0]?.sportType || ''
-            const courtNames = uniqueCourts.join(', ') + (sportType ? ` (${sportType})` : '')
+        invoiceRows.forEach((row, idx) => {
+            const isPackage = row.type === 'package'
+            const amount = isPackage ? row.sale.price : row.booking.totalAmount
+            const beforeVat = Math.round((amount / 1.07) * 100) / 100
+            const vatAmt = Math.round((amount - beforeVat) * 100) / 100
+            const createdAt = isPackage ? row.sale.createdAt : row.booking.createdAt
+            const serviceDate = isPackage ? '-' : getServiceDatesText(row.booking.bookingItems)
+            const payMethod = isPackage
+                ? 'โอนเงิน'
+                : row.booking.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (row.booking.payments[0]?.method || '-')
+            const payAmount = isPackage ? row.sale.price : row.booking.payments[0]?.amount || row.booking.totalAmount
+            const uniqueCourts = isPackage ? [] : [...new Set(row.booking.bookingItems.map(i => i.court.name))]
+            const sportType = isPackage ? '' : row.booking.participants[0]?.sportType || ''
+            const itemName = isPackage
+                ? `แพ็กเกจ ${row.sale.packageName} (${row.sale.totalHours} ชม.)`
+                : uniqueCourts.join(', ') + (sportType ? ` (${sportType})` : '')
+            const invoiceNumber = isPackage
+                ? getPackageSaleDocumentNumber(row.sale, row.sale.invoice?.invoiceNumber)
+                : formatInvoiceNumberFromBookingNumber(row.booking.bookingNumber)
+            const customerName = isPackage ? row.sale.customerName : row.booking.user.name
 
             rows.push([
                 { v: idx + 1, s: cellCenter },
-                { v: formatShortDate(b.createdAt), s: cellCenter },
-                { v: formatInvoiceNumberFromBookingNumber(b.bookingNumber), s: cellStyle },
-                { v: courtNames, s: cellStyle },
-                { v: b.user.name, s: cellStyle },
+                { v: formatShortDate(createdAt), s: cellCenter },
+                { v: invoiceNumber, s: cellStyle },
+                { v: itemName, s: cellStyle },
+                { v: customerName, s: cellStyle },
                 { v: beforeVat, s: numStyle },
                 { v: vatAmt, s: numStyle },
-                { v: b.totalAmount, s: numStyle },
-                { v: formatShortDate(b.createdAt), s: cellCenter },
+                { v: amount, s: numStyle },
+                { v: formatShortDate(createdAt), s: cellCenter },
                 { v: serviceDate, s: cellCenter },
-                { v: formatShortDate(b.createdAt), s: cellCenter },
+                { v: formatShortDate(createdAt), s: cellCenter },
                 { v: payMethod, s: cellStyle },
                 { v: payAmount, s: numStyle },
                 { v: '', s: cellStyle },
@@ -356,9 +379,9 @@ export default function InvoicesPage() {
         })
 
         // Totals row
-        const totalBV = filtered.reduce((s, b) => s + Math.round((b.totalAmount / 1.07) * 100) / 100, 0)
-        const totalV = filtered.reduce((s, b) => { const bv = Math.round((b.totalAmount / 1.07) * 100) / 100; return s + Math.round((b.totalAmount - bv) * 100) / 100 }, 0)
-        const totalAll = filtered.reduce((s, b) => s + b.totalAmount, 0)
+        const totalAll = invoiceRows.reduce((sum, row) => sum + (row.type === 'package' ? row.sale.price : row.booking.totalAmount), 0)
+        const totalBV = Math.round((totalAll / 1.07) * 100) / 100
+        const totalV = Math.round((totalAll - totalBV) * 100) / 100
         rows.push([
             { v: '', s: totalsLabel },
             { v: 'รวม', s: totalsLabel },
@@ -1060,6 +1083,11 @@ export default function InvoicesPage() {
         )
     }
 
+    const invoiceRows = [
+        ...filtered.map(booking => ({ type: 'booking' as const, sortDate: booking.createdAt, booking })),
+        ...filteredPackageSales.map(sale => ({ type: 'package' as const, sortDate: sale.createdAt, sale })),
+    ].sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
+
     // ── Main list ──
     return (
         <FadeIn><div>
@@ -1101,12 +1129,62 @@ export default function InvoicesPage() {
                     <tbody>
                         {loading ? (
                             <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>กำลังโหลด...</td></tr>
-                        ) : filtered.length === 0 ? (
+                        ) : invoiceRows.length === 0 ? (
                             <tr><td colSpan={10} style={{ textAlign: 'center', padding: '60px', color: 'var(--a-text-muted)' }}>
                                 <FileText size={40} style={{ marginBottom: '12px', opacity: 0.4, display: 'block', margin: '0 auto 12px' }} />
                                 <p style={{ fontWeight: 600 }}>ยังไม่มีรายการ</p>
                             </td></tr>
-                        ) : filtered.map(b => {
+                        ) : invoiceRows.map(row => {
+                            if (row.type === 'package') {
+                                const sale = row.sale
+                                const bv = sale.price / 1.07
+                                const v = sale.price - bv
+                                return (
+                                    <tr key={`package-${sale.id}`}>
+                                        <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber)}</td>
+                                        <td>{sale.saleNumber}</td>
+                                        <td>
+                                            <div>{sale.customerName}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{sale.customerPhone !== '-' ? sale.customerPhone : sale.customerEmail}</div>
+                                        </td>
+                                        <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                        <td>฿{v.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ fontWeight: 700 }}>฿{sale.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                        <td>
+                                            <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap' }}>
+                                                โอนเงิน
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                padding: '4px 10px',
+                                                borderRadius: '999px',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                whiteSpace: 'nowrap',
+                                                background: sale.invoice?.isIssued ? '#dcfce7' : '#f3f4f6',
+                                                color: sale.invoice?.isIssued ? '#166534' : '#6b7280',
+                                            }}>
+                                                {sale.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
+                                            </span>
+                                        </td>
+                                        <td>{new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button onClick={() => selectPackageSale(sale, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">
+                                                    <FileText size={14} />
+                                                </button>
+                                                <button onClick={() => selectPackageSale(sale, 'short')} className="btn-admin-outline" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบเสร็จแบบย่อ">
+                                                    <Receipt size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            }
+                            const b = row.booking
                             const bv = b.totalAmount / 1.07
                             const v = b.totalAmount - bv
                             return (
@@ -1168,78 +1246,6 @@ export default function InvoicesPage() {
                 </table>
             </div>
 
-            <div className="admin-card" style={{ marginTop: '16px' }}>
-                <div className="admin-card-header">
-                    <h3 className="admin-card-title">รายการขายแพ็คเกจ (ลูกค้าซื้อแพ็คเกจ)</h3>
-                </div>
-                <table className="admin-table">
-                    <thead>
-                        <tr>
-                            <th>เลขที่เอกสาร</th>
-                            <th>ลูกค้า</th>
-                            <th>แพ็คเกจ</th>
-                            <th>จำนวนชั่วโมง</th>
-                            <th>ยอดเงิน</th>
-                            <th>วันที่ขาย</th>
-                            <th>หมดอายุ</th>
-                            <th>สถานะใบกำกับ</th>
-                            <th>จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredPackageSales.length === 0 ? (
-                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '28px', color: 'var(--a-text-muted)' }}>ยังไม่มีข้อมูลขายแพ็คเกจ</td></tr>
-                        ) : filteredPackageSales.map(sale => {
-                            const packageInvoiceNumber = getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber)
-                            return (
-                            <tr key={sale.id}>
-                                <td>
-                                    <div style={{ fontWeight: 700, fontFamily: "'Inter'" }}>{packageInvoiceNumber}</div>
-                                    {sale.saleNumber !== packageInvoiceNumber && (
-                                        <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '4px' }}>
-                                            อ้างอิง: {sale.saleNumber}
-                                        </div>
-                                    )}
-                                </td>
-                                <td>
-                                    <div style={{ fontWeight: 600 }}>{sale.customerName}</div>
-                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{sale.customerPhone !== '-' ? sale.customerPhone : sale.customerEmail}</div>
-                                </td>
-                                <td>{sale.packageName}</td>
-                                <td>{sale.totalHours} ชม.</td>
-                                <td style={{ fontWeight: 700 }}>฿{sale.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                                <td>{new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                                <td>{new Date(sale.expiresAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                                <td>
-                                    <span style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        padding: '4px 10px',
-                                        borderRadius: '999px',
-                                        fontSize: '12px',
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
-                                        background: sale.invoice?.isIssued ? '#dcfce7' : '#f3f4f6',
-                                        color: sale.invoice?.isIssued ? '#166534' : '#6b7280',
-                                    }}>
-                                        {sale.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                        <button onClick={() => selectPackageSale(sale, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">
-                                            <FileText size={14} />
-                                        </button>
-                                        <button onClick={() => selectPackageSale(sale, 'short')} className="btn-admin-outline" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบเสร็จแบบย่อ">
-                                            <Receipt size={14} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        )})}
-                    </tbody>
-                </table>
-            </div>
         </div></FadeIn>
     )
 }

@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
             if (!userPackage) {
                 return NextResponse.json({ error: 'ไม่พบข้อมูลแพ็คเกจลูกค้า' }, { status: 404 })
             }
-            const requestedSaleNumber = typeof saleNumber === 'string' && /^PKG-\d{10}$/.test(saleNumber)
+            const requestedSaleNumber = typeof saleNumber === 'string' && /^PKG\d{11}$/.test(saleNumber)
                 ? saleNumber
                 : null
             seedDetails = buildPackageSaleDetails(userPackage, requestedSaleNumber || await generateNextPackageSaleNumber())

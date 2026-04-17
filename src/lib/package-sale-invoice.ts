@@ -43,7 +43,18 @@ export const parsePackageSaleAuditDetails = (raw: string | null | undefined): Pa
     }
 }
 
-export const formatPackageSaleInvoiceNumber = (saleNumber: string) => saleNumber
+export const formatPackageSaleInvoiceNumber = (saleNumber: string) => {
+    const newFormat = saleNumber.match(/^PKG(\d{6})(\d{5})$/)
+    if (newFormat) return `INV-${newFormat[1]}${newFormat[2]}`
+
+    const legacyMonthlyFormat = saleNumber.match(/^PKG-(\d{6})(\d{4})$/)
+    if (legacyMonthlyFormat) return `INV-${legacyMonthlyFormat[1]}${legacyMonthlyFormat[2].padStart(5, '0')}`
+
+    const legacyRandomFormat = saleNumber.match(/^PKG(\d{6})\d+$/)
+    if (legacyRandomFormat) return `INV-${saleNumber.slice(3)}`
+
+    return saleNumber.startsWith('INV-') ? saleNumber : `INV-${saleNumber}`
+}
 
 export const formatPackageSaleNumberFromUserPackageId = (userPackageId: string) => `PKG-${userPackageId.slice(0, 8).toUpperCase()}`
 
@@ -51,5 +62,5 @@ export const formatPackageSaleNumberFromDateSequence = (date: Date | string, seq
     const bangkokDate = new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
     const year = bangkokDate.getFullYear()
     const month = String(bangkokDate.getMonth() + 1).padStart(2, '0')
-    return `PKG-${year}${month}${String(sequence).padStart(4, '0')}`
+    return `PKG${year}${month}${String(sequence).padStart(5, '0')}`
 }

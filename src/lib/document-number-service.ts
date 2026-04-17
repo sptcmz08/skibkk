@@ -10,42 +10,35 @@ function getBangkokYearMonth(date = getBangkokNow()) {
     return `${year}${month}`
 }
 
-export async function generateNextBookingNumber() {
-    const yearMonth = getBangkokYearMonth()
-    const prefix = `BK${yearMonth}`
-    const pattern = new RegExp(`^${prefix}(\\d{5})$`)
+async function getMaxDocumentSequence(yearMonth: string) {
+    const bookingPrefix = `BK${yearMonth}`
+    const packagePrefix = `PKG${yearMonth}`
+    const bookingPattern = new RegExp(`^${bookingPrefix}(\\d{5})$`)
+    const packagePattern = new RegExp(`^${packagePrefix}(\\d{5})$`)
 
-    const existing = await prisma.booking.findMany({
-        where: { bookingNumber: { startsWith: prefix } },
-        select: { bookingNumber: true },
-    })
+    const [bookings, packageLogs] = await Promise.all([
+        prisma.booking.findMany({
+            where: { bookingNumber: { startsWith: bookingPrefix } },
+            select: { bookingNumber: true },
+        }),
+        prisma.auditLog.findMany({
+            where: {
+                action: 'PACKAGE_ASSIGN',
+                entityType: 'user_package',
+                details: { contains: packagePrefix },
+            },
+            select: { details: true },
+        }),
+    ])
 
     let maxSequence = 0
-    for (const booking of existing) {
-        const match = booking.bookingNumber.match(pattern)
+    for (const booking of bookings) {
+        const match = booking.bookingNumber.match(bookingPattern)
         if (!match) continue
         maxSequence = Math.max(maxSequence, parseInt(match[1], 10))
     }
 
-    return `${prefix}${String(maxSequence + 1).padStart(5, '0')}`
-}
-
-export async function generateNextPackageSaleNumber() {
-    const yearMonth = getBangkokYearMonth()
-    const prefix = `PKG-${yearMonth}`
-    const pattern = new RegExp(`^${prefix}(\\d{4})$`)
-
-    const logs = await prisma.auditLog.findMany({
-        where: {
-            action: 'PACKAGE_ASSIGN',
-            entityType: 'user_package',
-            details: { contains: prefix },
-        },
-        select: { details: true },
-    })
-
-    let maxSequence = 0
-    for (const log of logs) {
+    for (const log of packageLogs) {
         let saleNumber = ''
         try {
             const details = JSON.parse(log.details || '{}') as { saleNumber?: string }
@@ -53,10 +46,26 @@ export async function generateNextPackageSaleNumber() {
         } catch {
             continue
         }
-        const match = saleNumber.match(pattern)
+        const match = saleNumber.match(packagePattern)
         if (!match) continue
         maxSequence = Math.max(maxSequence, parseInt(match[1], 10))
     }
 
-    return `${prefix}${String(maxSequence + 1).padStart(4, '0')}`
+    return maxSequence
+}
+
+export async function generateNextBookingNumber() {
+    const yearMonth = getBangkokYearMonth()
+    const prefix = `BK${yearMonth}`
+    const maxSequence = await getMaxDocumentSequence(yearMonth)
+
+    return `${prefix}${String(maxSequence + 1).padStart(5, '0')}`
+}
+
+export async function generateNextPackageSaleNumber() {
+    const yearMonth = getBangkokYearMonth()
+    const prefix = `PKG${yearMonth}`
+    const maxSequence = await getMaxDocumentSequence(yearMonth)
+
+    return `${prefix}${String(maxSequence + 1).padStart(5, '0')}`
 }
