@@ -784,7 +784,7 @@ export default function BookingPage() {
                     {userPackages.length > 0 && (
                         <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
                             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Package size={18} /> ใช้แพ็คเกจแทนการชำระเงิน
+                                <Package size={18} /> เลือกวิธีชำระเงิน
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <button
@@ -862,7 +862,7 @@ export default function BookingPage() {
                     {paymentMethod === 'PROMPTPAY' && (
                         <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
                             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <QrCode size={18} /> สแกน QR Code ชำระเงิน
+                                <QrCode size={18} /> ชำระเงินผ่านเลขบัญชี
                             </h3>
 
                             {/* QR Code display */}
