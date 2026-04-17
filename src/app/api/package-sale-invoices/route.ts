@@ -161,6 +161,9 @@ export async function POST(req: NextRequest) {
                 },
             })
         }
+        if (!saleLog) {
+            return NextResponse.json({ error: 'ไม่พบข้อมูลการขายแพ็คเกจ' }, { status: 404 })
+        }
 
         const duplicateBookingInvoice = await prisma.invoice.findUnique({
             where: { invoiceNumber },
