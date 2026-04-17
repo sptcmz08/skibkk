@@ -44,3 +44,5 @@ export const parsePackageSaleAuditDetails = (raw: string | null | undefined): Pa
 }
 
 export const formatPackageSaleInvoiceNumber = (saleNumber: string) => `INV-${saleNumber}`
+
+export const formatPackageSaleNumberFromUserPackageId = (userPackageId: string) => `PKG-${userPackageId.slice(0, 8).toUpperCase()}`

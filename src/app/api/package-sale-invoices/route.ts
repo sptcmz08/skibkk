@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
-import { parsePackageSaleAuditDetails } from '@/lib/package-sale-invoice'
+import {
+    formatPackageSaleNumberFromUserPackageId,
+    parsePackageSaleAuditDetails,
+    type PackageSaleAuditDetails,
+} from '@/lib/package-sale-invoice'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,18 +29,68 @@ const loadPackageSaleLog = async (logId: string) => {
     })
 }
 
+const loadPackageSaleLogByUserPackageId = async (userPackageId: string) => {
+    return prisma.auditLog.findFirst({
+        where: {
+            entityId: userPackageId,
+            action: 'PACKAGE_ASSIGN',
+            entityType: 'user_package',
+        },
+    })
+}
+
+const buildPackageSaleDetails = (userPackage: {
+    id: string
+    purchasedAt: Date
+    expiresAt: Date
+    user: { id: string; name: string; email: string; phone: string }
+    package: { id: string; name: string; totalHours: number; price: number; validDays: number }
+}): PackageSaleAuditDetails => ({
+    saleNumber: formatPackageSaleNumberFromUserPackageId(userPackage.id),
+    customer: {
+        id: userPackage.user.id,
+        name: userPackage.user.name,
+        email: userPackage.user.email,
+        phone: userPackage.user.phone,
+    },
+    package: {
+        id: userPackage.package.id,
+        name: userPackage.package.name,
+        totalHours: userPackage.package.totalHours,
+        price: userPackage.package.price,
+        validDays: userPackage.package.validDays,
+    },
+    purchasedAt: userPackage.purchasedAt.toISOString(),
+    expiresAt: userPackage.expiresAt.toISOString(),
+})
+
+const loadUserPackageForInvoice = async (userPackageId: string) => {
+    return prisma.userPackage.findUnique({
+        where: { id: userPackageId },
+        include: {
+            user: { select: { id: true, name: true, email: true, phone: true } },
+            package: { select: { id: true, name: true, totalHours: true, price: true, validDays: true } },
+        },
+    })
+}
+
 export async function GET(req: NextRequest) {
     try {
         await requireInvoiceAccess()
 
         const logId = req.nextUrl.searchParams.get('logId')
-        if (!logId) {
-            return NextResponse.json({ error: 'logId is required' }, { status: 400 })
+        const userPackageId = req.nextUrl.searchParams.get('userPackageId')
+        if (!logId && !userPackageId) {
+            return NextResponse.json({ error: 'logId or userPackageId is required' }, { status: 400 })
         }
 
-        const saleLog = await loadPackageSaleLog(logId)
+        const saleLog = logId
+            ? await loadPackageSaleLog(logId)
+            : userPackageId
+                ? await loadPackageSaleLogByUserPackageId(userPackageId)
+                : null
         if (!saleLog) {
-            return NextResponse.json({ error: 'ไม่พบข้อมูลการขายแพ็คเกจ' }, { status: 404 })
+            return NextResponse.json({ invoice: null })
         }
 
         const details = parsePackageSaleAuditDetails(saleLog.details)
@@ -55,11 +109,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        await requireInvoiceAccess()
+        const user = await requireInvoiceAccess()
 
         const body = await req.json()
         const {
             logId,
+            userPackageId,
             invoiceNumber,
             totalAmount,
             vatAmount,
@@ -68,6 +123,7 @@ export async function POST(req: NextRequest) {
             isIssued,
         } = body as {
             logId?: string
+            userPackageId?: string
             invoiceNumber?: string
             totalAmount?: number
             vatAmount?: number
@@ -76,13 +132,34 @@ export async function POST(req: NextRequest) {
             isIssued?: boolean
         }
 
-        if (!logId || !invoiceNumber) {
+        if ((!logId && !userPackageId) || !invoiceNumber) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
         }
 
-        const saleLog = await loadPackageSaleLog(logId)
-        if (!saleLog) {
+        let saleLog = logId
+            ? await loadPackageSaleLog(logId)
+            : userPackageId
+                ? await loadPackageSaleLogByUserPackageId(userPackageId)
+                : null
+        if (logId && !saleLog) {
             return NextResponse.json({ error: 'ไม่พบข้อมูลการขายแพ็คเกจ' }, { status: 404 })
+        }
+        let seedDetails: PackageSaleAuditDetails | null = null
+        if (!saleLog && userPackageId) {
+            const userPackage = await loadUserPackageForInvoice(userPackageId)
+            if (!userPackage) {
+                return NextResponse.json({ error: 'ไม่พบข้อมูลแพ็คเกจลูกค้า' }, { status: 404 })
+            }
+            seedDetails = buildPackageSaleDetails(userPackage)
+            saleLog = await prisma.auditLog.create({
+                data: {
+                    userId: user.id,
+                    action: 'PACKAGE_ASSIGN',
+                    entityType: 'user_package',
+                    entityId: userPackage.id,
+                    details: JSON.stringify(seedDetails),
+                },
+            })
         }
 
         const duplicateBookingInvoice = await prisma.invoice.findUnique({
@@ -104,7 +181,7 @@ export async function POST(req: NextRequest) {
             },
         })
         const duplicatePackageSaleInvoice = saleLogs.some(log => {
-            if (log.id === logId) return false
+            if (saleLog && log.id === saleLog.id) return false
             const details = parsePackageSaleAuditDetails(log.details)
             return details.invoice?.invoiceNumber === invoiceNumber
         })
@@ -112,7 +189,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'เลขที่ใบกำกับนี้ถูกใช้งานแล้ว' }, { status: 409 })
         }
 
-        const details = parsePackageSaleAuditDetails(saleLog.details)
+        const details = seedDetails || parsePackageSaleAuditDetails(saleLog.details)
         const currentInvoice = details.invoice || null
         const issuedFlag = typeof isIssued === 'boolean' ? isIssued : false
         const nowIso = new Date().toISOString()
@@ -133,7 +210,7 @@ export async function POST(req: NextRequest) {
             data: { details: JSON.stringify(details) },
         })
 
-        return NextResponse.json({ invoice: details.invoice })
+        return NextResponse.json({ invoice: details.invoice, logId: saleLog.id })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })

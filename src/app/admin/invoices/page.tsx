@@ -8,7 +8,12 @@ import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save,
 import toast from 'react-hot-toast'
 import XLSX from 'xlsx-js-style'
 import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
-import { formatPackageSaleInvoiceNumber, parsePackageSaleAuditDetails, type PackageSaleInvoiceRecord } from '@/lib/package-sale-invoice'
+import {
+    formatPackageSaleInvoiceNumber,
+    formatPackageSaleNumberFromUserPackageId,
+    parsePackageSaleAuditDetails,
+    type PackageSaleInvoiceRecord,
+} from '@/lib/package-sale-invoice'
 
 interface BookingItem { court: { name: string }; date: string; startTime: string; endTime: string; price: number }
 interface Booking {
@@ -28,6 +33,8 @@ interface UserPackageInvoiceSource {
 }
 interface PackageSaleEntry {
     id: string
+    userPackageId: string
+    logId?: string | null
     saleNumber: string
     createdAt: string
     customerName: string
@@ -134,23 +141,27 @@ export default function InvoicesPage() {
                 const isPackageBooking = b.payments?.some(payment => payment.method === 'PACKAGE') || b.totalAmount <= 0
                 return !isPackageBooking
             }))
-            const saleLogs = Array.isArray(auditData?.logs) ? auditData.logs : []
+            const saleLogs = Array.isArray(auditData?.logs)
+                ? auditData.logs as Array<{ id: string; entityId?: string; details?: string | null; createdAt: string }>
+                : []
             const userPackages = Array.isArray(userPackageData?.userPackages) ? userPackageData.userPackages as UserPackageInvoiceSource[] : []
-            const userPackageById = new Map(userPackages.map(userPackage => [userPackage.id, userPackage]))
-            const mappedSales: PackageSaleEntry[] = saleLogs.map((log: { id: string; entityId?: string; details?: string | null; createdAt: string }) => {
-                const details = parsePackageSaleAuditDetails(log.details)
-                const linkedUserPackage = log.entityId ? userPackageById.get(log.entityId) : undefined
+            const saleLogByUserPackageId = new Map(saleLogs.map(log => [log.entityId, log]).filter((entry): entry is [string, typeof saleLogs[number]] => Boolean(entry[0])))
+            const mappedSales: PackageSaleEntry[] = userPackages.map(userPackage => {
+                const log = saleLogByUserPackageId.get(userPackage.id)
+                const details = parsePackageSaleAuditDetails(log?.details)
                 return {
-                    id: log.id,
-                    saleNumber: details.saleNumber || `PKG-${log.id?.slice(0, 8) || 'N/A'}`,
-                    createdAt: details.purchasedAt || linkedUserPackage?.purchasedAt || log.createdAt,
-                    customerName: details.customer?.name || linkedUserPackage?.user.name || '-',
-                    customerEmail: details.customer?.email || linkedUserPackage?.user.email || '-',
-                    customerPhone: details.customer?.phone || linkedUserPackage?.user.phone || '-',
-                    packageName: details.package?.name || linkedUserPackage?.package.name || '-',
-                    totalHours: Number(details.package?.totalHours || linkedUserPackage?.package.totalHours || 0),
-                    price: Number(details.package?.price || linkedUserPackage?.package.price || 0),
-                    expiresAt: details.expiresAt || linkedUserPackage?.expiresAt || log.createdAt,
+                    id: userPackage.id,
+                    userPackageId: userPackage.id,
+                    logId: log?.id || null,
+                    saleNumber: details.saleNumber || formatPackageSaleNumberFromUserPackageId(userPackage.id),
+                    createdAt: details.purchasedAt || userPackage.purchasedAt,
+                    customerName: details.customer?.name || userPackage.user.name || '-',
+                    customerEmail: details.customer?.email || userPackage.user.email || '-',
+                    customerPhone: details.customer?.phone || userPackage.user.phone || '-',
+                    packageName: details.package?.name || userPackage.package.name || '-',
+                    totalHours: Number(details.package?.totalHours || userPackage.package.totalHours || 0),
+                    price: Number(details.package?.price || userPackage.package.price || 0),
+                    expiresAt: details.expiresAt || userPackage.expiresAt,
                     invoice: details.invoice || null,
                 }
             })
@@ -473,7 +484,9 @@ export default function InvoicesPage() {
         setEditMode(false)
 
         try {
-            const res = await fetch(`/api/package-sale-invoices?logId=${sale.id}`)
+            const params = new URLSearchParams({ userPackageId: sale.userPackageId })
+            if (sale.logId) params.set('logId', sale.logId)
+            const res = await fetch(`/api/package-sale-invoices?${params.toString()}`)
             const data = await res.json()
             if (data.invoice?.customData) {
                 const cd = data.invoice.customData as Record<string, unknown>
@@ -543,7 +556,8 @@ export default function InvoicesPage() {
                 customData,
                 isIssued,
             } : {
-                logId: selectedPackageSale?.id,
+                logId: selectedPackageSale?.logId || undefined,
+                userPackageId: selectedPackageSale?.userPackageId,
                 invoiceNumber: invoiceNo,
                 totalAmount: beforeVat,
                 vatAmount: vat,
@@ -582,10 +596,11 @@ export default function InvoicesPage() {
                 }
                 if (selectedPackageSale) {
                     const nextInvoice = data.invoice as PackageSaleInvoiceRecord | null
+                    const nextLogId = data.logId as string | undefined
                     setPackageSales(current => current.map(sale => sale.id === selectedPackageSale.id
-                        ? { ...sale, invoice: nextInvoice }
+                        ? { ...sale, logId: nextLogId || sale.logId, invoice: nextInvoice }
                         : sale))
-                    setSelectedPackageSale(current => current ? { ...current, invoice: nextInvoice } : current)
+                    setSelectedPackageSale(current => current ? { ...current, logId: nextLogId || current.logId, invoice: nextInvoice } : current)
                 }
                 toast.success('บันทึกข้อมูลใบกำกับภาษีสำเร็จ')
                 setEditMode(false)

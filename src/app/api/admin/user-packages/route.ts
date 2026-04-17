@@ -131,44 +131,51 @@ export async function POST(req: NextRequest) {
         const expiresAt = new Date()
         expiresAt.setDate(expiresAt.getDate() + pkg.validDays)
 
-        const userPackage = await prisma.userPackage.create({
-            data: {
-                userId,
-                packageId,
-                remainingHours: pkg.totalHours,
-                expiresAt,
-            },
-            include: {
-                user: { select: { name: true } },
-                package: { select: { name: true } },
-            },
-        })
+        const purchasedAt = new Date()
+        const saleNumber = generatePackageSaleNumber()
+        const userPackage = await prisma.$transaction(async tx => {
+            const createdUserPackage = await tx.userPackage.create({
+                data: {
+                    userId,
+                    packageId,
+                    remainingHours: pkg.totalHours,
+                    purchasedAt,
+                    expiresAt,
+                },
+                include: {
+                    user: { select: { name: true } },
+                    package: { select: { name: true } },
+                },
+            })
 
-        await prisma.auditLog.create({
-            data: {
-                userId: admin.id,
-                action: 'PACKAGE_ASSIGN',
-                entityType: 'user_package',
-                entityId: userPackage.id,
-                details: JSON.stringify({
-                    saleNumber: generatePackageSaleNumber(),
-                    customer: {
-                        id: user.id,
-                        name: user.name,
-                        email: user.email,
-                        phone: user.phone,
-                    },
-                    package: {
-                        id: pkg.id,
-                        name: pkg.name,
-                        totalHours: pkg.totalHours,
-                        price: pkg.price,
-                        validDays: pkg.validDays,
-                    },
-                    purchasedAt: new Date().toISOString(),
-                    expiresAt: expiresAt.toISOString(),
-                }),
-            },
+            await tx.auditLog.create({
+                data: {
+                    userId: admin.id,
+                    action: 'PACKAGE_ASSIGN',
+                    entityType: 'user_package',
+                    entityId: createdUserPackage.id,
+                    details: JSON.stringify({
+                        saleNumber,
+                        customer: {
+                            id: user.id,
+                            name: user.name,
+                            email: user.email,
+                            phone: user.phone,
+                        },
+                        package: {
+                            id: pkg.id,
+                            name: pkg.name,
+                            totalHours: pkg.totalHours,
+                            price: pkg.price,
+                            validDays: pkg.validDays,
+                        },
+                        purchasedAt: purchasedAt.toISOString(),
+                        expiresAt: expiresAt.toISOString(),
+                    }),
+                },
+            })
+
+            return createdUserPackage
         })
 
         return NextResponse.json({ userPackage })
