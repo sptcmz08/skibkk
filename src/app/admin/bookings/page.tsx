@@ -686,6 +686,7 @@ export default function BookingsManagement() {
                                                 item.startTime !== persistedItem.startTime ||
                                                 item.endTime !== persistedItem.endTime ||
                                                 Number(item.price ?? 0) !== Number(persistedItem.price ?? 0)
+                                            if (!hasPendingChange) return null
 
                                             const historicalStates = buildBookingItemTimeline(
                                                 {

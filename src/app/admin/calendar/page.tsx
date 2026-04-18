@@ -1618,6 +1618,7 @@ export default function CalendarPage() {
                                                 editItem.startTime !== persistedItem.startTime ||
                                                 editItem.endTime !== persistedItem.endTime ||
                                                 Number(editItem.price ?? 0) !== Number(persistedItem.price ?? 0)
+                                            if (!hasPendingChange) return null
 
                                             const historicalStates = buildBookingItemTimeline(
                                                 {
