@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { DayOfWeek, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getDayOfWeek, generateTimeSlots, resolveSlotPrice } from '@/lib/utils'
+import { expandSlotStartTimes } from '@/lib/booking-slots'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,9 +67,11 @@ export async function GET(req: NextRequest) {
                 date: { gte: startOfDay, lte: endOfDay },
                 booking: { status: { not: 'CANCELLED' } },
             },
-            select: { courtId: true, startTime: true },
+            select: { courtId: true, startTime: true, endTime: true },
         })
-        const bookedSlots = new Set(existingBookings.map((b) => `${b.courtId}:${b.startTime}`))
+        const bookedSlots = new Set(existingBookings.flatMap((booking) =>
+            expandSlotStartTimes(booking).map((time) => `${booking.courtId}:${time}`)
+        ))
 
         // Get active slot locks for this date
         const now = new Date()

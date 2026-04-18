@@ -11,6 +11,7 @@ import {
     DEFAULT_LINE_CONFIRMATION_NOTE,
     DEFAULT_LINE_UPDATE_NOTE,
 } from '@/lib/line-booking-notify'
+import { expandSlotStartTimes, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
 // This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
@@ -19,6 +20,17 @@ const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12
 export const dynamic = 'force-dynamic'
 
 const EDITABLE_PAYMENT_METHODS = new Set(['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'])
+
+type BookingSlotInput = {
+    id?: string
+    courtId: string
+    courtName?: string
+    date: string
+    startTime: string
+    endTime: string
+    price?: number
+    teacherId?: string | null
+}
 
 const hasCode = (error: unknown, code: string): error is { code: string } =>
     typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === code
@@ -33,6 +45,71 @@ const hasTargetField = (error: unknown, field: string) => {
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const formatAuditDate = (date: Date | string) => new Date(date).toISOString().split('T')[0]
+
+const findDuplicateSubmittedSlot = (items: BookingSlotInput[]) => {
+    for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+            const left = items[i]
+            const right = items[j]
+            if (
+                left.courtId === right.courtId &&
+                normalizeDateOnly(left.date) === normalizeDateOnly(right.date) &&
+                slotRangesOverlap(left, right)
+            ) {
+                const duplicateTime = expandSlotStartTimes(left).find(time => expandSlotStartTimes(right).includes(time)) || left.startTime
+                return { item: left, time: duplicateTime }
+            }
+        }
+    }
+    return null
+}
+
+const findActiveSlotConflict = async (items: BookingSlotInput[], currentBookingId?: string) => {
+    for (const item of items) {
+        const existingItems = await prisma.bookingItem.findMany({
+            where: {
+                courtId: item.courtId,
+                date: toDateNoonUTC(item.date),
+                booking: {
+                    status: { not: 'CANCELLED' },
+                    ...(currentBookingId ? { id: { not: currentBookingId } } : {}),
+                },
+            },
+            include: {
+                court: { select: { name: true } },
+                booking: { select: { bookingNumber: true } },
+            },
+        })
+
+        const conflict = existingItems.find(existing => slotRangesOverlap(item, existing))
+        if (conflict) {
+            const conflictTime = expandSlotStartTimes(item).find(time => expandSlotStartTimes(conflict).includes(time)) || item.startTime
+            return {
+                item,
+                time: conflictTime,
+                courtName: conflict.court.name,
+                bookingNumber: conflict.booking.bookingNumber,
+            }
+        }
+    }
+    return null
+}
+
+const removeCancelledSlotConflicts = async (items: BookingSlotInput[]) => {
+    for (const item of items) {
+        await prisma.bookingItem.deleteMany({
+            where: {
+                courtId: item.courtId,
+                date: toDateNoonUTC(item.date),
+                startTime: item.startTime,
+                booking: { status: 'CANCELLED' },
+            },
+        })
+    }
+}
+
+const buildSlotConflictMessage = (item: BookingSlotInput, time: string, courtName?: string) =>
+    `สนาม ${courtName || item.courtName || ''} เวลา ${time} วันที่ ${normalizeDateOnly(item.date)} ถูกจองแล้ว`
 
 const summarizeAuditBookingItem = (item: {
     id?: string
@@ -217,25 +294,25 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Verify no conflicts
-        for (const item of body.items) {
-            const existing = await prisma.bookingItem.findUnique({
-                where: {
-                    courtId_date_startTime: {
-                        courtId: item.courtId,
-                        date: toDateNoonUTC(item.date),
-                        startTime: item.startTime,
-                    },
-                },
-                include: { booking: true },
-            })
-            if (existing && existing.booking.status !== 'CANCELLED') {
-                return NextResponse.json(
-                    { error: `สนาม ${item.courtName || ''} เวลา ${item.startTime} วันที่ ${item.date} ถูกจองแล้ว` },
-                    { status: 409 }
-                )
-            }
+        const requestedItems = Array.isArray(body.items) ? body.items as BookingSlotInput[] : []
+
+        const duplicateSubmittedSlot = findDuplicateSubmittedSlot(requestedItems)
+        if (duplicateSubmittedSlot) {
+            return NextResponse.json(
+                { error: `มีเวลาซ้ำในรายการจอง (${normalizeDateOnly(duplicateSubmittedSlot.item.date)} ${duplicateSubmittedSlot.time})` },
+                { status: 409 }
+            )
         }
+
+        const activeSlotConflict = await findActiveSlotConflict(requestedItems)
+        if (activeSlotConflict) {
+            return NextResponse.json(
+                { error: buildSlotConflictMessage(activeSlotConflict.item, activeSlotConflict.time, activeSlotConflict.courtName) },
+                { status: 409 }
+            )
+        }
+
+        await removeCancelledSlotConflicts(requestedItems)
 
         let bookingNumber = ''
         let booking = null
@@ -252,12 +329,12 @@ export async function POST(req: NextRequest) {
                         isBookerLearner: body.isBookerLearner || false,
                         createdByAdmin: body.createdByAdmin || false,
                         bookingItems: {
-                            create: body.items.map((item: { courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string }) => ({
+                            create: requestedItems.map((item) => ({
                                 courtId: item.courtId,
                                 date: toDateNoonUTC(item.date),
                                 startTime: item.startTime,
                                 endTime: item.endTime,
-                                price: item.price,
+                                price: item.price || 0,
                                 teacherId: item.teacherId || null,
                             })),
                         },
@@ -455,9 +532,26 @@ export async function PATCH(req: NextRequest) {
 
         // Update bookingItems if provided (admin can change court, date, time, price)
         if (updateData.bookingItems && Array.isArray(updateData.bookingItems)) {
+            const requestedItems = updateData.bookingItems as BookingSlotInput[]
+            const duplicateSubmittedSlot = findDuplicateSubmittedSlot(requestedItems)
+            if (duplicateSubmittedSlot) {
+                return NextResponse.json(
+                    { error: `ไม่สามารถย้ายไปเวลาที่ซ้ำกันได้ (${normalizeDateOnly(duplicateSubmittedSlot.item.date)} ${duplicateSubmittedSlot.time})` },
+                    { status: 409 }
+                )
+            }
+
+            const activeSlotConflict = await findActiveSlotConflict(requestedItems, bookingId)
+            if (activeSlotConflict) {
+                return NextResponse.json(
+                    { error: buildSlotConflictMessage(activeSlotConflict.item, activeSlotConflict.time, activeSlotConflict.courtName) },
+                    { status: 409 }
+                )
+            }
+
             // Check for duplicate slots WITHIN the submitted items (same court+date+startTime)
             const slotKeys = new Set<string>()
-            for (const item of updateData.bookingItems) {
+            for (const item of requestedItems) {
                 const startH = parseInt(item.startTime.split(':')[0])
                 const endH = parseInt(item.endTime.split(':')[0]) || 24
                 for (let h = startH; h < endH; h++) {
@@ -473,7 +567,7 @@ export async function PATCH(req: NextRequest) {
             }
 
             // Conflict check: verify no other booking occupies these slots
-            for (const item of updateData.bookingItems) {
+            for (const item of requestedItems) {
                 const startH = parseInt(item.startTime.split(':')[0])
                 const endH = parseInt(item.endTime.split(':')[0]) || 24
                 for (let h = startH; h < endH; h++) {
@@ -497,6 +591,8 @@ export async function PATCH(req: NextRequest) {
                 }
             }
 
+            await removeCancelledSlotConflicts(requestedItems)
+
             // Read existing items to preserve original data
             const existingItems = await prisma.bookingItem.findMany({
                 where: { bookingId },
@@ -504,11 +600,11 @@ export async function PATCH(req: NextRequest) {
                 orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { courtId: 'asc' }],
             })
             const existingItemsById = new Map(existingItems.map(item => [item.id, item]))
-            if (updateData.bookingItems.length !== existingItems.length) scheduleChanged = true
+            if (requestedItems.length !== existingItems.length) scheduleChanged = true
 
             await prisma.bookingItem.deleteMany({ where: { bookingId } })
             await prisma.bookingItem.createMany({
-                data: updateData.bookingItems.map((item: { id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; originalCourtId?: string | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }, idx: number) => {
+                data: requestedItems.map((item, idx: number) => {
                     const oldItem = item.id ? existingItemsById.get(item.id) : existingItems[idx]
                     let origCourtId = oldItem?.originalCourtId || null
                     let origDate = oldItem?.originalDate || null
@@ -547,7 +643,7 @@ export async function PATCH(req: NextRequest) {
             })
 
             // Sync teacherId to participants — use the first bookingItem's teacherId
-            const assignedTeacherId = updateData.bookingItems.find((item: { teacherId?: string | null }) => item.teacherId)?.teacherId || null
+            const assignedTeacherId = requestedItems.find((item) => item.teacherId)?.teacherId || null
             if (assignedTeacherId) {
                 await prisma.participant.updateMany({
                     where: { bookingId },

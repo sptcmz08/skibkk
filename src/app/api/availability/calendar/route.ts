@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateTimeSlots } from '@/lib/utils'
+import { expandSlotStartTimes, normalizeDateOnly } from '@/lib/booking-slots'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +15,10 @@ export async function GET(req: NextRequest) {
         const venueId = searchParams.get('venueId')
 
         // Date range for the month
-        const startDate = new Date(year, month - 1, 1)
-        const endDate = new Date(year, month, 0) // last day of month
+        const monthStr = String(month).padStart(2, '0')
+        const lastDay = new Date(year, month, 0).getDate()
+        const startDate = new Date(`${year}-${monthStr}-01T00:00:00Z`)
+        const endDate = new Date(`${year}-${monthStr}-${String(lastDay).padStart(2, '0')}T23:59:59Z`)
 
         // Get courts for this sport/venue
         const courtWhere: { isActive: boolean; sportType?: string; venueId?: string } = { isActive: true }
@@ -39,12 +42,12 @@ export async function GET(req: NextRequest) {
                 date: { gte: startDate, lte: endDate },
                 booking: { status: { not: 'CANCELLED' } },
             },
-            select: { date: true, startTime: true, courtId: true },
+            select: { date: true, startTime: true, endTime: true, courtId: true },
         })
 
         // Get active locks (SlotLock.date is String)
-        const startDateStr = `${year}-${String(month).padStart(2, '0')}-01`
-        const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+        const startDateStr = `${year}-${monthStr}-01`
+        const endDateStr = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`
         const locks = await prisma.slotLock.findMany({
             where: {
                 courtId: { in: courtIds },
@@ -60,7 +63,7 @@ export async function GET(req: NextRequest) {
             select: { date: true },
         }).catch(() => [] as Array<{ date: Date }>)
 
-        const closedSet = new Set(closedDates.map(d => d.date.toISOString().split('T')[0]))
+        const closedSet = new Set(closedDates.map(d => normalizeDateOnly(d.date)))
 
         // Calculate availability per day
         const availability: Record<string, { totalSlots: number; bookedSlots: number; status: 'available' | 'almost_full' | 'full' | 'closed' | 'past' }> = {}
@@ -76,9 +79,9 @@ export async function GET(req: NextRequest) {
             opHoursByCourtId[o.courtId].push(o)
         })
 
-        for (let d = 1; d <= endDate.getDate(); d++) {
+        for (let d = 1; d <= lastDay; d++) {
             const date = new Date(year, month - 1, d)
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            const dateStr = `${year}-${monthStr}-${String(d).padStart(2, '0')}`
 
             if (date < todayBkk) {
                 availability[dateStr] = { totalSlots: 0, bookedSlots: 0, status: 'past' }
@@ -107,10 +110,9 @@ export async function GET(req: NextRequest) {
             }
 
             // Count booked + locked slots
-            const bookedCount = bookedItems.filter(b => {
-                const bDate = new Date(b.date).toISOString().split('T')[0]
-                return bDate === dateStr
-            }).length
+            const bookedCount = bookedItems
+                .filter(b => normalizeDateOnly(b.date) === dateStr)
+                .reduce((sum, item) => sum + expandSlotStartTimes(item).length, 0)
 
             const lockedCount = locks.filter(l => l.date === dateStr).length
 

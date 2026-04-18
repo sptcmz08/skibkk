@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { expandSlotStartTimes, normalizeDateOnly } from '@/lib/booking-slots'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,27 +16,32 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ bookedSlots: [] })
         }
 
-        // Parse dates
-        const parsedDates = dates.map(d => new Date(d))
-
         // Find all non-cancelled booking items for this court on these dates
         const items = await prisma.bookingItem.findMany({
             where: {
                 courtId,
-                date: { in: parsedDates },
+                OR: dates.map(date => ({
+                    date: {
+                        gte: new Date(`${date}T00:00:00Z`),
+                        lte: new Date(`${date}T23:59:59Z`),
+                    },
+                })),
                 booking: { status: { not: 'CANCELLED' } },
             },
             select: {
                 date: true,
                 startTime: true,
+                endTime: true,
             },
         })
 
         // Format response
-        const bookedSlots = items.map(item => ({
-            date: item.date.toISOString().split('T')[0],
-            startTime: item.startTime,
-        }))
+        const bookedSlots = items.flatMap(item =>
+            expandSlotStartTimes(item).map(startTime => ({
+                date: normalizeDateOnly(item.date),
+                startTime,
+            }))
+        )
 
         return NextResponse.json({ bookedSlots }, {
             headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
