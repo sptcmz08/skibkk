@@ -622,18 +622,13 @@ export default function CalendarPage() {
         setBookParticipants(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
     }
 
-    // Open new booking modal
+    // Use the full admin booking flow instead of the legacy inline calendar modal.
     const openNewBooking = () => {
-        setBookCustomer(null)
-        setBookSearch('')
-        setBookCourt('')
-        setBookDates(selectedDate ? [selectedDate] : [])
-        setBookTimes([])
-        setAvailSlots([])
-        setCustomers([])
-        setBookParticipants([{ name: '', sportType: '', phone: '', shoeSize: '' }])
-        setBookStatus('CONFIRMED')
-        setShowBookModal(true)
+        const params = new URLSearchParams()
+        if (selectedDate) params.set('date', selectedDate)
+        if (selectedVenueId) params.set('venueId', selectedVenueId)
+        const query = params.toString()
+        router.push(`/admin/book${query ? `?${query}` : ''}`)
     }
 
     // Submit new booking

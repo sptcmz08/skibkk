@@ -39,6 +39,12 @@ type ParticipantDraft = {
     isBooker?: boolean
 }
 
+type SportTypeResponseItem = {
+    name: string
+    icon: string
+    isActive: boolean
+}
+
 const statusConfig: Record<string, { bg: string; color: string; label: string; icon: LucideIcon }> = {
     PENDING: { bg: 'rgba(255,193,7,0.12)', color: '#ffc107', label: 'รอชำระเงิน', icon: AlertCircle },
     CONFIRMED: { bg: 'rgba(56,239,125,0.12)', color: '#00b894', label: 'ยืนยันแล้ว', icon: CheckCircle },
@@ -114,7 +120,7 @@ export default function BookingDetailPage() {
         fetch('/api/sport-types', { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
-                if (data.sportTypes) setSportTypes(data.sportTypes.filter((s: any) => s.isActive).map((s: any) => ({ name: s.name, icon: s.icon })))
+                if (data.sportTypes) setSportTypes((data.sportTypes as SportTypeResponseItem[]).filter(s => s.isActive).map(s => ({ name: s.name, icon: s.icon })))
             })
             .catch(() => { })
     }, [])
@@ -397,7 +403,7 @@ export default function BookingDetailPage() {
                     {editingParticipants ? (
                         <>
                             {participantDrafts.map((participant, i) => (
-                                    <div style={{
+                                    <div key={participant.id || i} style={{
                                         padding: '14px', borderRadius: '14px',
                                         background: '#fff', border: '1px solid rgba(250,204,21,0.32)',
                                     }}>

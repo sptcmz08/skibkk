@@ -13,6 +13,12 @@ interface Participant {
     name: string; sportType: string; age: string; shoeSize: string; weight: string; height: string; phone: string; isBooker: boolean
 }
 
+type SportTypeResponseItem = {
+    name: string
+    icon: string
+    isActive: boolean
+}
+
 export default function BookingPage() {
     const router = useRouter()
     const [step, setStep] = useState(1) // 1=participants, 2=payment
@@ -226,7 +232,7 @@ export default function BookingPage() {
             .then(r => r.json())
             .then(data => {
                 if (data.sportTypes) {
-                    setSportTypes(data.sportTypes.filter((s: any) => s.isActive).map((s: any) => ({ name: s.name, icon: s.icon })))
+                    setSportTypes((data.sportTypes as SportTypeResponseItem[]).filter(s => s.isActive).map(s => ({ name: s.name, icon: s.icon })))
                 }
             })
             .catch(() => { })
