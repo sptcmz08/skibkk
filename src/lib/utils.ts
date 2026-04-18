@@ -98,7 +98,7 @@ export function generateTimeSlots(
         slots.push(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`)
     }
 
-    return slots
+    return slots.sort((a, b) => a.localeCompare(b))
 }
 
 type PricingTimeRule = {
