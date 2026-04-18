@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAuth } from '@/lib/auth'
 import { generateNextBookingNumber } from '@/lib/document-number-service'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
-import { isValidLineUserId, sendLinePush } from '@/lib/line-messaging'
+import { sendLinePush } from '@/lib/line-messaging'
 import { getAuditRequestMeta } from '@/lib/audit'
 import {
     buildLineConfirmationMessage,
@@ -275,11 +275,7 @@ export async function POST(req: NextRequest) {
                 // Existing customer selected
                 bookingUserId = body.userId
             } else if (body.guestName) {
-                // New customer — create or find by phone
-                const guestLineId = typeof body.guestLineId === 'string' ? body.guestLineId.trim() : ''
-                if (guestLineId && !isValidLineUserId(guestLineId)) {
-                    return NextResponse.json({ error: 'LINE User ID สำหรับแจ้งเตือนต้องขึ้นต้นด้วย U และเป็นรหัสจาก LINE Login เท่านั้น' }, { status: 400 })
-                }
+                // New customer — create or find by phone. LINE user IDs must come from LINE Login/LIFF.
                 let customer = body.guestPhone
                     ? await prisma.user.findFirst({ where: { phone: body.guestPhone, role: 'CUSTOMER' } })
                     : null
@@ -290,7 +286,6 @@ export async function POST(req: NextRequest) {
                             email: `guest-${Date.now()}@skibkk.local`,
                             phone: body.guestPhone?.trim() || `guest-${Date.now()}`,
                             role: 'CUSTOMER',
-                            lineUserId: guestLineId || null,
                         },
                     })
                 }

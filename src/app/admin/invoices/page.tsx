@@ -7,7 +7,11 @@ import { useState, useEffect, useRef } from 'react'
 import { FileText, Printer, Search, ChevronLeft, Receipt, Download, Edit3, Save, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import XLSX from 'xlsx-js-style'
-import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
+import {
+    formatInvoiceNumberFromBookingNumber,
+    formatInvoiceNumberFromYearMonthSequence,
+    getInvoiceYearMonth,
+} from '@/lib/document-number-format'
 import {
     formatPackageSaleInvoiceNumber,
     formatPackageSaleNumberFromDateSequence,
@@ -48,6 +52,9 @@ interface PackageSaleEntry {
 }
 
 type DocType = 'full' | 'short'
+type InvoiceRow =
+    | { type: 'booking'; sortDate: string; booking: Booking }
+    | { type: 'package'; sortDate: string; sale: PackageSaleEntry }
 
 interface EditableItem {
     description: string
@@ -57,6 +64,35 @@ interface EditableItem {
 }
 
 type ExcelCell = { v: string | number; s: unknown }
+
+const getInvoiceRowKey = (row: InvoiceRow) =>
+    row.type === 'booking' ? `booking:${row.booking.id}` : `package:${row.sale.id}`
+
+const getSourceDocumentSequence = (row: InvoiceRow) => {
+    const sourceNumber = row.type === 'booking' ? row.booking.bookingNumber : row.sale.saleNumber
+    const match = sourceNumber.match(/\d{6}(\d{5})$/)
+    return match ? Number(match[1]) : 0
+}
+
+const buildContinuousInvoiceNumberMap = (rows: InvoiceRow[]) => {
+    const counters = new Map<string, number>()
+    const invoiceNumbers = new Map<string, string>()
+
+    const chronologicalRows = [...rows].sort((a, b) => {
+        const dateDiff = new Date(a.sortDate).getTime() - new Date(b.sortDate).getTime()
+        if (dateDiff !== 0) return dateDiff
+        return getSourceDocumentSequence(a) - getSourceDocumentSequence(b)
+    })
+
+    for (const row of chronologicalRows) {
+        const yearMonth = getInvoiceYearMonth(row.sortDate)
+        const nextSequence = (counters.get(yearMonth) || 0) + 1
+        counters.set(yearMonth, nextSequence)
+        invoiceNumbers.set(getInvoiceRowKey(row), formatInvoiceNumberFromYearMonthSequence(yearMonth, nextSequence))
+    }
+
+    return invoiceNumbers
+}
 
 const INVOICE_DEFAULTS = {
     companyName: 'SKI BKK',
@@ -131,7 +167,7 @@ export default function InvoicesPage() {
 
     useEffect(() => {
         Promise.all([
-            fetch('/api/bookings').then(r => r.json()),
+            fetch('/api/bookings?take=1000').then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
             fetch('/api/audit-logs?action=PACKAGE_ASSIGN&entityType=user_package&limit=500', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ logs: [] })),
             fetch('/api/admin/user-packages', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ userPackages: [] })),
@@ -217,9 +253,29 @@ export default function InvoicesPage() {
             .finally(() => setLoading(false))
     }, [])
 
+    const allInvoiceRows: InvoiceRow[] = [
+        ...bookings.map(booking => ({ type: 'booking' as const, sortDate: booking.createdAt, booking })),
+        ...packageSales.map(sale => ({ type: 'package' as const, sortDate: sale.createdAt, sale })),
+    ]
+    const continuousInvoiceNumbers = buildContinuousInvoiceNumberMap(allInvoiceRows)
+    const getBookingDocumentNumber = (booking: Booking) =>
+        continuousInvoiceNumbers.get(`booking:${booking.id}`) || formatInvoiceNumberFromBookingNumber(booking.bookingNumber)
+    const getPackageSaleDocumentNumber = (sale: PackageSaleEntry, savedInvoiceNumber?: string | null) => {
+        const continuousInvoiceNumber = continuousInvoiceNumbers.get(`package:${sale.id}`)
+        if (continuousInvoiceNumber) return continuousInvoiceNumber
+        if (savedInvoiceNumber && /^INV-\d{11}$/.test(savedInvoiceNumber)) return savedInvoiceNumber
+        return formatPackageSaleInvoiceNumber(sale.saleNumber)
+    }
+
     const filtered = bookings.filter(b => {
-        const matchSearch = b.bookingNumber.toLowerCase().includes(search.toLowerCase()) ||
-            b.user.name.toLowerCase().includes(search.toLowerCase())
+        const term = search.toLowerCase()
+        const invoiceNumber = getBookingDocumentNumber(b).toLowerCase()
+        const legacyInvoiceNumber = formatInvoiceNumberFromBookingNumber(b.bookingNumber).toLowerCase()
+        const matchSearch = !term ||
+            b.bookingNumber.toLowerCase().includes(term) ||
+            invoiceNumber.includes(term) ||
+            legacyInvoiceNumber.includes(term) ||
+            b.user.name.toLowerCase().includes(term)
         if (!matchSearch) return false
         if (dateFrom) {
             const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
@@ -233,9 +289,12 @@ export default function InvoicesPage() {
     })
     const filteredPackageSales = packageSales.filter(sale => {
         const term = search.toLowerCase()
+        const invoiceNumber = getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber).toLowerCase()
+        const legacyInvoiceNumber = formatPackageSaleInvoiceNumber(sale.saleNumber).toLowerCase()
         const matchSearch = !term ||
             sale.saleNumber.toLowerCase().includes(term) ||
-            (sale.invoice?.invoiceNumber || formatPackageSaleInvoiceNumber(sale.saleNumber)).toLowerCase().includes(term) ||
+            invoiceNumber.includes(term) ||
+            legacyInvoiceNumber.includes(term) ||
             sale.customerName.toLowerCase().includes(term) ||
             sale.packageName.toLowerCase().includes(term)
         if (!matchSearch) return false
@@ -265,10 +324,6 @@ export default function InvoicesPage() {
         },
     ])
     const getPackageSalePaymentNote = () => 'ขายแพ็กเกจให้ลูกค้า • ชำระเงินเรียบร้อยแล้ว'
-    const getPackageSaleDocumentNumber = (sale: PackageSaleEntry, savedInvoiceNumber?: string | null) => {
-        if (savedInvoiceNumber && /^INV-\d{11}$/.test(savedInvoiceNumber)) return savedInvoiceNumber
-        return formatPackageSaleInvoiceNumber(sale.saleNumber)
-    }
 
     // ── Excel Export — styled to match template ──
     const handleExportExcel = () => {
@@ -356,7 +411,7 @@ export default function InvoicesPage() {
                 : uniqueCourts.join(', ') + (sportType ? ` (${sportType})` : '')
             const invoiceNumber = isPackage
                 ? getPackageSaleDocumentNumber(row.sale, row.sale.invoice?.invoiceNumber)
-                : formatInvoiceNumberFromBookingNumber(row.booking.bookingNumber)
+                : getBookingDocumentNumber(row.booking)
             const customerName = isPackage ? row.sale.customerName : row.booking.user.name
 
             rows.push([
@@ -469,7 +524,7 @@ export default function InvoicesPage() {
                 setCustomerName((cd.customerName as string) || b.user.name)
                 setCustomerEmail((cd.customerEmail as string) || b.user.email)
                 setCustomerPhone((cd.customerPhone as string) || '')
-                setInvoiceNo((cd.invoiceNo as string) || formatInvoiceNumberFromBookingNumber(b.bookingNumber))
+                setInvoiceNo(getBookingDocumentNumber(b))
                 setIssueDate((cd.issueDate as string) || formatThaiDate(b.createdAt))
                 setRefNo((cd.refNo as string) || b.bookingNumber)
                 setItems((cd.items as EditableItem[]) || b.bookingItems.map(item => ({
@@ -492,7 +547,7 @@ export default function InvoicesPage() {
         setCustomerName(b.user.name)
         setCustomerEmail(b.user.email)
         setCustomerPhone(b.user.phone && !b.user.phone.startsWith('LINE-') && !b.user.phone.startsWith('temp-') ? b.user.phone : '')
-        setInvoiceNo(formatInvoiceNumberFromBookingNumber(b.bookingNumber))
+        setInvoiceNo(getBookingDocumentNumber(b))
         setIssueDate(formatThaiDate(b.createdAt))
         setRefNo(b.bookingNumber)
         setItems(b.bookingItems.map(item => ({
@@ -1189,7 +1244,7 @@ export default function InvoicesPage() {
                             const v = b.totalAmount - bv
                             return (
                                 <tr key={b.id}>
-                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{formatInvoiceNumberFromBookingNumber(b.bookingNumber)}</td>
+                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{getBookingDocumentNumber(b)}</td>
                                     <td>{b.bookingNumber}</td>
                                     <td>{b.user.name}</td>
                                     <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>

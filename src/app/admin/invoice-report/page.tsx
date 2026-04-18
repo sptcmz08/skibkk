@@ -6,7 +6,11 @@ import DatePickerInput from '@/components/DatePickerInput'
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Calendar, Download, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { formatInvoiceNumberFromBookingNumber } from '@/lib/document-number-format'
+import {
+    formatInvoiceNumberFromBookingNumber,
+    formatInvoiceNumberFromYearMonthSequence,
+    getInvoiceYearMonth,
+} from '@/lib/document-number-format'
 
 const INVOICE_DEFAULTS = {
     companyName: 'SKI BKK',
@@ -25,6 +29,36 @@ interface Booking {
     payments: Array<{ method: string; status: string; amount: number; createdAt: string }>
 }
 
+const isPackageBooking = (booking: Booking) =>
+    booking.payments?.some(payment => payment.method === 'PACKAGE') || booking.totalAmount <= 0
+
+const getBookingSourceSequence = (booking: Booking) => {
+    const match = booking.bookingNumber.match(/\d{6}(\d{5})$/)
+    return match ? Number(match[1]) : 0
+}
+
+const buildContinuousBookingInvoiceNumberMap = (bookings: Booking[]) => {
+    const counters = new Map<string, number>()
+    const invoiceNumbers = new Map<string, string>()
+
+    const chronologicalBookings = [...bookings]
+        .filter(booking => booking.status !== 'CANCELLED' && !isPackageBooking(booking))
+        .sort((a, b) => {
+            const dateDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            if (dateDiff !== 0) return dateDiff
+            return getBookingSourceSequence(a) - getBookingSourceSequence(b)
+        })
+
+    for (const booking of chronologicalBookings) {
+        const yearMonth = getInvoiceYearMonth(booking.createdAt)
+        const nextSequence = (counters.get(yearMonth) || 0) + 1
+        counters.set(yearMonth, nextSequence)
+        invoiceNumbers.set(booking.id, formatInvoiceNumberFromYearMonthSequence(yearMonth, nextSequence))
+    }
+
+    return invoiceNumbers
+}
+
 export default function InvoiceReportPage() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
@@ -41,7 +75,7 @@ export default function InvoiceReportPage() {
 
     useEffect(() => {
         Promise.all([
-            fetch('/api/bookings?take=500', { cache: 'no-store' }).then(r => r.json()),
+            fetch('/api/bookings?take=1000', { cache: 'no-store' }).then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
         ])
             .then(([bookingData, settings]) => {
@@ -57,10 +91,14 @@ export default function InvoiceReportPage() {
     }, [])
 
     const formatThaiDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+    const invoiceNumbers = buildContinuousBookingInvoiceNumberMap(bookings)
+    const getBookingInvoiceNumber = (booking: Booking) =>
+        invoiceNumbers.get(booking.id) || formatInvoiceNumberFromBookingNumber(booking.bookingNumber)
 
     // Filter confirmed bookings where booking items fall on the selected date
     const filtered = bookings.filter(b => {
         if (b.status === 'CANCELLED') return false
+        if (isPackageBooking(b)) return false
         return b.bookingItems.some(item => item.date.split('T')[0] === selectedDate)
     })
 
@@ -112,7 +150,7 @@ export default function InvoiceReportPage() {
 
     // Render a single invoice for a booking
     const renderInvoice = (b: Booking) => {
-        const invoiceNo = formatInvoiceNumberFromBookingNumber(b.bookingNumber)
+        const invoiceNo = getBookingInvoiceNumber(b)
         const items = b.bookingItems.map(item => ({
             description: item.court.name,
             detail: `วันที่ ${formatThaiDate(item.date)} เวลา ${item.startTime} - ${item.endTime}`,
@@ -312,7 +350,7 @@ export default function InvoiceReportPage() {
                             return (
                                 <tr key={b.id}>
                                     <td>{i + 1}</td>
-                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{formatInvoiceNumberFromBookingNumber(b.bookingNumber)}</td>
+                                    <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{getBookingInvoiceNumber(b)}</td>
                                     <td>{b.user?.name}</td>
                                     <td style={{ fontSize: '12px' }}>
                                         {b.bookingItems.map((item, j) => (

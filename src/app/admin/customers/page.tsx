@@ -153,7 +153,6 @@ export default function CustomersPage() {
                     name: customerForm.name,
                     phone: customerForm.phone,
                     email: customerForm.email,
-                    lineUserId: customerForm.lineUserId,
                 }),
             })
             const data = await res.json() as { customer?: CustomerApiItem; error?: string }
@@ -299,8 +298,8 @@ export default function CustomersPage() {
                                 </div>
                                 <div className="input-group">
                                     <label style={{ color: 'var(--a-text-secondary)' }}>LINE User ID สำหรับแจ้งเตือน</label>
-                                    <input className="admin-input" value={customerForm.lineUserId} onChange={e => setCustomerForm({ ...customerForm, lineUserId: e.target.value })} placeholder="เช่น Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>ไม่ใช่ LINE ID ทั่วไป ต้องเป็นรหัสที่ได้จาก LINE Login เท่านั้น</div>
+                                    <input className="admin-input" value={customerForm.lineUserId || 'ยังไม่ได้เชื่อม LINE'} readOnly aria-readonly="true" style={{ background: '#f8f9fa', cursor: 'not-allowed' }} />
+                                    <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>ระบบจะเชื่อมจาก LINE Login/LIFF เท่านั้น แอดมินแก้ไขช่องนี้ไม่ได้เพื่อกันผูกผิดบัญชี</div>
                                 </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>

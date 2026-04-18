@@ -17,6 +17,20 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'bookingId is required' }, { status: 400 })
         }
 
+        const booking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { payments: { select: { method: true } } },
+        })
+
+        if (!booking) {
+            return NextResponse.json({ error: 'ไม่พบรายการจอง' }, { status: 404 })
+        }
+
+        const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE') || booking.totalAmount <= 0
+        if (isPackageBooking) {
+            return NextResponse.json({ invoice: null })
+        }
+
         const invoice = await prisma.invoice.findUnique({
             where: { bookingId },
         })
@@ -44,6 +58,20 @@ export async function POST(req: NextRequest) {
 
         if (!bookingId || !invoiceNumber) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        }
+
+        const booking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { payments: { select: { method: true } } },
+        })
+
+        if (!booking) {
+            return NextResponse.json({ error: 'ไม่พบรายการจอง' }, { status: 404 })
+        }
+
+        const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE') || booking.totalAmount <= 0
+        if (isPackageBooking) {
+            return NextResponse.json({ error: 'รายการจองที่ใช้แพ็คเกจไม่ต้องออกเลข INV' }, { status: 400 })
         }
 
         const issuedFlag = typeof isIssued === 'boolean' ? isIssued : false

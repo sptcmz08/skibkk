@@ -152,7 +152,6 @@ function AdminBookInner() {
     const [isNewCustomer, setIsNewCustomer] = useState(false)
     const [newBookerName, setNewBookerName] = useState('')
     const [newBookerPhone, setNewBookerPhone] = useState('')
-    const [newBookerLineId, setNewBookerLineId] = useState('')
     const [participants, setParticipants] = useState<Array<{ name: string; sportType: string; height: string; weight: string; phone: string; shoeSize: string }>>([{ name: '', sportType: '', height: '', weight: '', phone: '', shoeSize: '' }])
     const [bookStatus, setBookStatus] = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED')
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CREDIT_CARD' | 'PACKAGE'>('CASH')
@@ -509,7 +508,7 @@ function AdminBookInner() {
                 }),
             }
             if (bookCustomer) body.userId = bookCustomer.id
-            else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim(); body.guestLineId = newBookerLineId.trim() || null }
+            else if (isNewCustomer) { body.guestName = newBookerName.trim(); body.guestPhone = newBookerPhone.trim() }
 
             const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (res.ok) {
@@ -953,8 +952,8 @@ function AdminBookInner() {
                             <input className="admin-input" placeholder="เบอร์โทร" value={newBookerPhone} onChange={e => setNewBookerPhone(e.target.value)} />
                         </div>
                         <div>
-                            <input className="admin-input" placeholder="LINE User ID สำหรับแจ้งเตือน (ถ้ามี)" value={newBookerLineId} onChange={e => setNewBookerLineId(e.target.value)} />
-                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>ไม่ใช่ LINE ID ทั่วไป ต้องเป็นรหัสที่ขึ้นต้นด้วย U จาก LINE Login เท่านั้น</div>
+                            <input className="admin-input" value="เชื่อมจาก LINE Login/LIFF เท่านั้น" readOnly aria-readonly="true" style={{ background: '#f8f9fa', cursor: 'not-allowed' }} />
+                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>แอดมินกรอก LINE User ID เองไม่ได้ เพื่อป้องกันการแจ้งเตือนผิดบัญชี</div>
                         </div></>
                     )}
                 </div>
