@@ -158,6 +158,14 @@ export default function CalendarPage() {
             left.endTime === right.endTime
     }
 
+    const hasHistoryStateChange = (left: Partial<BookingItemHistoryState>, right: Partial<BookingItemHistoryState>) => {
+        return left.courtId !== right.courtId ||
+            normalizeDateOnly(left.date) !== normalizeDateOnly(right.date) ||
+            left.startTime !== right.startTime ||
+            left.endTime !== right.endTime ||
+            Number(left.price ?? 0) !== Number(right.price ?? 0)
+    }
+
     const findMatchingHistoryItem = (
         items: Partial<BookingItemHistoryState>[],
         target: Partial<BookingItemHistoryState>
@@ -185,7 +193,7 @@ export default function CalendarPage() {
         }
 
         bookingHistory.forEach(log => {
-            if (log.action !== 'BOOKING_UPDATE' && log.action !== 'BOOKING_CREATE') return
+            if (log.action !== 'BOOKING_UPDATE') return
 
             try {
                 const details = JSON.parse(log.details || '{}')
@@ -210,6 +218,7 @@ export default function CalendarPage() {
                     const previousByIndex = fallbackIndex >= 0 ? beforeItems[fallbackIndex] : null
                     const previousState = previousBySubmittedId || previousByCursorId || previousByUnchangedState || previousByIndex
                     if (!previousState) return
+                    if (!hasHistoryStateChange(previousState, matchedAfter)) return
 
                     const nextState: BookingItemHistoryState = { ...previousState, createdAt: log.createdAt }
                     const last = timeline[timeline.length - 1]
@@ -222,20 +231,6 @@ export default function CalendarPage() {
                         startTime: previousState.startTime,
                         endTime: previousState.endTime,
                     }
-                } else {
-                    const createdItems = Array.isArray(details.items) ? details.items : []
-                    const createdState = createdItems.find((createdItem: any) => isSameHistoryState({
-                        id: createdItem?.id,
-                        courtId: createdItem?.courtId,
-                        date: createdItem?.date,
-                        startTime: createdItem?.startTime,
-                        endTime: createdItem?.endTime,
-                    }, cursor))
-                    if (!createdState) return
-
-                    const nextState: BookingItemHistoryState = { ...createdState, createdAt: log.createdAt }
-                    const last = timeline[timeline.length - 1]
-                    if (!last || !isSameHistoryState(last, nextState)) timeline.push(nextState)
                 }
             } catch { /* skip malformed logs */ }
         })
@@ -1621,7 +1616,8 @@ export default function CalendarPage() {
                                                 editItem.courtId !== persistedItem.courtId ||
                                                 editItem.date !== persistedDate ||
                                                 editItem.startTime !== persistedItem.startTime ||
-                                                editItem.endTime !== persistedItem.endTime
+                                                editItem.endTime !== persistedItem.endTime ||
+                                                Number(editItem.price ?? 0) !== Number(persistedItem.price ?? 0)
 
                                             const historicalStates = buildBookingItemTimeline(
                                                 {
