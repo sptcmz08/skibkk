@@ -21,6 +21,9 @@ interface BookingDetail {
 }
 
 type BookingApiItem = BookingDetail & { user?: Customer }
+type CustomerApiItem = Omit<Customer, 'bookingCount'> & { bookingCount?: number; _count?: { bookings: number } }
+
+const emptyCustomerForm = { name: '', phone: '', email: '', lineUserId: '' }
 
 const detailStatusMap: Record<string, { label: string; bg: string; color: string }> = {
     PENDING: { label: 'รอชำระ', bg: '#fff8e1', color: '#f5a623' },
@@ -74,45 +77,54 @@ export default function CustomersPage() {
     const [search, setSearch] = useState('')
     const [loading, setLoading] = useState(true)
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+    const [editCustomerMode, setEditCustomerMode] = useState(false)
+    const [customerForm, setCustomerForm] = useState(emptyCustomerForm)
     const [bookings, setBookings] = useState<BookingDetail[]>([])
     const [loadingBookings, setLoadingBookings] = useState(false)
     const [editBooking, setEditBooking] = useState<BookingDetail | null>(null)
     const [editStatus, setEditStatus] = useState('')
     const [editAmount, setEditAmount] = useState(0)
     const [saving, setSaving] = useState(false)
+    const [savingCustomer, setSavingCustomer] = useState(false)
     const [viewSlip, setViewSlip] = useState<string | null>(null)
 
-    useEffect(() => {
-        fetch('/api/bookings?take=500', { cache: 'no-store' })
-            .then(r => r.json())
-            .then((data: { bookings?: BookingApiItem[] }) => {
-                if (data.bookings) {
-                    const usersMap = new Map<string, Customer>()
-                    data.bookings.forEach((b) => {
-                        if (b.user) {
-                            const existing = usersMap.get(b.user.id)
-                            if (existing) {
-                                existing.bookingCount++
-                            } else {
-                                usersMap.set(b.user.id, { ...b.user, bookingCount: 1, role: 'CUSTOMER', isActive: true, createdAt: b.createdAt })
-                            }
-                        }
-                    })
-                    setCustomers(Array.from(usersMap.values()))
-                }
-            })
-            .catch(() => toast.error('โหลดข้อมูลไม่สำเร็จ'))
-            .finally(() => setLoading(false))
-    }, [])
+    const normalizeCustomer = (customer: CustomerApiItem): Customer => ({
+        ...customer,
+        bookingCount: customer.bookingCount ?? customer._count?.bookings ?? 0,
+    })
+
+    const fetchCustomers = async () => {
+        setLoading(true)
+        try {
+            const res = await fetch('/api/customers?take=1000', { cache: 'no-store' })
+            const data = await res.json() as { customers?: CustomerApiItem[] }
+            setCustomers((data.customers || []).map(normalizeCustomer))
+        } catch {
+            toast.error('โหลดข้อมูลไม่สำเร็จ')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { fetchCustomers() }, [])
 
     const filtered = customers.filter(c =>
         c.name?.toLowerCase().includes(search.toLowerCase()) ||
         c.email?.toLowerCase().includes(search.toLowerCase()) ||
-        c.phone?.includes(search)
+        c.phone?.includes(search) ||
+        c.lineUserId?.toLowerCase().includes(search.toLowerCase()) ||
+        c.lineDisplayName?.toLowerCase().includes(search.toLowerCase())
     )
 
     const viewCustomerHistory = async (customer: Customer) => {
         setSelectedCustomer(customer)
+        setEditCustomerMode(false)
+        setCustomerForm({
+            name: customer.name || '',
+            phone: customer.phone || '',
+            email: customer.email || '',
+            lineUserId: customer.lineUserId || '',
+        })
         setLoadingBookings(true)
         try {
             const res = await fetch(`/api/bookings?search=${encodeURIComponent(customer.name)}`, { cache: 'no-store' })
@@ -122,6 +134,48 @@ export default function CustomersPage() {
             setBookings(customerBookings)
         } catch { toast.error('โหลดประวัติไม่สำเร็จ') }
         finally { setLoadingBookings(false) }
+    }
+
+    const handleSaveCustomer = async () => {
+        if (!selectedCustomer) return
+        if (!customerForm.name.trim() || !customerForm.phone.trim() || !customerForm.email.trim()) {
+            toast.error('กรุณากรอกชื่อ เบอร์โทร และอีเมล')
+            return
+        }
+
+        setSavingCustomer(true)
+        try {
+            const res = await fetch('/api/customers', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: selectedCustomer.id,
+                    name: customerForm.name,
+                    phone: customerForm.phone,
+                    email: customerForm.email,
+                    lineUserId: customerForm.lineUserId,
+                }),
+            })
+            const data = await res.json() as { customer?: CustomerApiItem; error?: string }
+            if (!res.ok || !data.customer) {
+                toast.error(data.error || 'บันทึกข้อมูลลูกค้าไม่สำเร็จ')
+                return
+            }
+
+            const updatedCustomer = normalizeCustomer(data.customer)
+            setSelectedCustomer(updatedCustomer)
+            setCustomers(prev => prev.map(customer => customer.id === updatedCustomer.id ? updatedCustomer : customer))
+            setBookings(prev => prev.map(booking => booking.user?.id === updatedCustomer.id
+                ? { ...booking, user: { ...booking.user, ...updatedCustomer } }
+                : booking
+            ))
+            setEditCustomerMode(false)
+            toast.success('บันทึกข้อมูลลูกค้าสำเร็จ')
+        } catch {
+            toast.error('เกิดข้อผิดพลาด')
+        } finally {
+            setSavingCustomer(false)
+        }
     }
 
     const statusBadge = (status: string) => {
@@ -189,26 +243,73 @@ export default function CustomersPage() {
 
                 {/* Customer header */}
                 <div className="admin-card" style={{ padding: '24px', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        {selectedCustomer.lineAvatar ? (
-                            <img src={selectedCustomer.lineAvatar} alt="" style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover' }} />
-                        ) : (
-                            <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '22px' }}>
-                                {selectedCustomer.name?.charAt(0)?.toUpperCase() || '?'}
-                            </div>
-                        )}
-                        <div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>{selectedCustomer.name}</h2>
-                            <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px', flexWrap: 'wrap' }}>
-                                {selectedCustomer.email && !selectedCustomer.email.endsWith('@line.local') && <span><Mail size={13} style={{ marginRight: '4px' }} />{selectedCustomer.email}</span>}
-                                {selectedCustomer.phone && !selectedCustomer.phone.startsWith('LINE-') && <span><Phone size={13} style={{ marginRight: '4px' }} />{selectedCustomer.phone}</span>}
-                                {selectedCustomer.lineUserId && <span style={{ color: '#06c755' }}>LINE: {selectedCustomer.lineDisplayName || '-'}</span>}
-                            </div>
-                            {selectedCustomer.lineUserId && (
-                                <div style={{ fontSize: '12px', color: '#06c755', marginTop: '2px', fontFamily: "'Inter', monospace" }}>ID: {selectedCustomer.lineUserId}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            {selectedCustomer.lineAvatar ? (
+                                <img src={selectedCustomer.lineAvatar} alt="" style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover' }} />
+                            ) : (
+                                <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--a-primary-light)', color: 'var(--a-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '22px' }}>
+                                    {selectedCustomer.name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
                             )}
+                            <div>
+                                <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--a-text)' }}>{selectedCustomer.name}</h2>
+                                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--a-text-muted)', marginTop: '4px', flexWrap: 'wrap' }}>
+                                    {selectedCustomer.email && !selectedCustomer.email.endsWith('@line.local') && <span><Mail size={13} style={{ marginRight: '4px' }} />{selectedCustomer.email}</span>}
+                                    {selectedCustomer.phone && !selectedCustomer.phone.startsWith('LINE-') && <span><Phone size={13} style={{ marginRight: '4px' }} />{selectedCustomer.phone}</span>}
+                                    {selectedCustomer.lineUserId && <span style={{ color: '#06c755' }}>LINE: {selectedCustomer.lineDisplayName || '-'}</span>}
+                                </div>
+                                {selectedCustomer.lineUserId && (
+                                    <div style={{ fontSize: '12px', color: '#06c755', marginTop: '2px', fontFamily: "'Inter', monospace" }}>ID: {selectedCustomer.lineUserId}</div>
+                                )}
+                            </div>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCustomerForm({
+                                    name: selectedCustomer.name || '',
+                                    phone: selectedCustomer.phone || '',
+                                    email: selectedCustomer.email || '',
+                                    lineUserId: selectedCustomer.lineUserId || '',
+                                })
+                                setEditCustomerMode(true)
+                            }}
+                            className="btn-admin-outline"
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px' }}
+                        >
+                            <Edit2 size={14} /> แก้ไขข้อมูลลูกค้า
+                        </button>
                     </div>
+                    {editCustomerMode && (
+                        <div style={{ marginTop: '18px', paddingTop: '18px', borderTop: '1px solid var(--a-border)' }}>
+                            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '12px' }}>ข้อมูลลูกค้า</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                                <div className="input-group">
+                                    <label style={{ color: 'var(--a-text-secondary)' }}>ชื่อ</label>
+                                    <input className="admin-input" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
+                                </div>
+                                <div className="input-group">
+                                    <label style={{ color: 'var(--a-text-secondary)' }}>เบอร์โทรศัพท์</label>
+                                    <input className="admin-input" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+                                </div>
+                                <div className="input-group">
+                                    <label style={{ color: 'var(--a-text-secondary)' }}>อีเมล</label>
+                                    <input className="admin-input" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
+                                </div>
+                                <div className="input-group">
+                                    <label style={{ color: 'var(--a-text-secondary)' }}>Line ID</label>
+                                    <input className="admin-input" value={customerForm.lineUserId} onChange={e => setCustomerForm({ ...customerForm, lineUserId: e.target.value })} placeholder="เว้นว่างได้" />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
+                                <button type="button" onClick={() => setEditCustomerMode(false)} className="btn-admin-outline">ยกเลิก</button>
+                                <button type="button" disabled={savingCustomer} onClick={handleSaveCustomer} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Save size={14} /> {savingCustomer ? 'กำลังบันทึก...' : 'บันทึกข้อมูลลูกค้า'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Stats */}
