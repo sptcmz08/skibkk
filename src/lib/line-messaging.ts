@@ -45,14 +45,14 @@ export async function sendLinePush(lineUserId: string, messages: LineMessage[]) 
 
         if (!res.ok) {
             const err = await res.json().catch(() => ({}))
-            console.error('LINE push error:', res.status, err)
+            console.error(`LINE push error for ${trimmedLineUserId}:`, res.status, err)
             return { success: false, error: err }
         }
 
         console.log(`✅ LINE push sent to ${trimmedLineUserId}`)
         return { success: true }
     } catch (error) {
-        console.error('LINE push error:', error)
+        console.error(`LINE push error for ${trimmedLineUserId}:`, error)
         return { success: false, error }
     }
 }
