@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
-import { resolvePackageBookingWindow } from '@/lib/package-window'
+import { formatPackageDate, resolvePackageBookingWindow } from '@/lib/package-window'
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const toDateOnlyUTC = (value: Date | string) => new Date(value).toISOString().split('T')[0]
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
                 .find(date => date < packageStart || date > packageEnd)
             if (outOfRangeDate) {
                 return NextResponse.json({
-                    error: `วันที่จอง ${outOfRangeDate} อยู่นอกช่วงแพ็คเกจ (${packageStart} - ${packageEnd})`,
+                    error: `จองไม่ได้: วันที่ ${formatPackageDate(outOfRangeDate)} อยู่นอกช่วงใช้แพ็คเกจ (${formatPackageDate(packageStart)} - ${formatPackageDate(packageEnd)})`,
                 }, { status: 400 })
             }
         }

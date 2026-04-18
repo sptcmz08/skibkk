@@ -1,6 +1,6 @@
 'use client'
 
-import { formatPackageBookingWindow, formatPackageDate } from '@/lib/package-window'
+import { formatPackageBookingWindow, formatPackageDate, resolvePackageBookingWindow } from '@/lib/package-window'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -33,6 +33,21 @@ const cleanParticipantDraft = (participant: Participant): Participant => ({
     ...participant,
     phone: cleanProfilePhone(participant.phone),
 })
+
+const readResponseError = async (response: Response, fallback: string) => {
+    const data = await response.json().catch(() => null)
+    return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback
+}
+
+const dateOnlyUTC = (value: string | Date) => new Date(value).toISOString().split('T')[0]
+
+const formatCartDate = (dateStr: string) => {
+    return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    })
+}
 
 export default function BookingPage() {
     const router = useRouter()
@@ -445,6 +460,45 @@ export default function BookingPage() {
             toast.error('ยอดโอนยังไม่ครบ กรุณาโอนเพิ่มและแนบสลิป')
             return
         }
+        if (paymentMethod === 'PACKAGE') {
+            if (!selectedPackageId) {
+                toast.error('กรุณาเลือกแพ็คเกจก่อนยืนยันการจอง')
+                return
+            }
+
+            const selectedPackage = userPackages.find(pkg => pkg.id === selectedPackageId)
+            if (!selectedPackage) {
+                toast.error('ไม่พบแพ็คเกจที่เลือก กรุณาเลือกแพ็คเกจใหม่')
+                return
+            }
+
+            if (selectedPackage.remainingHours < cart.length) {
+                toast.error(`ชั่วโมงในแพ็คเกจไม่เพียงพอ เหลือ ${selectedPackage.remainingHours} ชม. แต่เลือก ${cart.length} ชม.`)
+                return
+            }
+
+            const bookingWindow = resolvePackageBookingWindow(
+                selectedPackage.package.validFrom,
+                selectedPackage.package.validTo,
+                null,
+                selectedPackage.expiresAt
+            )
+            const packageStart = bookingWindow.start ? dateOnlyUTC(bookingWindow.start) : null
+            const packageEnd = bookingWindow.end ? dateOnlyUTC(bookingWindow.end) : null
+            const outOfRangeItem = cart.find(item => {
+                const itemDate = item.date.split('T')[0]
+                return (packageStart && itemDate < packageStart) || (packageEnd && itemDate > packageEnd)
+            })
+
+            if (outOfRangeItem) {
+                const windowText = [
+                    packageStart ? formatCartDate(packageStart) : null,
+                    packageEnd ? formatCartDate(packageEnd) : null,
+                ].filter(Boolean).join(' - ')
+                toast.error(`จองไม่ได้: วันที่ ${formatCartDate(outOfRangeItem.date.split('T')[0])} อยู่นอกช่วงใช้แพ็คเกจ${windowText ? ` (${windowText})` : ''}`, { duration: 6000 })
+                return
+            }
+        }
         setLoading(true)
         let createdBookingId: string | null = null
         try {
@@ -486,10 +540,13 @@ export default function BookingPage() {
                     })),
                 }),
             })
-            const data = await res.json()
+            const data = await res.json().catch(() => null)
             if (!res.ok) {
-                toast.error(data.error || 'ไม่สามารถจองได้')
+                toast.error(typeof data?.error === 'string' ? data.error : 'ไม่สามารถจองได้')
                 return
+            }
+            if (!data?.booking?.id) {
+                throw new Error('ไม่พบข้อมูลการจองที่สร้าง กรุณาลองใหม่อีกครั้ง')
             }
             createdBookingId = data.booking.id
             setBookingResult({ bookingNumber: data.booking.bookingNumber })
@@ -502,7 +559,9 @@ export default function BookingPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userPackageId: selectedPackageId, hoursToDeduct, bookingId: data.booking.id }),
                 })
-                if (!pkgRes.ok) throw new Error('Package deduction failed')
+                if (!pkgRes.ok) {
+                    throw new Error(await readResponseError(pkgRes, 'ใช้แพ็คเกจไม่สำเร็จ'))
+                }
             } else {
                 // Create payment — status depends on whether slip was auto-verified or fallback
                 const paymentMethodForRecord = paymentMethod === 'PROMPTPAY' ? 'BANK_TRANSFER' : paymentMethod
@@ -516,7 +575,9 @@ export default function BookingPage() {
                         slipData: verifiedSlips.map(s => s.transRef).filter(Boolean).join(',') || slipPreview,
                     }),
                 })
-                if (!paymentRes.ok) throw new Error('Payment creation failed')
+                if (!paymentRes.ok) {
+                    throw new Error(await readResponseError(paymentRes, 'สร้างข้อมูลการชำระเงินไม่สำเร็จ'))
+                }
             }
 
             // Step 3: Success — release locks, clear cart
@@ -536,7 +597,8 @@ export default function BookingPage() {
             if (createdBookingId) {
                 await fetch(`/api/bookings/${createdBookingId}`, { method: 'DELETE' }).catch(() => { })
             }
-            toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+            const message = err instanceof Error && err.message ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง'
+            toast.error(message, { duration: 6000 })
         } finally {
             setLoading(false)
         }
