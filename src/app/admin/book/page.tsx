@@ -425,8 +425,28 @@ function AdminBookInner() {
         return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`
     }
 
+    const compareCartItems = (a: CartItem, b: CartItem) => {
+        const dateCompare = a.date.localeCompare(b.date)
+        if (dateCompare !== 0) return dateCompare
+        const startCompare = a.startTime.localeCompare(b.startTime)
+        if (startCompare !== 0) return startCompare
+        const endCompare = a.endTime.localeCompare(b.endTime)
+        if (endCompare !== 0) return endCompare
+        return a.courtName.localeCompare(b.courtName)
+    }
+
+    const sortedCart = [...cart].sort(compareCartItems)
+
+    const removeCartItem = (item: CartItem) => {
+        setCart(prev => prev.filter(cartItem => !(
+            cartItem.courtId === item.courtId &&
+            cartItem.date === item.date &&
+            cartItem.startTime === item.startTime
+        )))
+    }
+
     const bookingDateGroups = Object.entries(
-        cart.reduce<Record<string, CartItem[]>>((groups, item) => {
+        sortedCart.reduce<Record<string, CartItem[]>>((groups, item) => {
             if (!groups[item.date]) groups[item.date] = []
             groups[item.date].push(item)
             return groups
@@ -472,7 +492,7 @@ function AdminBookInner() {
         setSubmitting(true)
         try {
             const body: any = {
-                items: cart, totalAmount: payableAmount, isBookerLearner,
+                items: sortedCart, totalAmount: payableAmount, isBookerLearner,
                 participants: validParts.map((p, i) => ({
                     name: p.name,
                     sportType: p.sportType,
@@ -518,7 +538,7 @@ function AdminBookInner() {
                 }).catch(() => { })
                 toast.success(`จองสำเร็จ! (${cart.length} รายการ) — ${paymentMethod === 'PACKAGE' ? 'ใช้แพ็คเกจ' : (bookStatus === 'CONFIRMED' ? 'จ่ายแล้ว' : 'รอชำระ')}`)
                 // Redirect to calendar page with the booked date + venue (Bug 6.8)
-                const bookedDate = cart[0]?.date || selectedDate
+                const bookedDate = sortedCart[0]?.date || selectedDate
                 const venueParam = selectedVenue ? `&venueId=${selectedVenue.id}` : ''
                 router.push(`/admin/calendar?date=${bookedDate}${venueParam}`)
             } else {
@@ -866,8 +886,8 @@ function AdminBookInner() {
                 {/* Cart summary */}
                 <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
                     <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '12px' }}>📋 รายการจอง ({cart.length})</h3>
-                    {cart.map((item, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < cart.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
+                    {sortedCart.map((item, i) => (
+                        <div key={`${item.courtId}-${item.date}-${item.startTime}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < sortedCart.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={13} /> {item.courtName}</div>
                                 <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
@@ -876,7 +896,7 @@ function AdminBookInner() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <span style={{ fontWeight: 800, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
-                                <button onClick={() => setCart(cart.filter((_, j) => j !== i))} style={{ background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.2)', borderRadius: '6px', padding: '4px', cursor: 'pointer', color: '#e17055' }}><Trash2 size={14} /></button>
+                                <button onClick={() => removeCartItem(item)} style={{ background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.2)', borderRadius: '6px', padding: '4px', cursor: 'pointer', color: '#e17055' }}><Trash2 size={14} /></button>
                             </div>
                         </div>
                     ))}

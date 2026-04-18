@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { DayOfWeek, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { getDayOfWeek, generateTimeSlots } from '@/lib/utils'
+import { getDayOfWeek, generateTimeSlots, resolveSlotPrice } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
         const selectedDate = new Date(`${dateStr}T12:00:00Z`)
         const startOfDay = new Date(`${dateStr}T00:00:00Z`)
         const endOfDay = new Date(`${dateStr}T23:59:59Z`)
-        const dayOfWeek = getDayOfWeek(selectedDate)
+        const dayOfWeek = getDayOfWeek(selectedDate) as DayOfWeek
 
         // Check special closed dates
         const specialClosed = await prisma.specialClosedDate.findFirst({
@@ -38,15 +39,15 @@ export async function GET(req: NextRequest) {
         }
 
         // Get visible courts, filtered by venue if specified
-        const courtWhere: any = { status: { in: ['ACTIVE', 'CLOSED'] } }
+        const courtWhere: Prisma.CourtWhereInput = { status: { in: ['ACTIVE', 'CLOSED'] } }
         if (venueId) courtWhere.venueId = venueId
 
         const courts = await prisma.court.findMany({
             where: courtWhere,
             include: {
-                operatingHours: { where: { dayOfWeek: dayOfWeek as any } },
+                operatingHours: { where: { dayOfWeek } },
                 pricingRules: {
-                    where: { isActive: true, daysOfWeek: { has: dayOfWeek as any } },
+                    where: { isActive: true, daysOfWeek: { has: dayOfWeek } },
                     orderBy: { priority: 'desc' },
                 },
             },
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
 
         // Get global pricing rules (courtId is null = applies to ALL courts)
         const globalPricingRules = await prisma.pricingRule.findMany({
-            where: { isActive: true, courtId: null, daysOfWeek: { has: dayOfWeek as any } },
+            where: { isActive: true, courtId: null, daysOfWeek: { has: dayOfWeek } },
             orderBy: { priority: 'desc' },
         })
 
@@ -112,14 +113,7 @@ export async function GET(req: NextRequest) {
                 const [slotH, slotM] = time.split(':').map(Number)
                 const isPast = isToday && (slotH < currentHour || (slotH === currentHour && slotM <= currentMinute))
 
-                let price = 0
-                for (const rule of allRules) {
-                    const timeNum = parseInt(time.replace(':', ''))
-                    const startNum = parseInt(rule.startTime.replace(':', ''))
-                    let endNum = parseInt(rule.endTime.replace(':', ''))
-                    if (endNum === 0) endNum = 2400 // Treat midnight (00:00) as end of day
-                    if (timeNum >= startNum && timeNum < endNum) { price = rule.price; break }
-                }
+                const price = resolveSlotPrice(time, allRules)
 
                 const endHour = parseInt(time.split(':')[0]) + 1
                 const endTime = `${endHour.toString().padStart(2, '0')}:00`

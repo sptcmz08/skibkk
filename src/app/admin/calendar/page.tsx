@@ -57,7 +57,7 @@ export default function CalendarPage() {
     const bookingGridRef = useRef<HTMLDivElement>(null)
     const editDateInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
     // Helper: convert UTC ISO date string to YYYY-MM-DD in Bangkok timezone
-    const toDateBangkok = (isoDate: string) => {
+    const toDateBangkok = (isoDate: string | Date) => {
         const d = new Date(isoDate)
         return new Date(d.getTime() + (7 * 60 * 60 * 1000)).toISOString().split('T')[0]
     }
@@ -133,7 +133,21 @@ export default function CalendarPage() {
 
     const normalizeDateOnly = (value: unknown) => {
         if (!value) return ''
+        if (value instanceof Date) return toDateBangkok(value)
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.split('T')[0]
         return String(value).split('T')[0]
+    }
+
+    const sortBookingItemsBySchedule = <T extends { date: string | Date; startTime: string; endTime?: string; courtId?: string }>(items: T[]) => {
+        return [...items].sort((a, b) => {
+            const dateCompare = normalizeDateOnly(a.date).localeCompare(normalizeDateOnly(b.date))
+            if (dateCompare !== 0) return dateCompare
+            const startCompare = a.startTime.localeCompare(b.startTime)
+            if (startCompare !== 0) return startCompare
+            const endCompare = (a.endTime || '').localeCompare(b.endTime || '')
+            if (endCompare !== 0) return endCompare
+            return (a.courtId || '').localeCompare(b.courtId || '')
+        })
     }
 
     const isSameHistoryState = (left: Partial<BookingItemHistoryState>, right: Partial<BookingItemHistoryState>) => {
@@ -250,7 +264,7 @@ export default function CalendarPage() {
             weight: p.weight ? String(p.weight) : '',
             shoeSize: p.shoeSize || '',
         })))
-        setEditBookingItems(booking.bookingItems.map(item => {
+        setEditBookingItems(sortBookingItemsBySchedule(booking.bookingItems).map(item => {
             const dateStr = toDateBangkok(item.date)
             return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
         }))
@@ -300,8 +314,9 @@ export default function CalendarPage() {
         }
 
         nextItems[index] = nextItem
-        setEditBookingItems(nextItems)
-        syncEditAmount(nextItems)
+        const sortedItems = sortBookingItemsBySchedule(nextItems)
+        setEditBookingItems(sortedItems)
+        syncEditAmount(sortedItems)
     }
 
     const removeEditBookingItem = (index: number) => {
@@ -347,7 +362,7 @@ export default function CalendarPage() {
                         weight: p.weight ? parseFloat(p.weight) : null,
                         shoeSize: p.shoeSize || null,
                     })),
-                    bookingItems: editBookingItems,
+                    bookingItems: sortBookingItemsBySchedule(editBookingItems),
                 }),
             })
             if (res.ok) {
@@ -1455,7 +1470,7 @@ export default function CalendarPage() {
                         </div>
 
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
-                        {(editMode ? editBookingItems : [...viewBooking.bookingItems].sort((a, b) => a.startTime.localeCompare(b.startTime))).map((item, i) => (
+                        {(editMode ? editBookingItems : sortBookingItemsBySchedule(viewBooking.bookingItems)).map((item, i) => (
                             <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
                                 {editMode ? (
                                     <>

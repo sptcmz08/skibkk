@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { generateTimeSlots } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
         const endDate = new Date(year, month, 0) // last day of month
 
         // Get courts for this sport/venue
-        const courtWhere: any = { isActive: true }
+        const courtWhere: { isActive: boolean; sportType?: string; venueId?: string } = { isActive: true }
         if (sportType) courtWhere.sportType = sportType
         if (venueId) courtWhere.venueId = venueId
 
@@ -97,9 +98,7 @@ export async function GET(req: NextRequest) {
             for (const cid of courtIds) {
                 const courtOp = opHoursByCourtId[cid]?.find(o => o.dayOfWeek === dayOfWeek)
                 if (!courtOp || courtOp.isClosed) continue
-                const startHour = parseInt(courtOp.openTime.split(':')[0])
-                const endHour = parseInt(courtOp.closeTime.split(':')[0]) || 24
-                totalSlots += Math.max(0, endHour - startHour)
+                totalSlots += generateTimeSlots(courtOp.openTime, courtOp.closeTime).length
             }
 
             if (totalSlots === 0) {
