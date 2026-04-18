@@ -74,10 +74,10 @@ export default function InvoiceReportPage() {
     const [companyTaxId, setCompanyTaxId] = useState(INVOICE_DEFAULTS.companyTaxId)
 
     useEffect(() => {
-        Promise.all([
+        fetch('/api/invoices/sync', { method: 'POST' }).catch(() => null).then(() => Promise.all([
             fetch('/api/bookings?take=1000', { cache: 'no-store' }).then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
-        ])
+        ]))
             .then(([bookingData, settings]) => {
                 setBookings(bookingData.bookings || [])
                 setCompanyName(settings.invoice_company_name || INVOICE_DEFAULTS.companyName)

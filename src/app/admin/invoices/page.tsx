@@ -166,12 +166,12 @@ export default function InvoicesPage() {
     const [isIssued, setIsIssued] = useState(false)
 
     useEffect(() => {
-        Promise.all([
+        fetch('/api/invoices/sync', { method: 'POST' }).catch(() => null).then(() => Promise.all([
             fetch('/api/bookings?take=1000').then(r => r.json()),
             fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
             fetch('/api/audit-logs?action=PACKAGE_ASSIGN&entityType=user_package&limit=500', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ logs: [] })),
             fetch('/api/admin/user-packages', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ userPackages: [] })),
-        ]).then(([bookingData, settings, auditData, userPackageData]) => {
+        ])).then(([bookingData, settings, auditData, userPackageData]) => {
             const bookingRows = (bookingData.bookings || []) as Booking[]
             setBookings(bookingRows.filter((b: Booking) => {
                 if (b.status === 'CANCELLED') return false
