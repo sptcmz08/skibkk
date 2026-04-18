@@ -10,6 +10,10 @@ interface LineMessage {
     contents?: object
 }
 
+export function isValidLineUserId(lineUserId: string | null | undefined) {
+    return typeof lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(lineUserId.trim())
+}
+
 /**
  * Send a LINE push message to a user
  */
@@ -20,6 +24,12 @@ export async function sendLinePush(lineUserId: string, messages: LineMessage[]) 
         return { success: false, error: 'No LINE access token' }
     }
 
+    const trimmedLineUserId = lineUserId.trim()
+    if (!isValidLineUserId(trimmedLineUserId)) {
+        console.warn(`Skipping LINE push: invalid LINE userId "${trimmedLineUserId}"`)
+        return { success: false, error: 'Invalid LINE userId' }
+    }
+
     try {
         const res = await fetch(LINE_API, {
             method: 'POST',
@@ -28,7 +38,7 @@ export async function sendLinePush(lineUserId: string, messages: LineMessage[]) 
                 'Authorization': `Bearer ${token}`,
             },
             body: JSON.stringify({
-                to: lineUserId,
+                to: trimmedLineUserId,
                 messages,
             }),
         })
@@ -39,7 +49,7 @@ export async function sendLinePush(lineUserId: string, messages: LineMessage[]) 
             return { success: false, error: err }
         }
 
-        console.log(`✅ LINE push sent to ${lineUserId}`)
+        console.log(`✅ LINE push sent to ${trimmedLineUserId}`)
         return { success: true }
     } catch (error) {
         console.error('LINE push error:', error)

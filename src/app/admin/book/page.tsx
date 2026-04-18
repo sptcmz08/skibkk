@@ -953,7 +953,8 @@ function AdminBookInner() {
                             <input className="admin-input" placeholder="เบอร์โทร" value={newBookerPhone} onChange={e => setNewBookerPhone(e.target.value)} />
                         </div>
                         <div>
-                            <input className="admin-input" placeholder="Line ID (ถ้ามี)" value={newBookerLineId} onChange={e => setNewBookerLineId(e.target.value)} />
+                            <input className="admin-input" placeholder="LINE User ID สำหรับแจ้งเตือน (ถ้ามี)" value={newBookerLineId} onChange={e => setNewBookerLineId(e.target.value)} />
+                            <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>ไม่ใช่ LINE ID ทั่วไป ต้องเป็นรหัสที่ขึ้นต้นด้วย U จาก LINE Login เท่านั้น</div>
                         </div></>
                     )}
                 </div>

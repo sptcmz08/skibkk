@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { getAuditRequestMeta } from '@/lib/audit'
+import { isValidLineUserId } from '@/lib/line-messaging'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +95,9 @@ export async function PATCH(req: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'ระบุลูกค้าไม่ถูกต้อง' }, { status: 400 })
         if (!name || !email || !phone) {
             return NextResponse.json({ error: 'กรุณากรอกชื่อ เบอร์โทร และอีเมล' }, { status: 400 })
+        }
+        if (lineUserId && !isValidLineUserId(lineUserId)) {
+            return NextResponse.json({ error: 'LINE User ID สำหรับแจ้งเตือนต้องขึ้นต้นด้วย U และเป็นรหัสจาก LINE Login เท่านั้น' }, { status: 400 })
         }
 
         const existing = await prisma.user.findUnique({
