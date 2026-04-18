@@ -177,6 +177,42 @@ export default function CustomersPage() {
         }
     }
 
+    const handleUnlinkLine = async () => {
+        if (!selectedCustomer?.lineUserId) return
+        if (!confirm(`ยกเลิกผูก LINE ของ ${selectedCustomer.name} ใช่ไหม?`)) return
+
+        setSavingCustomer(true)
+        try {
+            const res = await fetch('/api/customers', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: selectedCustomer.id,
+                    action: 'unlinkLine',
+                }),
+            })
+            const data = await res.json() as { customer?: CustomerApiItem; error?: string }
+            if (!res.ok || !data.customer) {
+                toast.error(data.error || 'ยกเลิกผูก LINE ไม่สำเร็จ')
+                return
+            }
+
+            const updatedCustomer = normalizeCustomer(data.customer)
+            setSelectedCustomer(updatedCustomer)
+            setCustomerForm(prev => ({ ...prev, lineUserId: '' }))
+            setCustomers(prev => prev.map(customer => customer.id === updatedCustomer.id ? updatedCustomer : customer))
+            setBookings(prev => prev.map(booking => booking.user?.id === updatedCustomer.id
+                ? { ...booking, user: { ...booking.user, ...updatedCustomer } }
+                : booking
+            ))
+            toast.success('ยกเลิกผูก LINE สำเร็จ')
+        } catch {
+            toast.error('เกิดข้อผิดพลาด')
+        } finally {
+            setSavingCustomer(false)
+        }
+    }
+
     const statusBadge = (status: string) => {
         switch (status) {
             case 'CONFIRMED': return { label: 'ยืนยันแล้ว', cls: 'badge-success' }
@@ -300,6 +336,11 @@ export default function CustomersPage() {
                                     <label style={{ color: 'var(--a-text-secondary)' }}>LINE User ID สำหรับแจ้งเตือน</label>
                                     <input className="admin-input" value={customerForm.lineUserId || 'ยังไม่ได้เชื่อม LINE'} readOnly aria-readonly="true" style={{ background: '#f8f9fa', cursor: 'not-allowed' }} />
                                     <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>ระบบจะเชื่อมจาก LINE Login/LIFF เท่านั้น แอดมินแก้ไขช่องนี้ไม่ได้เพื่อกันผูกผิดบัญชี</div>
+                                    {selectedCustomer.lineUserId && (
+                                        <button type="button" onClick={handleUnlinkLine} disabled={savingCustomer} className="btn-admin-outline" style={{ marginTop: '8px', color: '#e74c3c', borderColor: 'rgba(231,76,60,0.35)', padding: '7px 10px', fontSize: '12px' }}>
+                                            ยกเลิกผูก LINE
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>

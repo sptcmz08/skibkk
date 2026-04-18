@@ -109,28 +109,14 @@ export async function GET(req: NextRequest) {
                     lineAvatar: profile.pictureUrl || null,
                 },
             })
-        } else if (email) {
-            // Check if email already exists (link LINE to existing account)
-            const existingByEmail = await prisma.user.findUnique({ where: { email } })
-            if (existingByEmail) {
-                if (!existingByEmail.isActive) {
-                    return NextResponse.redirect(`${BASE_URL}/login?error=account_disabled`)
-                }
-                user = await prisma.user.update({
-                    where: { id: existingByEmail.id },
-                    data: {
-                        lineUserId: profile.userId,
-                        lineDisplayName: profile.displayName,
-                        lineAvatar: profile.pictureUrl || null,
-                    },
-                })
-            }
         }
 
         if (!user) {
             // Create new user from LINE profile
-            // Generate a placeholder email and phone if not available
-            const placeholderEmail = email || `line_${profile.userId}@line.local`
+            // Keep LINE accounts isolated by LINE userId. Do not auto-link by email:
+            // different LINE accounts can expose the same email and must not become one customer.
+            const emailAlreadyUsed = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null
+            const placeholderEmail = email && !emailAlreadyUsed ? email : `line_${profile.userId}@line.local`
             const placeholderPhone = `LINE-${profile.userId.substring(0, 12)}`
 
             user = await prisma.user.create({

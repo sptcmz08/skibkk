@@ -86,14 +86,12 @@ export async function PATCH(req: NextRequest) {
         const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
         const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
+        const action = typeof body.action === 'string' ? body.action.trim() : ''
         const name = typeof body.name === 'string' ? body.name.trim() : ''
         const email = typeof body.email === 'string' ? body.email.trim() : ''
         const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
 
         if (!userId) return NextResponse.json({ error: 'ระบุลูกค้าไม่ถูกต้อง' }, { status: 400 })
-        if (!name || !email || !phone) {
-            return NextResponse.json({ error: 'กรุณากรอกชื่อ เบอร์โทร และอีเมล' }, { status: 400 })
-        }
 
         const existing = await prisma.user.findUnique({
             where: { id: userId },
@@ -110,6 +108,45 @@ export async function PATCH(req: NextRequest) {
 
         if (!existing || existing.role !== 'CUSTOMER') {
             return NextResponse.json({ error: 'ไม่พบลูกค้า' }, { status: 404 })
+        }
+
+        if (action === 'unlinkLine') {
+            const customer = await prisma.user.update({
+                where: { id: userId },
+                data: {
+                    lineUserId: null,
+                    lineDisplayName: null,
+                    lineAvatar: null,
+                },
+                select: customerSelect,
+            })
+
+            await prisma.auditLog.create({
+                data: {
+                    userId: user.id,
+                    action: 'CUSTOMER_LINE_UNLINK',
+                    entityType: 'user',
+                    entityId: userId,
+                    ipAddress: requestMeta.ipAddress,
+                    details: JSON.stringify({
+                        before: {
+                            lineUserId: existing.lineUserId,
+                            lineDisplayName: existing.lineDisplayName,
+                        },
+                        after: {
+                            lineUserId: customer.lineUserId,
+                            lineDisplayName: customer.lineDisplayName,
+                        },
+                        request: requestMeta,
+                    }),
+                },
+            })
+
+            return NextResponse.json({ customer })
+        }
+
+        if (!name || !email || !phone) {
+            return NextResponse.json({ error: 'กรุณากรอกชื่อ เบอร์โทร และอีเมล' }, { status: 400 })
         }
 
         const customer = await prisma.user.update({
