@@ -12,7 +12,7 @@ import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; updatedAt?: string; isBookerLearner: boolean; createdByAdmin: boolean
-    user: { name: string; email: string; phone: string; lineDisplayName?: string; lineAvatar?: string }
+    user: { name: string; email: string; phone: string; lineUserId?: string | null; lineDisplayName?: string; lineAvatar?: string }
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
@@ -158,6 +158,14 @@ export default function CalendarPage() {
             left.endTime === right.endTime
     }
 
+    const findMatchingHistoryItem = (
+        items: Partial<BookingItemHistoryState>[],
+        target: Partial<BookingItemHistoryState>
+    ) => {
+        return items.find(item => item.id && target.id && item.id === target.id)
+            || items.find(item => isSameHistoryState(item, target))
+    }
+
     const buildBookingItemTimeline = (
         seed: Partial<BookingItemHistoryState>,
         includeCurrentState: BookingItemHistoryState | null
@@ -185,19 +193,22 @@ export default function CalendarPage() {
                 if (log.action === 'BOOKING_UPDATE') {
                     const beforeItems = Array.isArray(details.changes?.bookingItems?.before) ? details.changes.bookingItems.before : []
                     const afterItems = Array.isArray(details.changes?.bookingItems?.after) ? details.changes.bookingItems.after : []
+                    const submittedItems = Array.isArray(details.rawPayload?.bookingItems) ? details.rawPayload.bookingItems : []
 
-                    const afterIndex = afterItems.findIndex((afterItem: any) => isSameHistoryState({
-                        id: afterItem?.id,
-                        courtId: afterItem?.courtId,
-                        date: afterItem?.date,
-                        startTime: afterItem?.startTime,
-                        endTime: afterItem?.endTime,
-                    }, cursor))
-                    if (afterIndex < 0) return
+                    const matchedAfter = findMatchingHistoryItem(afterItems, cursor)
+                    if (!matchedAfter) return
 
-                    const previousByIndex = beforeItems[afterIndex]
-                    const previousById = cursor.id ? beforeItems.find((beforeItem: any) => beforeItem?.id === cursor.id) : null
-                    const previousState = previousByIndex || previousById
+                    const submittedItem = findMatchingHistoryItem(submittedItems, matchedAfter)
+                    const previousBySubmittedId = submittedItem?.id
+                        ? beforeItems.find((beforeItem: any) => beforeItem?.id === submittedItem.id)
+                        : null
+                    const previousByCursorId = cursor.id
+                        ? beforeItems.find((beforeItem: any) => beforeItem?.id === cursor.id)
+                        : null
+                    const previousByUnchangedState = findMatchingHistoryItem(beforeItems, matchedAfter)
+                    const fallbackIndex = afterItems.findIndex((afterItem: any) => afterItem === matchedAfter)
+                    const previousByIndex = fallbackIndex >= 0 ? beforeItems[fallbackIndex] : null
+                    const previousState = previousBySubmittedId || previousByCursorId || previousByUnchangedState || previousByIndex
                     if (!previousState) return
 
                     const nextState: BookingItemHistoryState = { ...previousState, createdAt: log.createdAt }
@@ -1434,7 +1445,7 @@ export default function CalendarPage() {
                                 </div>
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.lineDisplayName || viewBooking.user?.name}{viewBooking.user?.lineDisplayName && viewBooking.user?.name !== viewBooking.user?.lineDisplayName ? ` (${viewBooking.user?.name})` : ''}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
-                                <div><strong>อีเมล:</strong> {viewBooking.user?.email?.endsWith('@line.local') ? <span style={{ color: '#999' }}>ไม่มี (LINE)</span> : viewBooking.user?.email}</div>
+                                <div><strong>Line ID:</strong> {viewBooking.user?.lineUserId ? <span style={{ color: '#06C755', fontWeight: 600 }}>{viewBooking.user.lineUserId}</span> : '-'}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                                 {(viewBooking.payments[0] || editMode) && (
                                     <div>
