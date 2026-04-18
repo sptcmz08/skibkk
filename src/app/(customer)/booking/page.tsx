@@ -19,6 +19,21 @@ type SportTypeResponseItem = {
     isActive: boolean
 }
 
+const cleanProfileEmail = (email?: string | null) => {
+    if (!email || email.endsWith('@line.local') || email.endsWith('@skibkk.local')) return ''
+    return email
+}
+
+const cleanProfilePhone = (phone?: string | null) => {
+    if (!phone || phone.startsWith('LINE-') || phone.startsWith('guest-') || phone.startsWith('temp-')) return ''
+    return phone
+}
+
+const cleanParticipantDraft = (participant: Participant): Participant => ({
+    ...participant,
+    phone: cleanProfilePhone(participant.phone),
+})
+
 export default function BookingPage() {
     const router = useRouter()
     const [step, setStep] = useState(1) // 1=participants, 2=payment
@@ -292,11 +307,12 @@ export default function BookingPage() {
             .then(r => r.json())
             .then(d => {
                 if (d.user) {
+                    const cleanPhone = cleanProfilePhone(d.user.phone)
                     setUser(d.user)
                     setBooker({
                         name: d.user.name || '',
-                        phone: d.user.phone || '',
-                        email: d.user.email || '',
+                        phone: cleanPhone,
+                        email: cleanProfileEmail(d.user.email),
                     })
                     // Auto-fill first participant with user profile data
                     setParticipants(prev => {
@@ -305,7 +321,7 @@ export default function BookingPage() {
                             updated[0] = {
                                 ...updated[0],
                                 name: d.user.name || '',
-                                phone: d.user.phone || '',
+                                phone: cleanPhone,
                             }
                         }
                         return updated
@@ -324,7 +340,7 @@ export default function BookingPage() {
         try {
             const draft = JSON.parse(localStorage.getItem(BOOKING_DRAFT_KEY) || 'null')
             if (draft) {
-                if (draft.participants?.length) setParticipants(draft.participants)
+                if (draft.participants?.length) setParticipants(draft.participants.map(cleanParticipantDraft))
                 if (draft.isBookerLearner !== undefined) setIsBookerLearner(draft.isBookerLearner)
             }
         } catch { /* ignore */ }
