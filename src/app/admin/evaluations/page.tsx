@@ -1,9 +1,10 @@
 'use client'
 
 import { FadeIn } from '@/components/Motion'
+import DatePickerInput from '@/components/DatePickerInput'
 
-import { useState, useEffect } from 'react'
-import { Star, BarChart3, Copy, Link, MessageSquare, Users, TrendingUp } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Star, BarChart3, Copy, Link, MessageSquare, Users, TrendingUp, Calendar, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface TeacherStat {
@@ -32,10 +33,18 @@ export default function EvaluationsPage() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [createTeacherId, setCreateTeacherId] = useState('')
     const [generatedUrl, setGeneratedUrl] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
 
-    useEffect(() => {
+    const fetchEvaluations = useCallback(() => {
+        setLoading(true)
+        const params = new URLSearchParams()
+        if (dateFrom) params.set('from', dateFrom)
+        if (dateTo) params.set('to', dateTo)
+        const qs = params.toString() ? `?${params.toString()}` : ''
+
         Promise.all([
-            fetch('/api/evaluations').then(r => r.json()),
+            fetch(`/api/evaluations${qs}`).then(r => r.json()),
             fetch('/api/teachers').then(r => r.json()),
         ]).then(([evalData, teachersData]) => {
             setStats(evalData.teacherStats || [])
@@ -43,7 +52,11 @@ export default function EvaluationsPage() {
             setTeachers(teachersData.teachers || [])
         }).catch(() => toast.error('โหลดข้อมูลไม่สำเร็จ'))
             .finally(() => setLoading(false))
-    }, [])
+    }, [dateFrom, dateTo])
+
+    useEffect(() => {
+        fetchEvaluations()
+    }, [fetchEvaluations])
 
     const handleCreateLink = async () => {
         if (!createTeacherId) { toast.error('กรุณาเลือกเทรนเนอร์'); return }
@@ -160,15 +173,49 @@ export default function EvaluationsPage() {
 
             {/* Evaluation History */}
             <div className="admin-card">
-                <div className="admin-card-header">
+                <div className="admin-card-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
                     <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <MessageSquare size={18} /> รายการแบบประเมินที่ส่งแล้ว ({filteredEvals.length})
                     </h3>
-                    <select className="admin-input" style={{ width: '200px' }}
-                        value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}>
-                        <option value="">ทุกเทรนเนอร์</option>
-                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {/* Date Range Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Calendar size={15} style={{ color: 'var(--a-text-muted)', flexShrink: 0 }} />
+                            <DatePickerInput
+                                value={dateFrom}
+                                onChange={setDateFrom}
+                                placeholder="จากวันที่"
+                                style={{ width: '140px' }}
+                            />
+                            <span style={{ color: 'var(--a-text-muted)', fontSize: '13px', fontWeight: 600 }}>ถึง</span>
+                            <DatePickerInput
+                                value={dateTo}
+                                onChange={setDateTo}
+                                placeholder="ถึงวันที่"
+                                style={{ width: '140px' }}
+                            />
+                            {(dateFrom || dateTo) && (
+                                <button
+                                    onClick={() => { setDateFrom(''); setDateTo('') }}
+                                    title="ล้างตัวกรองวันที่"
+                                    style={{
+                                        background: 'rgba(225, 112, 85, 0.12)', border: '1px solid rgba(225, 112, 85, 0.3)',
+                                        borderRadius: '6px', cursor: 'pointer', padding: '5px 8px',
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                        color: '#e17055', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                                    }}
+                                >
+                                    <X size={13} /> ล้าง
+                                </button>
+                            )}
+                        </div>
+                        {/* Teacher Filter */}
+                        <select className="admin-input" style={{ width: '180px' }}
+                            value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}>
+                            <option value="">ทุกเทรนเนอร์</option>
+                            {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </div>
                 </div>
                 <table className="admin-table">
                     <thead>

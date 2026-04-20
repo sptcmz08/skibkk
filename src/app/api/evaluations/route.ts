@@ -30,8 +30,18 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 
+        // Date range filter
+        const from = searchParams.get('from')
+        const to = searchParams.get('to')
+        const dateFilter: Record<string, Date> = {}
+        if (from) dateFilter.gte = new Date(`${from}T00:00:00`)
+        if (to) dateFilter.lte = new Date(`${to}T23:59:59.999`)
+
         const evaluations = await prisma.teacherEvaluation.findMany({
-            where: { isSubmitted: true },
+            where: {
+                isSubmitted: true,
+                ...(Object.keys(dateFilter).length > 0 ? { submittedAt: dateFilter } : {}),
+            },
             include: { teacher: { select: { id: true, name: true, specialty: true } } },
             orderBy: { submittedAt: 'desc' },
         })
