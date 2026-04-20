@@ -13,6 +13,8 @@ interface Participant {
     name: string; sportType: string; age: string; shoeSize: string; weight: string; height: string; phone: string; isBooker: boolean
 }
 
+type ParticipantDraft = Partial<Participant>
+
 type SportTypeResponseItem = {
     name: string
     icon: string
@@ -32,6 +34,17 @@ const cleanProfilePhone = (phone?: string | null) => {
 const cleanParticipantDraft = (participant: Participant): Participant => ({
     ...participant,
     phone: cleanProfilePhone(participant.phone),
+})
+
+const normalizeParticipantDraft = (participant: ParticipantDraft): Participant => cleanParticipantDraft({
+    name: participant.name || '',
+    sportType: participant.sportType || '',
+    age: participant.age || '',
+    shoeSize: participant.shoeSize || '',
+    weight: participant.weight || '',
+    height: participant.height || '',
+    phone: participant.phone || '',
+    isBooker: Boolean(participant.isBooker),
 })
 
 const readResponseError = async (response: Response, fallback: string) => {
@@ -57,6 +70,8 @@ export default function BookingPage() {
     const [participants, setParticipants] = useState<Participant[]>([
         { name: '', sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: '', isBooker: false },
     ])
+    const [recentParticipants, setRecentParticipants] = useState<Participant[]>([])
+    const [loadingRecentParticipants, setLoadingRecentParticipants] = useState(false)
     const BOOKING_DRAFT_KEY = 'skibkk-booking-draft'
     const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER' | 'PACKAGE'>('PROMPTPAY')
     const [loading, setLoading] = useState(false)
@@ -341,6 +356,15 @@ export default function BookingPage() {
                         }
                         return updated
                     })
+                    setLoadingRecentParticipants(true)
+                    fetch('/api/participants/recent', { cache: 'no-store' })
+                        .then(r => r.ok ? r.json() : null)
+                        .then(data => {
+                            const savedParticipants = Array.isArray(data?.participants) ? data.participants : []
+                            setRecentParticipants(savedParticipants.map(normalizeParticipantDraft))
+                        })
+                        .catch(() => setRecentParticipants([]))
+                        .finally(() => setLoadingRecentParticipants(false))
                 } else {
                     toast.error('กรุณาเข้าสู่ระบบก่อนดำเนินการจอง')
                     router.push('/cart')
@@ -407,6 +431,34 @@ export default function BookingPage() {
             toast.error('ผู้เรียนทุกคนต้องเลือกประเภทกีฬาเดียวกับคนแรก')
         }
         setParticipants(updated)
+    }
+
+    const applyRecentParticipant = (idx: number, recentParticipant: Participant) => {
+        setParticipants(prev => {
+            const updated = [...prev]
+            const current = updated[idx]
+            if (!current) return prev
+
+            const sportType = idx > 0 && updated[0]?.sportType
+                ? updated[0].sportType
+                : recentParticipant.sportType || current.sportType
+
+            updated[idx] = {
+                ...current,
+                ...recentParticipant,
+                sportType,
+                isBooker: current.isBooker,
+            }
+
+            if (idx === 0 && sportType) {
+                for (let i = 1; i < updated.length; i++) {
+                    updated[i] = { ...updated[i], sportType }
+                }
+            }
+
+            return updated
+        })
+        toast.success('ดึงข้อมูลผู้เรียนแล้ว')
     }
 
     const handleBookerToggle = (checked: boolean) => {
@@ -728,6 +780,31 @@ export default function BookingPage() {
                                     </button>
                                 )}
                             </div>
+                            {(loadingRecentParticipants || recentParticipants.length > 0) && (
+                                <div className="input-group" style={{ marginBottom: '12px' }}>
+                                    <label>ดึงข้อมูลผู้เรียนที่เคยกรอก</label>
+                                    <select
+                                        className="input-field"
+                                        value=""
+                                        disabled={loadingRecentParticipants || recentParticipants.length === 0}
+                                        onChange={e => {
+                                            const selected = recentParticipants[Number(e.target.value)]
+                                            if (selected) applyRecentParticipant(idx, selected)
+                                        }}
+                                    >
+                                        <option value="">
+                                            {loadingRecentParticipants ? 'กำลังโหลดข้อมูลเดิม...' : 'เลือกข้อมูลเดิมมาเติม'}
+                                        </option>
+                                        {recentParticipants.map((recentParticipant, recentIdx) => (
+                                            <option key={`${recentParticipant.name}-${recentParticipant.phone}-${recentIdx}`} value={recentIdx}>
+                                                {recentParticipant.name}
+                                                {recentParticipant.sportType ? ` - ${recentParticipant.sportType}` : ''}
+                                                {recentParticipant.phone ? ` (${recentParticipant.phone})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                 <div className="input-group" style={{ gridColumn: 'span 2' }}>
                                     <label>ชื่อผู้เรียน *</label>
