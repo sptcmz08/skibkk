@@ -33,6 +33,124 @@ function getItemEndBangkokTimestamp(date: Date, endTime: string) {
 
 export const dynamic = 'force-dynamic'
 
+type EvaluationCronItem = Awaited<ReturnType<typeof findEvaluationCronItems>>[number]
+
+async function findEvaluationCronItems(todayDate: Date, evaluationSent?: boolean) {
+    return prisma.bookingItem.findMany({
+        where: {
+            ...(evaluationSent === undefined ? {} : { evaluationSent }),
+            date: { lte: todayDate },
+            booking: {
+                status: 'CONFIRMED',
+            },
+        },
+        include: {
+            booking: {
+                include: {
+                    user: { select: { name: true, lineUserId: true } },
+                    participants: {
+                        where: { teacherId: { not: null } },
+                        include: { teacher: { select: { id: true, name: true } } },
+                    },
+                },
+            },
+            court: { select: { name: true } },
+            teacher: { select: { id: true, name: true } },
+        },
+    })
+}
+
+function getItemTeacherIds(item: EvaluationCronItem) {
+    const teacherIds = new Set<string>()
+    const teacherMap = new Map<string, string>()
+
+    if (item.teacherId && item.teacher) {
+        teacherIds.add(item.teacherId)
+        teacherMap.set(item.teacherId, item.teacher.name)
+    } else {
+        for (const participant of item.booking.participants) {
+            if (participant.teacherId && participant.teacher) {
+                teacherIds.add(participant.teacherId)
+                teacherMap.set(participant.teacherId, participant.teacher.name)
+            }
+        }
+    }
+
+    return { teacherIds, teacherMap }
+}
+
+function isItemDue(item: EvaluationCronItem, evaluationDelayMinutes: number, bangkokNowMs: number) {
+    const itemEndMs = getItemEndBangkokTimestamp(item.date, item.endTime)
+    return itemEndMs !== null && itemEndMs + evaluationDelayMinutes * MINUTE_MS <= bangkokNowMs
+}
+
+function maskLineUserId(lineUserId: string) {
+    return `${lineUserId.slice(0, 5)}...${lineUserId.slice(-4)}`
+}
+
+async function buildDebugPayload(todayDate: Date, evaluationDelayMinutes: number, bangkokNowMs: number) {
+    const allCandidateItems = await findEvaluationCronItems(todayDate)
+    const completedItems = allCandidateItems.filter(item => isItemDue(item, evaluationDelayMinutes, bangkokNowMs))
+
+    const debugItems = await Promise.all(completedItems.slice(0, 30).map(async item => {
+        const lineUserId = item.booking.user?.lineUserId || null
+        const { teacherIds } = getItemTeacherIds(item)
+        const evaluations = teacherIds.size > 0
+            ? await prisma.teacherEvaluation.findMany({
+                where: { bookingItemId: item.id, teacherId: { in: [...teacherIds] } },
+                select: { isSubmitted: true },
+            })
+            : []
+
+        let reason = 'ready'
+        if (item.evaluationSent) reason = 'already_marked_sent'
+        else if (!lineUserId) reason = 'no_line_user_id'
+        else if (teacherIds.size === 0) reason = 'no_teacher'
+        else if (evaluations.some(evaluation => evaluation.isSubmitted)) reason = 'already_submitted'
+
+        return {
+            bookingNumber: item.booking.bookingNumber,
+            bookingItemId: item.id,
+            courtName: item.court.name,
+            date: item.date.toISOString().split('T')[0],
+            startTime: item.startTime,
+            endTime: item.endTime,
+            evaluationSent: item.evaluationSent,
+            hasLineUserId: Boolean(lineUserId),
+            teacherCount: teacherIds.size,
+            evaluationCount: evaluations.length,
+            reason,
+        }
+    }))
+
+    const recentEvaluationLogs = await prisma.lineMessageLog.findMany({
+        where: { messageType: 'evaluation' },
+        orderBy: { sentAt: 'desc' },
+        take: 10,
+        select: {
+            sentAt: true,
+            lineUserId: true,
+            bookingId: true,
+            success: true,
+            httpStatus: true,
+            errorCode: true,
+            errorDetail: true,
+        },
+    })
+
+    return {
+        candidateItems: allCandidateItems.length,
+        completedItems: completedItems.length,
+        pendingCompletedItems: completedItems.filter(item => !item.evaluationSent).length,
+        alreadyMarkedCompletedItems: completedItems.filter(item => item.evaluationSent).length,
+        items: debugItems,
+        recentEvaluationLogs: recentEvaluationLogs.map(log => ({
+            ...log,
+            lineUserId: maskLineUserId(log.lineUserId),
+        })),
+    }
+}
+
 // Finds completed booking items and sends one evaluation link per booking slot via LINE.
 // If a slot-level evaluation link was created earlier when assigning a teacher, reuse it.
 export async function GET(req: NextRequest) {
@@ -43,39 +161,17 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const { searchParams } = new URL(req.url)
+        const includeDebug = searchParams.get('debug') === '1'
         const now = new Date()
         const bangkokNowMs = now.getTime() + BANGKOK_OFFSET_MS
         const todayStr = getBangkokDateKey(bangkokNowMs)
         const todayDate = new Date(todayStr + 'T23:59:59Z')
         const evaluationDelayMinutes = getEvaluationDelayMinutes()
 
-        const bookingItems = await prisma.bookingItem.findMany({
-            where: {
-                evaluationSent: false,
-                date: { lte: todayDate },
-                booking: {
-                    status: 'CONFIRMED',
-                },
-            },
-            include: {
-                booking: {
-                    include: {
-                        user: { select: { name: true, lineUserId: true } },
-                        participants: {
-                            where: { teacherId: { not: null } },
-                            include: { teacher: { select: { id: true, name: true } } },
-                        },
-                    },
-                },
-                court: { select: { name: true } },
-                teacher: { select: { id: true, name: true } },
-            },
-        })
+        const bookingItems = await findEvaluationCronItems(todayDate, false)
 
-        const completedItems = bookingItems.filter(item => {
-            const itemEndMs = getItemEndBangkokTimestamp(item.date, item.endTime)
-            return itemEndMs !== null && itemEndMs + evaluationDelayMinutes * MINUTE_MS <= bangkokNowMs
-        })
+        const completedItems = bookingItems.filter(item => isItemDue(item, evaluationDelayMinutes, bangkokNowMs))
 
         let sentCount = 0
         let failedCount = 0
@@ -93,29 +189,12 @@ export async function GET(req: NextRequest) {
             const lineUserId = booking.user?.lineUserId
 
             if (!lineUserId) {
-                // No LINE ID: mark as handled to avoid retrying forever.
-                await prisma.bookingItem.update({
-                    where: { id: item.id },
-                    data: { evaluationSent: true },
-                })
+                // Keep evaluationSent=false so it can send after LINE is linked later.
                 skippedNoLine++
-                itemsMarked++
                 continue
             }
 
-            const teacherIds = new Set<string>()
-            const teacherMap = new Map<string, string>()
-            if (item.teacherId && item.teacher) {
-                teacherIds.add(item.teacherId)
-                teacherMap.set(item.teacherId, item.teacher.name)
-            } else {
-                for (const participant of booking.participants) {
-                    if (participant.teacherId && participant.teacher) {
-                        teacherIds.add(participant.teacherId)
-                        teacherMap.set(participant.teacherId, participant.teacher.name)
-                    }
-                }
-            }
+            const { teacherIds, teacherMap } = getItemTeacherIds(item)
 
             if (teacherIds.size === 0) {
                 // Keep evaluationSent=false so it can send after a teacher is assigned later.
@@ -192,6 +271,8 @@ export async function GET(req: NextRequest) {
 
         console.log(`Evaluation cron: ${evalCreated} created, ${evalReused} reused, ${sentCount} sent, ${failedCount} failed, ${skippedNoLine} skipped no LINE, ${skippedNoTeacher} skipped no teacher, ${completedItems.length} completed items`)
 
+        const debugPayload = includeDebug ? await buildDebugPayload(todayDate, evaluationDelayMinutes, bangkokNowMs) : undefined
+
         return NextResponse.json({
             success: true,
             currentTime: formatBangkokMinute(bangkokNowMs),
@@ -205,6 +286,7 @@ export async function GET(req: NextRequest) {
             skippedNoTeacher,
             skippedSubmitted,
             itemsMarked,
+            ...(debugPayload ? { debug: debugPayload } : {}),
         })
     } catch (error) {
         console.error('Evaluation cron error:', error)
