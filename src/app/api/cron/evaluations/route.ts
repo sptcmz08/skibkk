@@ -2,9 +2,39 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendLineEvaluationRequest } from '@/lib/line-messaging'
 
-// Cron endpoint — runs every 30 minutes
-// Finds completed booking items and sends evaluation links via LINE
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
+const DEFAULT_EVALUATION_DELAY_MINUTES = 5
 
+function getEvaluationDelayMinutes() {
+    const value = Number(process.env.EVALUATION_DELAY_MINUTES)
+    return Number.isFinite(value) && value >= 0 ? value : DEFAULT_EVALUATION_DELAY_MINUTES
+}
+
+function getBangkokDateKey(timestampMs: number) {
+    return new Date(timestampMs).toISOString().split('T')[0]
+}
+
+function formatBangkokMinute(timestampMs: number) {
+    return `${getBangkokDateKey(timestampMs)} ${new Date(timestampMs).toISOString().slice(11, 16)}`
+}
+
+function getItemEndBangkokTimestamp(date: Date, endTime: string) {
+    const [hoursRaw, minutesRaw = '0'] = endTime.split(':')
+    const hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw)
+    const dateKey = date.toISOString().split('T')[0]
+    const dayStart = Date.parse(`${dateKey}T00:00:00.000Z`)
+
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+
+    return dayStart + (hours * 60 + minutes) * MINUTE_MS
+}
+
+export const dynamic = 'force-dynamic'
+
+// Finds completed booking items and sends evaluation links via LINE.
+// If an evaluation link was created earlier when assigning a teacher, reuse that link.
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -13,19 +43,12 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        // Current time in Bangkok (UTC+7)
         const now = new Date()
-        const bangkokOffset = 7 * 60 * 60 * 1000
-        const bangkokNow = new Date(now.getTime() + bangkokOffset)
-        const currentHHMM = `${String(bangkokNow.getUTCHours()).padStart(2, '0')}:${String(bangkokNow.getUTCMinutes()).padStart(2, '0')}`
-        const todayStr = bangkokNow.toISOString().split('T')[0]
+        const bangkokNowMs = now.getTime() + BANGKOK_OFFSET_MS
+        const todayStr = getBangkokDateKey(bangkokNowMs)
         const todayDate = new Date(todayStr)
+        const evaluationDelayMinutes = getEvaluationDelayMinutes()
 
-        // Find BookingItems where:
-        // 1. date is today (or earlier)
-        // 2. endTime has passed (endTime <= current time)
-        // 3. evaluationSent = false
-        // 4. booking is CONFIRMED
         const bookingItems = await prisma.bookingItem.findMany({
             where: {
                 evaluationSent: false,
@@ -48,74 +71,87 @@ export async function GET(req: NextRequest) {
             },
         })
 
-        // Filter by endTime (string comparison works for HH:MM format)
         const completedItems = bookingItems.filter(item => {
-            const itemDateStr = new Date(item.date).toISOString().split('T')[0]
-            // If item date is before today, it's definitely completed
-            if (itemDateStr < todayStr) return true
-            // If item date is today, check if endTime has passed
-            return item.endTime <= currentHHMM
+            const itemEndMs = getItemEndBangkokTimestamp(item.date, item.endTime)
+            return itemEndMs !== null && itemEndMs + evaluationDelayMinutes * MINUTE_MS <= bangkokNowMs
         })
 
         let sentCount = 0
+        let failedCount = 0
         let evalCreated = 0
-        let skippedCount = 0
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://skibkk.com'
+        let evalReused = 0
+        let skippedNoLine = 0
+        let skippedNoTeacher = 0
+        let skippedSubmitted = 0
+        let itemsMarked = 0
+        const sentEvaluationKeys = new Set<string>()
+        const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://skibkk.com').replace(/\/$/, '')
 
         for (const item of completedItems) {
             const booking = item.booking
             const lineUserId = booking.user?.lineUserId
 
             if (!lineUserId) {
-                // No LINE ID — still mark as sent to avoid retrying
+                // No LINE ID: mark as handled to avoid retrying forever.
                 await prisma.bookingItem.update({
                     where: { id: item.id },
                     data: { evaluationSent: true },
                 })
-                skippedCount++
+                skippedNoLine++
+                itemsMarked++
                 continue
             }
 
-            // Get unique teachers from participants
             const teacherIds = new Set<string>()
             const teacherMap = new Map<string, string>()
-            for (const p of booking.participants) {
-                if (p.teacherId && p.teacher) {
-                    teacherIds.add(p.teacherId)
-                    teacherMap.set(p.teacherId, p.teacher.name)
+            for (const participant of booking.participants) {
+                if (participant.teacherId && participant.teacher) {
+                    teacherIds.add(participant.teacherId)
+                    teacherMap.set(participant.teacherId, participant.teacher.name)
                 }
             }
 
             if (teacherIds.size === 0) {
-                // No teachers assigned — mark as sent
-                await prisma.bookingItem.update({
-                    where: { id: item.id },
-                    data: { evaluationSent: true },
-                })
-                skippedCount++
+                // Keep evaluationSent=false so it can send after a teacher is assigned later.
+                skippedNoTeacher++
                 continue
             }
 
-            // Create evaluation for each teacher (if not already created for this booking+teacher)
+            let itemHandled = true
+
             for (const teacherId of teacherIds) {
-                // Check if evaluation already exists for this booking + teacher
-                const existing = await prisma.teacherEvaluation.findFirst({
+                const sendKey = `${booking.id}:${teacherId}`
+                if (sentEvaluationKeys.has(sendKey)) continue
+
+                let evaluation = await prisma.teacherEvaluation.findFirst({
                     where: { bookingId: booking.id, teacherId },
                 })
-                if (existing) continue
 
-                // Create evaluation token
-                const evaluation = await prisma.teacherEvaluation.create({
-                    data: {
-                        teacherId,
-                        bookingId: booking.id,
-                    },
-                })
+                if (evaluation) {
+                    evalReused++
+                } else {
+                    evaluation = await prisma.teacherEvaluation.create({
+                        data: {
+                            teacherId,
+                            bookingId: booking.id,
+                        },
+                    })
+                    evalCreated++
+                }
+
+                if (evaluation.isSubmitted) {
+                    skippedSubmitted++
+                    continue
+                }
 
                 const evaluationUrl = `${baseUrl}/evaluate/${evaluation.token}`
-                const itemDate = new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+                const itemDate = new Date(item.date).toLocaleDateString('th-TH', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'Asia/Bangkok',
+                })
 
-                // Send LINE message
                 const result = await sendLineEvaluationRequest(lineUserId, {
                     customerName: booking.user?.name || 'ลูกค้า',
                     teacherName: teacherMap.get(teacherId) || 'ครูผู้สอน',
@@ -126,29 +162,41 @@ export async function GET(req: NextRequest) {
                     endTime: item.endTime,
                 })
 
-                evalCreated++
-                if (result.success) sentCount++
+                if (result.success) {
+                    sentCount++
+                    sentEvaluationKeys.add(sendKey)
+                } else {
+                    failedCount++
+                    itemHandled = false
+                }
 
-                // Small delay to avoid LINE rate limiting
                 await new Promise(resolve => setTimeout(resolve, 300))
             }
 
-            // Mark booking item as evaluation sent
-            await prisma.bookingItem.update({
-                where: { id: item.id },
-                data: { evaluationSent: true },
-            })
+            if (itemHandled) {
+                await prisma.bookingItem.update({
+                    where: { id: item.id },
+                    data: { evaluationSent: true },
+                })
+                itemsMarked++
+            }
         }
 
-        console.log(`⭐ Evaluation cron: ${evalCreated} evaluations created, ${sentCount} LINE messages sent, ${skippedCount} skipped, ${completedItems.length} completed items`)
+        console.log(`Evaluation cron: ${evalCreated} created, ${evalReused} reused, ${sentCount} sent, ${failedCount} failed, ${skippedNoLine} skipped no LINE, ${skippedNoTeacher} skipped no teacher, ${completedItems.length} completed items`)
 
         return NextResponse.json({
             success: true,
-            currentTime: currentHHMM,
+            currentTime: formatBangkokMinute(bangkokNowMs),
+            evaluationDelayMinutes,
             completedItems: completedItems.length,
             evaluationsCreated: evalCreated,
+            evaluationsReused: evalReused,
             lineMessagesSent: sentCount,
-            skipped: skippedCount,
+            lineMessagesFailed: failedCount,
+            skippedNoLine,
+            skippedNoTeacher,
+            skippedSubmitted,
+            itemsMarked,
         })
     } catch (error) {
         console.error('Evaluation cron error:', error)
