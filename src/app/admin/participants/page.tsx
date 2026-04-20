@@ -3,7 +3,7 @@
 import { FadeIn } from '@/components/Motion'
 
 import { useState, useEffect } from 'react'
-import { Users, GraduationCap, Copy, ExternalLink, Search, CheckCircle } from 'lucide-react'
+import { Users, Copy, ExternalLink, Search, CheckCircle, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Teacher { id: string; name: string; specialty: string | null }
@@ -15,7 +15,15 @@ interface Participant {
 interface BookingData {
     id: string; bookingNumber: string; status: string; createdAt: string
     user: { name: string; email: string; phone: string; lineUserId: string | null }
-    bookingItems: Array<{ court: { name: string }; date: string; startTime: string; endTime: string }>
+    bookingItems: Array<{
+        id: string
+        court: { name: string }
+        date: string
+        startTime: string
+        endTime: string
+        teacherId: string | null
+        evaluationSent: boolean
+    }>
     participants: Participant[]
 }
 
@@ -25,6 +33,7 @@ export default function ParticipantsPage() {
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [filter, setFilter] = useState<'all' | 'assigned' | 'unassigned'>('all')
+    const [sendingEvaluationId, setSendingEvaluationId] = useState<string | null>(null)
 
     const loadData = () => {
         fetch('/api/participants')
@@ -72,6 +81,28 @@ export default function ParticipantsPage() {
             }
         } catch {
             toast.error('เกิดข้อผิดพลาด')
+        }
+    }
+
+    const handleSendEvaluation = async (bookingItemId: string) => {
+        setSendingEvaluationId(bookingItemId)
+        try {
+            const res = await fetch('/api/evaluations/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingItemId }),
+            })
+            const data = await res.json()
+            if (res.ok) {
+                toast.success(data.message || 'ส่งแบบประเมินแล้ว')
+                loadData()
+            } else {
+                toast.error(data.error || 'ส่งแบบประเมินไม่สำเร็จ')
+            }
+        } catch {
+            toast.error('เกิดข้อผิดพลาด')
+        } finally {
+            setSendingEvaluationId(null)
         }
     }
 
@@ -148,9 +179,48 @@ export default function ParticipantsPage() {
                                     {booking.user.name} • {new Date(booking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </span>
                             </div>
-                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>
-                                {booking.bookingItems.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(' | ')}
-                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                            {booking.bookingItems.map(item => {
+                                const canSendEvaluation = booking.status === 'CONFIRMED'
+                                    && Boolean(booking.user.lineUserId)
+                                    && Boolean(item.teacherId || booking.participants.some(participant => participant.teacherId))
+                                return (
+                                    <div key={item.id} style={{
+                                        border: '1px solid var(--a-border)',
+                                        borderRadius: '8px',
+                                        padding: '8px 10px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: '#fff',
+                                        fontSize: '12px',
+                                    }}>
+                                        <span style={{ color: 'var(--a-text-secondary)' }}>
+                                            {item.court.name} {new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {item.startTime}-{item.endTime}
+                                        </span>
+                                        <button
+                                            onClick={() => handleSendEvaluation(item.id)}
+                                            disabled={!canSendEvaluation || sendingEvaluationId === item.id}
+                                            className="btn-admin-outline"
+                                            style={{
+                                                padding: '5px 8px',
+                                                fontSize: '11px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                opacity: !canSendEvaluation ? 0.5 : 1,
+                                                cursor: !canSendEvaluation ? 'not-allowed' : 'pointer',
+                                            }}
+                                            title={!booking.user.lineUserId ? 'ลูกค้ายังไม่ได้เชื่อม LINE' : !canSendEvaluation ? 'ต้องยืนยัน booking และเลือกครูก่อน' : undefined}
+                                        >
+                                            <Send size={12} />
+                                            {sendingEvaluationId === item.id ? 'กำลังส่ง...' : item.evaluationSent ? 'ส่งซ้ำ' : 'ส่งประเมิน'}
+                                        </button>
+                                    </div>
+                                )
+                            })}
                         </div>
 
                         {/* Participants table */}
