@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
                     })),
                     totalAmount: body.totalAmount,
                 })
-                sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+                sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }], { messageType: 'confirmation', bookingId: booking.id }).catch(err => console.error('Failed to send LINE confirmation:', err))
             }
         }
 
@@ -764,7 +764,7 @@ export async function PATCH(req: NextRequest) {
                 totalAmount: updatedWithPayments.totalAmount,
             })
 
-            sendLinePush(updatedWithPayments.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE update:', err))
+            sendLinePush(updatedWithPayments.user.lineUserId, [{ type: 'text', text: message }], { messageType: 'update', bookingId: updatedWithPayments.id }).catch(err => console.error('Failed to send LINE update:', err))
         }
 
         return NextResponse.json({ booking: updatedWithPayments })

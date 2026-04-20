@@ -408,3 +408,20 @@ model ClosedDate {
 
   @@map("closed_dates")
 }
+
+model LineMessageLog {
+  id          String   @id @default(uuid())
+  lineUserId  String
+  messageType String   // confirmation, update, reminder, reminder_sameday, evaluation
+  bookingId   String?
+  success     Boolean
+  httpStatus  Int?
+  errorCode   String?
+  errorDetail String?  @db.Text
+  sentAt      DateTime @default(now())
+
+  @@index([sentAt])
+  @@index([lineUserId])
+  @@index([messageType])
+  @@map("line_message_logs")
+}

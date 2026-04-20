@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
                     })),
                     totalAmount: confirmedBooking.totalAmount,
                 })
-                sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+                sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }], { messageType: 'payment_confirmation', bookingId: confirmedBooking.id }).catch(err => console.error('Failed to send LINE confirmation:', err))
             }
         }
 

@@ -85,6 +85,7 @@ async function processReminderGroup(
     now: Date,
     reminderTemplate: string | undefined,
     headerText: string,
+    messageType: string,
 ) {
     let sentCount = 0
     let failCount = 0
@@ -118,7 +119,7 @@ async function processReminderGroup(
             totalAmount: booking.totalAmount,
         }, headerText)
 
-        const result = await sendLineBookingReminder(booking.user.lineUserId, message)
+        const result = await sendLineBookingReminder(booking.user.lineUserId, message, { messageType, bookingId: booking.id })
 
         if (result.success) {
             sentCount++
@@ -176,13 +177,13 @@ export async function GET(req: NextRequest) {
         // Process 24h-ahead reminders ("พรุ่งนี้")
         const result24h = await processReminderGroup(
             itemsByBooking, now, reminderTemplate,
-            '📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!',
+            '📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!', 'reminder',
         )
 
         // Process same-day reminders ("วันนี้")
         const resultSameDay = await processReminderGroup(
             sameDayByBooking, now, reminderTemplate,
-            '⏰ แจ้งเตือน: คุณมีจองสนามวันนี้!',
+            '⏰ แจ้งเตือน: คุณมีจองสนามวันนี้!', 'reminder_sameday',
         )
 
         const totalSent = result24h.sentCount + resultSameDay.sentCount

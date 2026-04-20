@@ -167,6 +167,7 @@ export async function GET(req: NextRequest) {
                     date: itemDate,
                     startTime: item.startTime,
                     endTime: item.endTime,
+                    bookingId: booking.id,
                 })
 
                 if (result.success) {

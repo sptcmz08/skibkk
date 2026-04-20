@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
             date: formatEvaluationDate(item.date),
             startTime: item.startTime,
             endTime: item.endTime,
+            bookingId: item.bookingId,
         })
 
         if (!result.success) {

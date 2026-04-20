@@ -281,7 +281,7 @@ export async function PATCH(req: NextRequest) {
                     hoursRemaining: userPkg.remainingHours - hoursToDeduct,
                 },
             })
-            sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }]).catch(err => console.error('Failed to send LINE confirmation:', err))
+            sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }], { messageType: 'package_booking_admin', bookingId: confirmedBooking.id }).catch(err => console.error('Failed to send LINE confirmation:', err))
         }
 
         return NextResponse.json({ message: 'ตัดชั่วโมงแพ็คเกจสำเร็จ' })
