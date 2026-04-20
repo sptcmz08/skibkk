@@ -33,8 +33,8 @@ function getItemEndBangkokTimestamp(date: Date, endTime: string) {
 
 export const dynamic = 'force-dynamic'
 
-// Finds completed booking items and sends evaluation links via LINE.
-// If an evaluation link was created earlier when assigning a teacher, reuse that link.
+// Finds completed booking items and sends one evaluation link per booking slot via LINE.
+// If a slot-level evaluation link was created earlier when assigning a teacher, reuse it.
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
                     },
                 },
                 court: { select: { name: true } },
+                teacher: { select: { id: true, name: true } },
             },
         })
 
@@ -104,10 +105,15 @@ export async function GET(req: NextRequest) {
 
             const teacherIds = new Set<string>()
             const teacherMap = new Map<string, string>()
-            for (const participant of booking.participants) {
-                if (participant.teacherId && participant.teacher) {
-                    teacherIds.add(participant.teacherId)
-                    teacherMap.set(participant.teacherId, participant.teacher.name)
+            if (item.teacherId && item.teacher) {
+                teacherIds.add(item.teacherId)
+                teacherMap.set(item.teacherId, item.teacher.name)
+            } else {
+                for (const participant of booking.participants) {
+                    if (participant.teacherId && participant.teacher) {
+                        teacherIds.add(participant.teacherId)
+                        teacherMap.set(participant.teacherId, participant.teacher.name)
+                    }
                 }
             }
 
@@ -120,11 +126,11 @@ export async function GET(req: NextRequest) {
             let itemHandled = true
 
             for (const teacherId of teacherIds) {
-                const sendKey = `${booking.id}:${teacherId}`
+                const sendKey = `${item.id}:${teacherId}`
                 if (sentEvaluationKeys.has(sendKey)) continue
 
                 let evaluation = await prisma.teacherEvaluation.findFirst({
-                    where: { bookingId: booking.id, teacherId },
+                    where: { bookingItemId: item.id, teacherId },
                 })
 
                 if (evaluation) {
@@ -134,6 +140,7 @@ export async function GET(req: NextRequest) {
                         data: {
                             teacherId,
                             bookingId: booking.id,
+                            bookingItemId: item.id,
                         },
                     })
                     evalCreated++

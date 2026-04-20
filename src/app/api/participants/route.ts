@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 
-// GET — list participants from confirmed bookings (with teacher info)
+// GET: list participants from confirmed bookings with teacher info.
 export async function GET() {
     try {
         const user = await requireAuth()
@@ -39,7 +39,7 @@ export async function GET() {
     }
 }
 
-// PATCH — assign teacher to participant + auto-create evaluation link
+// PATCH: assign teacher to participant and prepare one evaluation link per booking slot.
 export async function PATCH(req: NextRequest) {
     try {
         const user = await requireAuth()
@@ -49,42 +49,59 @@ export async function PATCH(req: NextRequest) {
 
         const { participantId, teacherId } = await req.json()
 
-        // Update participant
         const participant = await prisma.participant.update({
             where: { id: participantId },
             data: { teacherId },
             include: { booking: { include: { user: true } } },
         })
 
-        // Sync teacherId to booking items as well (link with calendar edit)
         if (teacherId) {
             await prisma.bookingItem.updateMany({
-                where: { bookingId: participant.bookingId },
-                data: { teacherId },
+                where: {
+                    bookingId: participant.bookingId,
+                    OR: [
+                        { teacherId: null },
+                        { teacherId: { not: teacherId } },
+                    ],
+                },
+                data: { teacherId, evaluationSent: false },
             })
         }
 
-        // Auto-create evaluation link for this teacher+booking
-        const existingEval = await prisma.teacherEvaluation.findFirst({
-            where: { teacherId, bookingId: participant.bookingId },
-        })
-
-        let evaluationUrl = null
-        if (!existingEval) {
-            const evaluation = await prisma.teacherEvaluation.create({
-                data: {
-                    teacherId,
-                    bookingId: participant.bookingId,
-                },
+        const evaluationUrls: string[] = []
+        if (teacherId) {
+            const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://skibkk.com').replace(/\/$/, '')
+            const bookingItems = await prisma.bookingItem.findMany({
+                where: { bookingId: participant.bookingId },
+                orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
             })
-            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://skibkk.com'
-            evaluationUrl = `${baseUrl}/evaluate/${evaluation.token}`
+
+            for (const item of bookingItems) {
+                let evaluation = await prisma.teacherEvaluation.findFirst({
+                    where: { teacherId, bookingItemId: item.id },
+                })
+
+                if (!evaluation) {
+                    evaluation = await prisma.teacherEvaluation.create({
+                        data: {
+                            teacherId,
+                            bookingId: participant.bookingId,
+                            bookingItemId: item.id,
+                        },
+                    })
+                }
+
+                evaluationUrls.push(`${baseUrl}/evaluate/${evaluation.token}`)
+            }
         }
 
         return NextResponse.json({
             participant,
-            evaluationUrl,
-            message: evaluationUrl ? 'เลือกครูผู้สอนและสร้างลิงก์แบบประเมินอัตโนมัติแล้ว' : 'เลือกครูผู้สอนแล้ว',
+            evaluationUrl: evaluationUrls[0] || null,
+            evaluationUrls,
+            message: evaluationUrls.length > 0
+                ? 'เลือกครูผู้สอนและสร้างลิงก์แบบประเมินแยกตามรอบเวลาแล้ว'
+                : 'เลือกครูผู้สอนแล้ว',
         })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {

@@ -78,11 +78,11 @@ model Court {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  venue          Venue?           @relation(fields: [venueId], references: [id])
-  operatingHours OperatingHours[]
-  bookingItems   BookingItem[]
-  originalBookingItems BookingItem[] @relation("OriginalBookingItems")
-  pricingRules   PricingRule[]
+  venue                Venue?           @relation(fields: [venueId], references: [id])
+  operatingHours       OperatingHours[]
+  bookingItems         BookingItem[]
+  originalBookingItems BookingItem[]    @relation("OriginalBookingItems")
+  pricingRules         PricingRule[]
 
   @@map("courts")
 }
@@ -189,25 +189,26 @@ model Booking {
 }
 
 model BookingItem {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   bookingId         String
   courtId           String
-  date              DateTime @db.Date
+  date              DateTime  @db.Date
   startTime         String // "09:00"
   endTime           String // "10:00"
   price             Float
   teacherId         String?
-  evaluationSent    Boolean  @default(false)
+  evaluationSent    Boolean   @default(false)
   reminderSentAt    DateTime?
   originalCourtId   String?
   originalDate      DateTime? @db.Date
   originalStartTime String?
   originalEndTime   String?
 
-  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  court         Court    @relation(fields: [courtId], references: [id])
-  teacher       Teacher? @relation(fields: [teacherId], references: [id])
-  originalCourt Court?   @relation("OriginalBookingItems", fields: [originalCourtId], references: [id])
+  booking       Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  court         Court               @relation(fields: [courtId], references: [id])
+  teacher       Teacher?            @relation(fields: [teacherId], references: [id])
+  originalCourt Court?              @relation("OriginalBookingItems", fields: [originalCourtId], references: [id])
+  evaluations   TeacherEvaluation[]
 
   @@unique([courtId, date, startTime])
   @@map("booking_items")
@@ -321,6 +322,7 @@ model TeacherEvaluation {
   id              String    @id @default(uuid())
   teacherId       String
   bookingId       String?
+  bookingItemId   String?
   token           String    @unique @default(uuid()) // for public form link
   evaluatorName   String?
   // Trainer ratings (1=ปรับปรุง 2=พอใช้ 3=ดี 4=ดีมาก)
@@ -338,8 +340,10 @@ model TeacherEvaluation {
   submittedAt     DateTime?
   createdAt       DateTime  @default(now())
 
-  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher     Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  bookingItem BookingItem? @relation(fields: [bookingItemId], references: [id], onDelete: SetNull)
 
+  @@index([bookingItemId, teacherId])
   @@map("teacher_evaluations")
 }
 
@@ -356,7 +360,7 @@ model Invoice {
   grandTotal    Float
   customData    Json?
   issuedAt      DateTime @default(now())
-  updatedAt     DateTime @updatedAt @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id])
 
