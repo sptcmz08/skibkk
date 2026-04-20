@@ -96,7 +96,8 @@ export const buildLineUpdateMessage = (
 export const buildLineReminderMessage = (
     note: string | null | undefined,
     data: BookingNotifyData,
+    headerText = '📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!',
 ) => {
     const safeNote = normalizeLineEditableNote(note, DEFAULT_LINE_REMINDER_NOTE)
-    return `📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!\n\nสวัสดีคุณ ${data.customerName}\nหมายเลขจอง: #${data.bookingNumber}\n\n${formatItemsText(data.items)}\n\n${safeNote}`
+    return `${headerText}\n\nสวัสดีคุณ ${data.customerName}\nหมายเลขจอง: #${data.bookingNumber}\n\n${formatItemsText(data.items)}\n\n${safeNote}`
 }

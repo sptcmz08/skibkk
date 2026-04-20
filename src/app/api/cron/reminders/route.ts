@@ -35,8 +35,9 @@ function getItemStartBangkokTimestamp(date: Date, startTime: string) {
 }
 
 async function findDueReminderItems(reminderStartMs: number, reminderEndMs: number) {
-    const rangeStartDate = new Date(formatBangkokDateKey(reminderStartMs))
-    const rangeEndDate = new Date(formatBangkokDateKey(reminderEndMs))
+    const rangeStartDate = new Date(formatBangkokDateKey(reminderStartMs) + 'T00:00:00.000Z')
+    // Use end-of-day so noon-stored @db.Date values are included in the range
+    const rangeEndDate = new Date(formatBangkokDateKey(reminderEndMs) + 'T23:59:59.999Z')
 
     const candidateItems = await prisma.bookingItem.findMany({
         where: {
@@ -76,8 +77,69 @@ function groupItemsByBooking(items: DueReminderItem[]) {
     return itemsByBooking
 }
 
+/**
+ * Process a group of reminder bookings: send LINE messages and mark as sent.
+ */
+async function processReminderGroup(
+    itemsByBooking: Map<string, DueReminderItem[]>,
+    now: Date,
+    reminderTemplate: string | undefined,
+    headerText: string,
+) {
+    let sentCount = 0
+    let failCount = 0
+    let skippedCount = 0
+    let reminderItemsMarked = 0
+
+    for (const items of itemsByBooking.values()) {
+        const booking = items[0].booking
+        const itemIds = items.map(item => item.id)
+
+        if (!booking.user?.lineUserId) {
+            skippedCount++
+            await prisma.bookingItem.updateMany({
+                where: { id: { in: itemIds } },
+                data: { reminderSentAt: now },
+            })
+            reminderItemsMarked += itemIds.length
+            continue
+        }
+
+        const message = buildLineReminderMessage(reminderTemplate, {
+            bookingNumber: booking.bookingNumber,
+            customerName: booking.user.name,
+            items: items.map(item => ({
+                courtName: item.court.name,
+                date: new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+                startTime: item.startTime,
+                endTime: item.endTime,
+                price: item.price,
+            })),
+            totalAmount: booking.totalAmount,
+        }, headerText)
+
+        const result = await sendLineBookingReminder(booking.user.lineUserId, message)
+
+        if (result.success) {
+            sentCount++
+            await prisma.bookingItem.updateMany({
+                where: { id: { in: itemIds } },
+                data: { reminderSentAt: now },
+            })
+            reminderItemsMarked += itemIds.length
+        } else {
+            failCount++
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 300))
+    }
+
+    return { sentCount, failCount, skippedCount, reminderItemsMarked }
+}
+
 // Call this endpoint frequently by cron. It sends LINE reminders for booking items
 // that start about 24 hours from now, within REMINDER_WINDOW_MINUTES.
+// It also sends same-day reminders for bookings starting 1–12 hours from now.
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -89,10 +151,21 @@ export async function GET(req: NextRequest) {
         const now = new Date()
         const bangkokNowMs = now.getTime() + BANGKOK_OFFSET_MS
         const windowMinutes = getReminderWindowMinutes()
+
+        // 24h-ahead reminder window
         const reminderStartMs = bangkokNowMs + MS_PER_DAY
         const reminderEndMs = reminderStartMs + windowMinutes * 60 * 1000
         const dueItems = await findDueReminderItems(reminderStartMs, reminderEndMs)
         const itemsByBooking = groupItemsByBooking(dueItems)
+
+        // Same-day catch-up: bookings starting 1h to 12h from now
+        // This covers bookings made less than 24h in advance
+        const SAME_DAY_MIN_MS = 1 * 60 * 60 * 1000
+        const SAME_DAY_MAX_MS = 12 * 60 * 60 * 1000
+        const sameDayStartMs = bangkokNowMs + SAME_DAY_MIN_MS
+        const sameDayEndMs = bangkokNowMs + SAME_DAY_MAX_MS
+        const sameDayItems = await findDueReminderItems(sameDayStartMs, sameDayEndMs)
+        const sameDayByBooking = groupItemsByBooking(sameDayItems)
 
         // Fetch custom template
         const settings = await prisma.siteSetting.findMany()
@@ -100,55 +173,24 @@ export async function GET(req: NextRequest) {
         settings.forEach(s => settingsMap[s.key] = s.value)
         const reminderTemplate = settingsMap['line_booking_reminder_template']
 
-        let sentCount = 0
-        let failCount = 0
-        let skippedCount = 0
-        let reminderItemsMarked = 0
+        // Process 24h-ahead reminders ("พรุ่งนี้")
+        const result24h = await processReminderGroup(
+            itemsByBooking, now, reminderTemplate,
+            '📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!',
+        )
 
-        for (const items of itemsByBooking.values()) {
-            const booking = items[0].booking
-            const itemIds = items.map(item => item.id)
+        // Process same-day reminders ("วันนี้")
+        const resultSameDay = await processReminderGroup(
+            sameDayByBooking, now, reminderTemplate,
+            '⏰ แจ้งเตือน: คุณมีจองสนามวันนี้!',
+        )
 
-            if (!booking.user?.lineUserId) {
-                skippedCount++
-                await prisma.bookingItem.updateMany({
-                    where: { id: { in: itemIds } },
-                    data: { reminderSentAt: now },
-                })
-                reminderItemsMarked += itemIds.length
-                continue
-            }
+        const totalSent = result24h.sentCount + resultSameDay.sentCount
+        const totalFailed = result24h.failCount + resultSameDay.failCount
+        const totalSkipped = result24h.skippedCount + resultSameDay.skippedCount
+        const totalItemsMarked = result24h.reminderItemsMarked + resultSameDay.reminderItemsMarked
 
-            const message = buildLineReminderMessage(reminderTemplate, {
-                bookingNumber: booking.bookingNumber,
-                customerName: booking.user.name,
-                items: items.map(item => ({
-                    courtName: item.court.name,
-                    date: new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                    price: item.price,
-                })),
-                totalAmount: booking.totalAmount,
-            })
-
-            const result = await sendLineBookingReminder(booking.user.lineUserId, message)
-
-            if (result.success) {
-                sentCount++
-                await prisma.bookingItem.updateMany({
-                    where: { id: { in: itemIds } },
-                    data: { reminderSentAt: now },
-                })
-                reminderItemsMarked += itemIds.length
-            } else {
-                failCount++
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 300))
-        }
-
-        console.log(`LINE Reminder cron: ${sentCount} sent, ${failCount} failed, ${skippedCount} skipped (no LINE), ${dueItems.length} due items`)
+        console.log(`LINE Reminder cron: ${totalSent} sent (24h:${result24h.sentCount} sameDay:${resultSameDay.sentCount}), ${totalFailed} failed, ${totalSkipped} skipped (no LINE), ${dueItems.length + sameDayItems.length} due items`)
 
         return NextResponse.json({
             success: true,
@@ -158,12 +200,18 @@ export async function GET(req: NextRequest) {
                 end: formatBangkokMinute(reminderEndMs),
                 minutes: windowMinutes,
             },
-            totalBookings: itemsByBooking.size,
-            totalItems: dueItems.length,
-            lineMessagesSent: sentCount,
-            lineMessagesFailed: failCount,
-            skippedNoLine: skippedCount,
-            reminderItemsMarked,
+            sameDayWindow: {
+                start: formatBangkokMinute(sameDayStartMs),
+                end: formatBangkokMinute(sameDayEndMs),
+            },
+            totalBookings: itemsByBooking.size + sameDayByBooking.size,
+            totalItems: dueItems.length + sameDayItems.length,
+            lineMessagesSent: totalSent,
+            lineMessagesSent24h: result24h.sentCount,
+            lineMessagesSentSameDay: resultSameDay.sentCount,
+            lineMessagesFailed: totalFailed,
+            skippedNoLine: totalSkipped,
+            reminderItemsMarked: totalItemsMarked,
         })
     } catch (error) {
         console.error('Reminder cron error:', error)

@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         const now = new Date()
         const bangkokNowMs = now.getTime() + BANGKOK_OFFSET_MS
         const todayStr = getBangkokDateKey(bangkokNowMs)
-        const todayDate = new Date(todayStr)
+        const todayDate = new Date(todayStr + 'T23:59:59Z')
         const evaluationDelayMinutes = getEvaluationDelayMinutes()
 
         const bookingItems = await prisma.bookingItem.findMany({
