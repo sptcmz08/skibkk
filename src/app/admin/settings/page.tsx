@@ -32,8 +32,11 @@ export default function AdminSettingsPage() {
     const qrInputRef = useRef<HTMLInputElement>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
     const [qrReceiver, setQrReceiver] = useState<{ name: string; account: string; learnedAt: string | null; autoLearned: boolean } | null>(null)
+    const [qrReceiverName, setQrReceiverName] = useState('')
+    const [qrReceiverAccount, setQrReceiverAccount] = useState('')
     const [qrStatus, setQrStatus] = useState<'ready' | 'learning' | 'no_qr'>('no_qr')
     const [qrUploading, setQrUploading] = useState(false)
+    const [qrSaving, setQrSaving] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
 
     useEffect(() => {
@@ -59,10 +62,47 @@ export default function AdminSettingsPage() {
         // Load QR settings
         fetch('/api/admin/qr-settings').then(r => r.json()).then(data => {
             if (data.qrImage) setQrImage(data.qrImage)
-            if (data.receiver) setQrReceiver(data.receiver)
+            if (data.receiver) {
+                setQrReceiver(data.receiver)
+                setQrReceiverName(data.receiver.name || '')
+                setQrReceiverAccount(data.receiver.account || '')
+            }
             if (data.status) setQrStatus(data.status)
         }).catch(() => { })
     }, [])
+
+    const saveQrReceiver = async () => {
+        const name = qrReceiverName.trim()
+        const account = qrReceiverAccount.trim()
+        if (!name && !account) {
+            toast.error('กรุณากรอกชื่อผู้รับหรือเลขบัญชีอย่างน้อย 1 ช่อง')
+            return
+        }
+
+        setQrSaving(true)
+        try {
+            const res = await fetch('/api/admin/qr-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ receiver: { name, account } }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                toast.error(data.error || 'บันทึกข้อมูลผู้รับไม่สำเร็จ')
+                return
+            }
+
+            setQrReceiver(data.receiver || { name, account, learnedAt: new Date().toISOString(), autoLearned: false })
+            setQrReceiverName(data.receiver?.name || name)
+            setQrReceiverAccount(data.receiver?.account || account)
+            setQrStatus(data.status || 'ready')
+            toast.success(data.message || 'บันทึกข้อมูลบัญชีผู้รับสำเร็จ')
+        } catch {
+            toast.error('บันทึกข้อมูลผู้รับไม่สำเร็จ')
+        } finally {
+            setQrSaving(false)
+        }
+    }
 
     const uploadFile = async (file: File): Promise<string | null> => {
         const formData = new FormData()
@@ -242,7 +282,7 @@ export default function AdminSettingsPage() {
                             padding: '14px', textAlign: 'center',
                         }}>
                             <div style={{ fontSize: '16px', fontWeight: 800, color: '#2d3436' }}>
-                                {qrReceiver?.name || 'SKI BKK รามอินทรา40'}
+                                {qrReceiverName || qrReceiver?.name || 'SKI BKK รามอินทรา40'}
                             </div>
                             <div style={{ fontSize: '13px', color: '#636e72', marginTop: '2px' }}>
                                 SKI BKK
@@ -298,8 +338,32 @@ export default function AdminSettingsPage() {
                             </div>
                         </div>
 
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>à¸à¸£à¸­à¸à¸Šà¸·à¹ˆà¸­à¸œà¸¹à¹‰à¸£à¸±à¸šà¹€à¸­à¸‡ (à¸—à¸²à¸‡à¹€à¸¥à¸·à¸­à¸)</div>
+                                <input
+                                    className="admin-input"
+                                    placeholder="เช่น SKI BKK"
+                                    value={qrReceiverName}
+                                    onChange={e => setQrReceiverName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>à¸à¸£à¸­à¸à¹€à¸¥à¸‚à¸šà¸±à¸à¸Šà¸µà¹€à¸­à¸‡ (à¸—à¸²à¸‡à¹€à¸¥à¸·à¸­à¸)</div>
+                                <input
+                                    className="admin-input"
+                                    placeholder="เช่น 014000003712049"
+                                    value={qrReceiverAccount}
+                                    onChange={e => setQrReceiverAccount(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
                         {/* Actions */}
                         <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <button className="btn-admin" disabled={qrSaving} onClick={saveQrReceiver}>
+                                {qrSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลผู้รับ'}
+                            </button>
                             {qrStatus === 'ready' && (
                                 <button
                                     className="btn-admin"
@@ -336,8 +400,12 @@ export default function AdminSettingsPage() {
                         const data = await res.json()
                         if (res.ok) {
                             setQrImage(base64)
-                            setQrStatus('learning')
-                            setQrReceiver(null)
+                            setQrStatus(data.status || 'learning')
+                            setQrReceiver(data.receiver || null)
+                            if (!data.receiver) {
+                                setQrReceiverName('')
+                                setQrReceiverAccount('')
+                            }
                             toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
                         } else {
                             toast.error(data.error || 'อัปโหลดไม่สำเร็จ')
@@ -563,13 +631,16 @@ export default function AdminSettingsPage() {
                 type="warning"
                 icon="🔄"
                 onConfirm={async () => {
-                    await fetch('/api/admin/qr-settings', {
+                    const res = await fetch('/api/admin/qr-settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ qrImage: qrImage, resetReceiver: true }),
+                        body: JSON.stringify({ resetReceiver: true }),
                     })
-                    setQrStatus('learning')
+                    const data = await res.json().catch(() => null)
+                    setQrStatus(data?.status || (qrImage ? 'learning' : 'no_qr'))
                     setQrReceiver(null)
+                    setQrReceiverName('')
+                    setQrReceiverAccount('')
                     setShowResetConfirm(false)
                     toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
                 }}

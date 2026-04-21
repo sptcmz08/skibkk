@@ -264,12 +264,36 @@ export default function BookingPage() {
             fetch('/api/user-packages').then(r => r.json())
                 .then(data => setUserPackages(data.packages || []))
                 .catch(() => { })
-            // Load QR from DB
-            fetch('/api/admin/qr-settings').then(r => r.json())
-                .then(data => { if (data.qrImage) setQrImage(data.qrImage) })
-                .catch(() => { })
+
+            const loadQrImage = async () => {
+                try {
+                    const settingsRes = await fetch('/api/admin/qr-settings')
+                    const settingsData = await settingsRes.json()
+                    if (settingsData.qrImage) {
+                        setQrImage(settingsData.qrImage)
+                        return
+                    }
+                } catch { /* ignore */ }
+
+                try {
+                    const qrRes = await fetch('/api/payments/qr', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: total }),
+                    })
+                    const qrData = await qrRes.json()
+                    if (qrRes.ok && qrData.qrDataUrl) {
+                        setQrImage(qrData.qrDataUrl)
+                        return
+                    }
+                } catch { /* ignore */ }
+
+                setQrImage(null)
+            }
+
+            loadQrImage().catch(() => setQrImage(null))
         }
-    }, [step])
+    }, [step, total])
 
     // Fetch sport types for participant dropdown
     useEffect(() => {
