@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
+import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, CheckCircle, Upload, Package, AlertTriangle, Timer, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clearStoredCart, readStoredCart, syncCartWithServerLocks } from '@/lib/cart'
 
@@ -98,6 +98,16 @@ export default function BookingPage() {
     const remaining = total - paidTotal
     const hasVisibleBankDetails = paymentDisplayConfig.enableBankDetails && Boolean(qrReceiver?.name || qrReceiver?.account || qrReceiver?.bankName)
     const hasTransferChannel = paymentDisplayConfig.enableQrCode || hasVisibleBankDetails
+    const showPaymentImage = paymentDisplayConfig.enableQrCode && Boolean(qrImage)
+    const copyPaymentText = async (value: string | undefined, label: string) => {
+        if (!value) return
+        try {
+            await navigator.clipboard.writeText(value)
+            toast.success(`คัดลอก${label}แล้ว`)
+        } catch {
+            toast.error(`คัดลอก${label}ไม่สำเร็จ`)
+        }
+    }
 
     // Lock countdown timer for payment step
     const [lockSecondsLeft, setLockSecondsLeft] = useState<number | null>(null)
@@ -980,23 +990,23 @@ export default function BookingPage() {
                     <style>{`@keyframes timerPulse { 0%,100%{opacity:1} 50%{opacity:0.55} }`}</style>
 
                     {/* Order summary */}
-                    <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
+                    <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px', padding: '20px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>สรุปการจอง</h3>
                         {[...cart].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map((item, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < cart.length - 1 ? '1px solid var(--c-border)' : 'none', fontSize: '14px' }}>
-                                <span>{item.courtName} • {new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {item.startTime}-{item.endTime}</span>
-                                <span style={{ fontWeight: 600 }}>฿{item.price.toLocaleString()}</span>
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontSize: '14px', marginBottom: i < cart.length - 1 ? '10px' : '0' }}>
+                                <span style={{ flex: 1, minWidth: 0, color: 'var(--c-text-secondary)', lineHeight: 1.6 }}>{item.courtName} • {new Date(item.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} {item.startTime}-{item.endTime}</span>
+                                <span style={{ flexShrink: 0, padding: '8px 12px', borderRadius: '999px', background: 'rgba(250,204,21,0.12)', color: '#B38600', fontSize: '14px', fontWeight: 800 }}>฿{item.price.toLocaleString()}</span>
                             </div>
                         ))}
-                        <div style={{ borderTop: '2px solid var(--c-border)', marginTop: '12px', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                        <div style={{ marginTop: '16px', padding: '16px 18px', borderRadius: '18px', background: 'linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,0.04))', border: '1px solid rgba(250,204,21,0.24)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontSize: '18px', fontWeight: 800 }}>ยอดรวม</span>
-                            <span style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>฿{payableTotal.toLocaleString()}</span>
+                            <span style={{ fontSize: '30px', fontWeight: 900, fontFamily: "'Inter'", color: '#B38600', letterSpacing: '-0.02em' }}>฿{payableTotal.toLocaleString()}</span>
                         </div>
                     </div>
 
                     {/* Package option (only if user has packages) */}
                     {userPackages.length > 0 && (
-                        <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
+                        <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px', padding: '20px' }}>
                             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <Package size={18} /> เลือกวิธีชำระเงิน
                             </h3>
@@ -1074,7 +1084,7 @@ export default function BookingPage() {
 
                     {/* PromptPay QR + Slip Upload Section */}
                     {paymentMethod === 'PROMPTPAY' && (
-                        <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px' }}>
+                        <div className="glass-card" style={{ cursor: 'default', marginBottom: '24px', padding: '20px' }}>
                             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <QrCode size={18} /> ชำระเงินผ่านเลขบัญชี
                             </h3>
@@ -1093,60 +1103,143 @@ export default function BookingPage() {
                                     ช่องทางชำระเงินผ่านการโอนถูกปิดชั่วคราว กรุณาติดต่อแอดมิน
                                 </div>
                             ) : (
-                                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', justifyContent: 'center', gap: '16px', marginBottom: '20px' }}>
                                     {paymentDisplayConfig.enableQrCode && qrImage && (
-                                        <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
+                                        <div style={{ background: 'white', borderRadius: '20px', padding: '14px', width: '100%', maxWidth: '300px', boxShadow: '0 20px 40px rgba(15,23,42,0.12)' }}>
                                             <Image
                                                 src={qrImage}
                                                 alt="QR Payment - SKI BKK"
                                                 width={260}
                                                 height={260}
                                                 unoptimized
-                                                style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }}
+                                                style={{ width: '100%', height: 'auto', borderRadius: '12px', display: 'block' }}
                                             />
                                         </div>
                                     )}
                                     {hasVisibleBankDetails && (
                                         <div style={{
-                                            margin: paymentDisplayConfig.enableQrCode && qrImage ? '0 auto 12px' : '0 auto 16px',
-                                            maxWidth: '360px',
+                                            flex: '1 1 360px',
+                                            minWidth: 0,
+                                            maxWidth: showPaymentImage ? '420px' : '100%',
                                             textAlign: 'left',
-                                            padding: '14px 16px',
-                                            borderRadius: '14px',
-                                            background: 'rgba(255,255,255,0.04)',
-                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            padding: '20px',
+                                            borderRadius: '24px',
+                                            background: 'linear-gradient(180deg, #172554 0%, #0f172a 100%)',
+                                            border: '1px solid rgba(59,130,246,0.25)',
+                                            boxShadow: '0 22px 44px rgba(15,23,42,0.24)',
+                                            color: '#f8fafc',
                                         }}>
-                                            {qrReceiver?.bankName && (
-                                                <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '6px' }}>
-                                                    ธนาคาร: {qrReceiver.bankName}
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
+                                                <div style={{
+                                                    width: '52px',
+                                                    height: '52px',
+                                                    borderRadius: '16px',
+                                                    background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
+                                                }}>
+                                                    <CreditCard size={20} color="#eff6ff" />
                                                 </div>
-                                            )}
-                                            {qrReceiver?.name && (
-                                                <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: qrReceiver?.account ? '4px' : '0' }}>
-                                                    {qrReceiver.name}
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(191,219,254,0.78)', marginBottom: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                                        บัญชีสำหรับโอนเงิน
+                                                    </div>
+                                                    <div style={{ fontSize: '22px', lineHeight: 1.25, color: '#f8fafc', fontWeight: 800 }}>
+                                                        {qrReceiver?.bankName || 'บัญชีธนาคาร'}
+                                                    </div>
+                                                    <div style={{ fontSize: '14px', color: 'rgba(191,219,254,0.82)', marginTop: '2px' }}>
+                                                        โอนผ่านแอปธนาคารหรือเคาน์เตอร์บริการได้
+                                                    </div>
                                                 </div>
-                                            )}
+                                            </div>
+
                                             {qrReceiver?.account && (
-                                                <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', wordBreak: 'break-word' }}>
-                                                    {qrReceiver.account}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: '12px',
+                                                    padding: '14px 16px',
+                                                    borderRadius: '18px',
+                                                    background: 'rgba(15,23,42,0.5)',
+                                                    border: '1px solid rgba(96,165,250,0.12)',
+                                                    marginBottom: '12px',
+                                                }}>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: '12px', color: 'rgba(191,219,254,0.68)', marginBottom: '4px' }}>เลขบัญชี</div>
+                                                        <div style={{ fontSize: '30px', lineHeight: 1.1, color: '#f8fafc', fontWeight: 900, letterSpacing: '0.02em', wordBreak: 'break-word' }}>
+                                                            {qrReceiver.account}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => copyPaymentText(qrReceiver?.account, 'เลขบัญชี')}
+                                                        style={{
+                                                            width: '48px',
+                                                            height: '48px',
+                                                            borderRadius: '14px',
+                                                            border: '1px solid rgba(96,165,250,0.18)',
+                                                            background: 'linear-gradient(135deg, rgba(14,165,233,0.18), rgba(37,99,235,0.22))',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            cursor: 'pointer',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <Copy size={18} color="#93c5fd" />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {qrReceiver?.name && (
+                                                <div style={{
+                                                    padding: '14px 16px',
+                                                    borderRadius: '18px',
+                                                    background: 'rgba(15,23,42,0.34)',
+                                                    border: '1px solid rgba(96,165,250,0.1)',
+                                                    marginBottom: qrReceiver?.bankName ? '12px' : '0',
+                                                }}>
+                                                    <div style={{ fontSize: '12px', color: 'rgba(191,219,254,0.68)', marginBottom: '4px' }}>ชื่อบัญชี</div>
+                                                    <div style={{ fontSize: '20px', lineHeight: 1.3, color: '#f8fafc', fontWeight: 800 }}>
+                                                        {qrReceiver.name}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {qrReceiver?.bankName && (
+                                                <div style={{ fontSize: '12px', color: 'rgba(191,219,254,0.68)' }}>
+                                                    ธนาคาร: <span style={{ color: '#dbeafe', fontWeight: 700 }}>{qrReceiver.bankName}</span>
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                     <div style={{
-                                        display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
-                                        background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
+                                        flex: showPaymentImage || hasVisibleBankDetails ? '1 1 220px' : '0 1 320px',
+                                        minWidth: '220px',
+                                        padding: '18px 22px',
+                                        borderRadius: '20px',
+                                        background: 'linear-gradient(135deg, rgba(250,204,21,0.18), rgba(250,204,21,0.08))',
+                                        border: '1px solid rgba(250,204,21,0.35)',
+                                        boxShadow: '0 16px 32px rgba(250,204,21,0.12)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'center',
+                                        textAlign: 'center',
                                     }}>
-                                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
-                                        <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{payableTotal.toLocaleString()}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '4px' }}>ยอดที่ต้องชำระ</div>
+                                        <div style={{ fontSize: '36px', fontWeight: 900, fontFamily: "'Inter'", color: '#B38600', letterSpacing: '-0.03em' }}>฿{payableTotal.toLocaleString()}</div>
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#e17055', marginTop: '10px', fontWeight: 600 }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
+                                    <div style={{ width: '100%', fontSize: '12px', color: '#e17055', fontWeight: 700, textAlign: 'center', padding: '10px 14px', borderRadius: '14px', background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.18)' }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
                                 </div>
                             )}
 
                             {/* Slip upload */}
                             {hasTransferChannel && (
-                                <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px' }}>
+                                <div style={{ borderTop: '1px solid var(--c-border)', marginTop: '8px', paddingTop: '20px' }}>
                                 <p style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>📸 อัปโหลดสลิปการโอนเงิน</p>
                                 <label style={{
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
