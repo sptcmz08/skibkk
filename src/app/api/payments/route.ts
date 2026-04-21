@@ -91,9 +91,9 @@ export async function POST(req: NextRequest) {
         let totalVerifiedAmount = 0
 
         if (slipTokens.length > 0) {
-            let decodedSlips
+            let decodedSlips: Awaited<ReturnType<typeof verifySlipToken>>[]
             try {
-                decodedSlips = await Promise.all(slipTokens.map(token => verifySlipToken(token)))
+                decodedSlips = await Promise.all(slipTokens.map((token: string) => verifySlipToken(token)))
             } catch {
                 return NextResponse.json({ error: 'ข้อมูลการยืนยันสลิปไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสลิปใหม่' }, { status: 400 })
             }
