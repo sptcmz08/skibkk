@@ -123,15 +123,15 @@ export default function AdminSettingsPage() {
             const data = await res.json()
             if (!res.ok) {
                 setPaymentDisplayConfig(previousConfig)
-                toast.error(data.error || 'à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
+                toast.error(data.error || 'บันทึกการตั้งค่าไม่สำเร็จ')
                 return
             }
 
             setPaymentDisplayConfig(data.displayConfig || nextConfig)
-            toast.success(data.message || 'à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¸Šà¸³à¸£à¸°à¹€à¸‡à¸´à¸™à¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
+            toast.success(data.message || 'บันทึกการตั้งค่าชำระเงินสำเร็จ')
         } catch {
             setPaymentDisplayConfig(previousConfig)
-            toast.error('à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
+            toast.error('บันทึกการตั้งค่าไม่สำเร็จ')
         } finally {
             setQrSaving(false)
         }
@@ -259,7 +259,7 @@ export default function AdminSettingsPage() {
             {/* QR Code Payment — เลขบัญชี */}
             <div style={cardStyle}>
                 <h2 style={sectionTitle}>
-                    <QrCode size={20} color="#6c5ce7" /> QR Code ชำระเงิน
+                    <QrCode size={20} color="#6c5ce7" /> รูปช่องทางชำระเงิน
                 </h2>
 
                 <div style={{
@@ -279,8 +279,8 @@ export default function AdminSettingsPage() {
                         background: paymentDisplayConfig.enableQrCode ? '#eef6ff' : '#f8f9fa',
                     }}>
                         <div>
-                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งาน QR Code</div>
-                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นและใช้งาน QR สำหรับโอนเงินได้</div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งานรูปชำระเงิน</div>
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นรูป QR หรือรูปบัญชีสำหรับโอนเงินได้</div>
                         </div>
                         <input
                             type="checkbox"
@@ -306,7 +306,7 @@ export default function AdminSettingsPage() {
                     }}>
                         <div>
                             <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งานข้อมูลบัญชี</div>
-                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นชื่อบัญชี เลขบัญชี และธนาคารแทนหรือร่วมกับ QR</div>
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นชื่อบัญชี เลขบัญชี และธนาคารร่วมกับรูปที่อัปโหลด</div>
                         </div>
                         <input
                             type="checkbox"
@@ -324,7 +324,7 @@ export default function AdminSettingsPage() {
                 <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
                     {/* Left: QR Display */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto' }}>
-                        {/* THAI QR PAYMENT Header */}
+                        {/* Payment image header */}
                         <div style={{
                             background: 'linear-gradient(135deg, #1a237e, #283593)',
                             color: 'white', padding: '10px 32px', borderRadius: '10px 10px 0 0',
@@ -332,7 +332,7 @@ export default function AdminSettingsPage() {
                             fontSize: '13px', fontWeight: 700, letterSpacing: '1px',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         }}>
-                            <QrCode size={16} /> THAI QR PAYMENT
+                            <QrCode size={16} /> TRANSFER PAYMENT
                         </div>
 
                         {/* QR Image with click overlay */}
@@ -376,7 +376,7 @@ export default function AdminSettingsPage() {
                                 whiteSpace: 'nowrap',
                                 opacity: qrUploading ? 0.6 : 1,
                             }}>
-                                {qrUploading ? 'กำลังอัปโหลด...' : 'คลิกเพื่อเปลี่ยน QR-CODE'}
+                                {qrUploading ? 'กำลังอัปโหลด...' : 'คลิกเพื่อเปลี่ยนรูปชำระเงิน'}
                             </div>
                         </div>
 
@@ -411,8 +411,8 @@ export default function AdminSettingsPage() {
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '14px', color: '#2d3436' }}>
                                     {qrStatus === 'ready' ? 'ระบบพร้อมใช้งาน'
-                                        : qrStatus === 'learning' ? 'รอเรียนรู้ผู้รับจากสลิปแรก'
-                                            : 'ยังไม่ได้ตั้งค่า QR Code'}
+                                        : qrStatus === 'learning' ? 'รอกรอกข้อมูลบัญชีหรือเรียนรู้จากสลิปแรก'
+                                            : 'ยังไม่ได้อัปโหลดรูปช่องทางชำระเงิน'}
                                 </div>
                                 {qrStatus === 'ready' && qrReceiver?.learnedAt && (
                                     <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
@@ -430,7 +430,7 @@ export default function AdminSettingsPage() {
                                     padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
                                     background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
                                 }}>
-                                    {qrReceiver?.name || 'รอเรียนรู้จากสลิป...'}
+                                    {qrReceiver?.name || 'รอกรอกหรือเรียนรู้จากสลิป...'}
                                 </div>
                             </div>
                             <div>
@@ -439,7 +439,7 @@ export default function AdminSettingsPage() {
                                     padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
                                     background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
                                 }}>
-                                    {qrReceiver?.account || 'รอเรียนรู้จากสลิป...'}
+                                    {qrReceiver?.account || 'รอกรอกหรือเรียนรู้จากสลิป...'}
                                 </div>
                             </div>
                             <div>
@@ -455,7 +455,7 @@ export default function AdminSettingsPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
                             <div>
-                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>à¸à¸£à¸­à¸à¸Šà¸·à¹ˆà¸­à¸œà¸¹à¹‰à¸£à¸±à¸šà¹€à¸­à¸‡ (à¸—à¸²à¸‡à¹€à¸¥à¸·à¸­à¸)</div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>กรอกชื่อผู้รับเอง (ทางเลือก)</div>
                                 <input
                                     className="admin-input"
                                     placeholder="เช่น SKI BKK"
@@ -464,7 +464,7 @@ export default function AdminSettingsPage() {
                                 />
                             </div>
                             <div>
-                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>à¸à¸£à¸­à¸à¹€à¸¥à¸‚à¸šà¸±à¸à¸Šà¸µà¹€à¸­à¸‡ (à¸—à¸²à¸‡à¹€à¸¥à¸·à¸­à¸)</div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>กรอกเลขบัญชีเอง (ทางเลือก)</div>
                                 <input
                                     className="admin-input"
                                     placeholder="เช่น 014000003712049"
@@ -499,7 +499,7 @@ export default function AdminSettingsPage() {
                             )}
 
                             <p style={{ fontSize: '11px', color: '#b2bec3', lineHeight: 1.6 }}>
-                                💡 คลิกที่รูป QR Code เพื่อเปลี่ยน — ระบบจะเรียนรู้ข้อมูลผู้รับอัตโนมัติจากสลิปแรกที่ตรวจสำเร็จ
+                                💡 คลิกที่รูปเพื่อเปลี่ยนได้ทั้ง QR Code และรูปบัญชี ส่วนข้อมูลผู้รับให้กรอกเองหรือรอเรียนรู้จากสลิปแรกที่ตรวจสำเร็จ
                             </p>
                         </div>
                     </div>
@@ -525,18 +525,14 @@ export default function AdminSettingsPage() {
                         if (res.ok) {
                             setQrImage(data.qrImage || base64)
                             setQrStatus(data.status || 'learning')
-                            setQrReceiver(data.receiver || null)
+                            setQrReceiver(data.receiver || qrReceiver)
                             if (data.displayConfig) setPaymentDisplayConfig(data.displayConfig)
-                            if (!data.receiver) {
-                                setQrReceiverName('')
-                                setQrReceiverAccount('')
-                                setQrReceiverBankName('')
-                            } else {
+                            if (data.receiver) {
                                 setQrReceiverName(data.receiver.name || '')
                                 setQrReceiverAccount(data.receiver.account || '')
                                 setQrReceiverBankName(data.receiver.bankName || '')
                             }
-                            toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
+                            toast.success(data.message || 'อัปโหลดรูปช่องทางชำระเงินสำเร็จ')
                         } else {
                             toast.error(data.error || 'อัปโหลดไม่สำเร็จ')
                         }
