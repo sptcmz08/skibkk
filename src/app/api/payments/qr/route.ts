@@ -2,11 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import generatePayload from 'promptpay-qr'
 import QRCode from 'qrcode'
 import { requireAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
         const { amount } = await req.json()
+
+        const displaySetting = await prisma.siteSetting.findUnique({
+            where: { key: 'payment_display_config' },
+        })
+
+        let enableQrCode = true
+        try {
+            if (displaySetting?.value) {
+                const displayConfig = JSON.parse(displaySetting.value) as { enableQrCode?: boolean }
+                enableQrCode = displayConfig.enableQrCode !== false
+            }
+        } catch { /* ignore */ }
+
+        if (!enableQrCode) {
+            return NextResponse.json({ error: 'ปิดการใช้งาน QR Code ชั่วคราว' }, { status: 403 })
+        }
 
         // Get PromptPay number from env or use default
         const promptpayNumber = process.env.PROMPTPAY_NUMBER || '0000000000'

@@ -32,9 +32,11 @@ export default function AdminSettingsPage() {
     const logoInputRef = useRef<HTMLInputElement>(null)
     const qrInputRef = useRef<HTMLInputElement>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
-    const [qrReceiver, setQrReceiver] = useState<{ name: string; account: string; learnedAt: string | null; autoLearned: boolean } | null>(null)
+    const [qrReceiver, setQrReceiver] = useState<{ name: string; account: string; bankName?: string; learnedAt: string | null; autoLearned: boolean } | null>(null)
     const [qrReceiverName, setQrReceiverName] = useState('')
     const [qrReceiverAccount, setQrReceiverAccount] = useState('')
+    const [qrReceiverBankName, setQrReceiverBankName] = useState('')
+    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
     const [qrStatus, setQrStatus] = useState<'ready' | 'learning' | 'no_qr'>('no_qr')
     const [qrUploading, setQrUploading] = useState(false)
     const [qrSaving, setQrSaving] = useState(false)
@@ -67,7 +69,9 @@ export default function AdminSettingsPage() {
                 setQrReceiver(data.receiver)
                 setQrReceiverName(data.receiver.name || '')
                 setQrReceiverAccount(data.receiver.account || '')
+                setQrReceiverBankName(data.receiver.bankName || '')
             }
+            if (data.displayConfig) setPaymentDisplayConfig(data.displayConfig)
             if (data.status) setQrStatus(data.status)
         }).catch(() => { })
     }, [])
@@ -75,7 +79,8 @@ export default function AdminSettingsPage() {
     const saveQrReceiver = async () => {
         const name = qrReceiverName.trim()
         const account = qrReceiverAccount.trim()
-        if (!name && !account) {
+        const bankName = qrReceiverBankName.trim()
+        if (!name && !account && !bankName) {
             toast.error('กรุณากรอกชื่อผู้รับหรือเลขบัญชีอย่างน้อย 1 ช่อง')
             return
         }
@@ -85,7 +90,7 @@ export default function AdminSettingsPage() {
             const res = await fetch('/api/admin/qr-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ receiver: { name, account } }),
+                body: JSON.stringify({ receiver: { name, account, bankName } }),
             })
             const data = await res.json()
             if (!res.ok) {
@@ -93,13 +98,40 @@ export default function AdminSettingsPage() {
                 return
             }
 
-            setQrReceiver(data.receiver || { name, account, learnedAt: new Date().toISOString(), autoLearned: false })
+            setQrReceiver(data.receiver || { name, account, bankName, learnedAt: new Date().toISOString(), autoLearned: false })
             setQrReceiverName(data.receiver?.name || name)
             setQrReceiverAccount(data.receiver?.account || account)
+            setQrReceiverBankName(data.receiver?.bankName || bankName)
             setQrStatus(data.status || 'ready')
             toast.success(data.message || 'บันทึกข้อมูลบัญชีผู้รับสำเร็จ')
         } catch {
             toast.error('บันทึกข้อมูลผู้รับไม่สำเร็จ')
+        } finally {
+            setQrSaving(false)
+        }
+    }
+
+    const savePaymentDisplayConfig = async (nextConfig: { enableQrCode: boolean; enableBankDetails: boolean }) => {
+        const previousConfig = paymentDisplayConfig
+        setQrSaving(true)
+        try {
+            const res = await fetch('/api/admin/qr-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayConfig: nextConfig }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                setPaymentDisplayConfig(previousConfig)
+                toast.error(data.error || 'à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
+                return
+            }
+
+            setPaymentDisplayConfig(data.displayConfig || nextConfig)
+            toast.success(data.message || 'à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¸Šà¸³à¸£à¸°à¹€à¸‡à¸´à¸™à¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
+        } catch {
+            setPaymentDisplayConfig(previousConfig)
+            toast.error('à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ')
         } finally {
             setQrSaving(false)
         }
@@ -230,6 +262,65 @@ export default function AdminSettingsPage() {
                     <QrCode size={20} color="#6c5ce7" /> QR Code ชำระเงิน
                 </h2>
 
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '12px',
+                    marginBottom: '20px',
+                }}>
+                    <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef',
+                        background: paymentDisplayConfig.enableQrCode ? '#eef6ff' : '#f8f9fa',
+                    }}>
+                        <div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งาน QR Code</div>
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นและใช้งาน QR สำหรับโอนเงินได้</div>
+                        </div>
+                        <input
+                            type="checkbox"
+                            checked={paymentDisplayConfig.enableQrCode}
+                            disabled={qrSaving}
+                            onChange={async (e) => {
+                                const nextConfig = { ...paymentDisplayConfig, enableQrCode: e.target.checked }
+                                setPaymentDisplayConfig(nextConfig)
+                                await savePaymentDisplayConfig(nextConfig)
+                            }}
+                        />
+                    </label>
+
+                    <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef',
+                        background: paymentDisplayConfig.enableBankDetails ? '#eefbf3' : '#f8f9fa',
+                    }}>
+                        <div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งานข้อมูลบัญชี</div>
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นชื่อบัญชี เลขบัญชี และธนาคารแทนหรือร่วมกับ QR</div>
+                        </div>
+                        <input
+                            type="checkbox"
+                            checked={paymentDisplayConfig.enableBankDetails}
+                            disabled={qrSaving}
+                            onChange={async (e) => {
+                                const nextConfig = { ...paymentDisplayConfig, enableBankDetails: e.target.checked }
+                                setPaymentDisplayConfig(nextConfig)
+                                await savePaymentDisplayConfig(nextConfig)
+                            }}
+                        />
+                    </label>
+                </div>
+
                 <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
                     {/* Left: QR Display */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto' }}>
@@ -351,6 +442,15 @@ export default function AdminSettingsPage() {
                                     {qrReceiver?.account || 'รอเรียนรู้จากสลิป...'}
                                 </div>
                             </div>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>ธนาคาร</div>
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
+                                    background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
+                                }}>
+                                    {qrReceiver?.bankName || '-'}
+                                </div>
+                            </div>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
@@ -370,6 +470,15 @@ export default function AdminSettingsPage() {
                                     placeholder="เช่น 014000003712049"
                                     value={qrReceiverAccount}
                                     onChange={e => setQrReceiverAccount(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>กรอกชื่อธนาคาร (ทางเลือก)</div>
+                                <input
+                                    className="admin-input"
+                                    placeholder="เช่น กสิกรไทย"
+                                    value={qrReceiverBankName}
+                                    onChange={e => setQrReceiverBankName(e.target.value)}
                                 />
                             </div>
                         </div>
@@ -414,12 +523,18 @@ export default function AdminSettingsPage() {
                         })
                         const data = await res.json()
                         if (res.ok) {
-                            setQrImage(base64)
+                            setQrImage(data.qrImage || base64)
                             setQrStatus(data.status || 'learning')
                             setQrReceiver(data.receiver || null)
+                            if (data.displayConfig) setPaymentDisplayConfig(data.displayConfig)
                             if (!data.receiver) {
                                 setQrReceiverName('')
                                 setQrReceiverAccount('')
+                                setQrReceiverBankName('')
+                            } else {
+                                setQrReceiverName(data.receiver.name || '')
+                                setQrReceiverAccount(data.receiver.account || '')
+                                setQrReceiverBankName(data.receiver.bankName || '')
                             }
                             toast.success(data.message || 'อัปโหลด QR สำเร็จ!')
                         } else {
@@ -653,9 +768,11 @@ export default function AdminSettingsPage() {
                     })
                     const data = await res.json().catch(() => null)
                     setQrStatus(data?.status || (qrImage ? 'learning' : 'no_qr'))
-                    setQrReceiver(null)
+                    setQrReceiver(data?.receiver || null)
+                    if (data?.displayConfig) setPaymentDisplayConfig(data.displayConfig)
                     setQrReceiverName('')
                     setQrReceiverAccount('')
+                    setQrReceiverBankName('')
                     setShowResetConfirm(false)
                     toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
                 }}

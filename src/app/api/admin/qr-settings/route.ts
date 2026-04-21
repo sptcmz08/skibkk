@@ -7,40 +7,78 @@ export const dynamic = 'force-dynamic'
 type ReceiverInfo = {
     name: string
     account: string
+    bankName: string
     learnedAt: string | null
     autoLearned: boolean
+}
+
+type PaymentDisplayConfig = {
+    enableQrCode: boolean
+    enableBankDetails: boolean
 }
 
 const emptyReceiver = (): ReceiverInfo => ({
     name: '',
     account: '',
+    bankName: '',
     learnedAt: null,
     autoLearned: false,
 })
 
-const hasReceiverData = (receiver: ReceiverInfo | null | undefined) =>
-    Boolean(receiver?.name.trim() || receiver?.account.trim())
+const defaultDisplayConfig = (): PaymentDisplayConfig => ({
+    enableQrCode: true,
+    enableBankDetails: true,
+})
 
-// GET /api/admin/qr-settings - get QR image + receiver info
+const hasReceiverData = (receiver: ReceiverInfo | null | undefined) =>
+    Boolean(receiver?.name.trim() || receiver?.account.trim() || receiver?.bankName.trim())
+
+const parseReceiver = (raw: string | null | undefined): ReceiverInfo | null => {
+    if (!raw) return null
+    try {
+        const value = JSON.parse(raw) as Partial<ReceiverInfo>
+        return {
+            name: String(value.name || '').trim(),
+            account: String(value.account || '').trim(),
+            bankName: String(value.bankName || '').trim(),
+            learnedAt: value.learnedAt || null,
+            autoLearned: Boolean(value.autoLearned),
+        }
+    } catch {
+        return null
+    }
+}
+
+const parseDisplayConfig = (raw: string | null | undefined): PaymentDisplayConfig => {
+    if (!raw) return defaultDisplayConfig()
+    try {
+        const value = JSON.parse(raw) as Partial<PaymentDisplayConfig>
+        return {
+            enableQrCode: value.enableQrCode !== false,
+            enableBankDetails: value.enableBankDetails !== false,
+        }
+    } catch {
+        return defaultDisplayConfig()
+    }
+}
+
+// GET /api/admin/qr-settings - get payment display settings
 export async function GET() {
     try {
-        const [qrSetting, receiverSetting] = await Promise.all([
+        const [qrSetting, receiverSetting, displaySetting] = await Promise.all([
             prisma.siteSetting.findUnique({ where: { key: 'payment_qr_image' } }),
             prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } }),
+            prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } }),
         ])
 
         const qrImage = qrSetting?.value || null
-        let receiver: ReceiverInfo | null = null
-
-        try {
-            receiver = receiverSetting ? JSON.parse(receiverSetting.value) as ReceiverInfo : null
-        } catch {
-            receiver = null
-        }
+        const receiver = parseReceiver(receiverSetting?.value || null)
+        const displayConfig = parseDisplayConfig(displaySetting?.value || null)
 
         return NextResponse.json({
             qrImage,
             receiver,
+            displayConfig,
             status: hasReceiverData(receiver) ? 'ready' : (qrImage ? 'learning' : 'no_qr'),
         })
     } catch (error) {
@@ -49,7 +87,7 @@ export async function GET() {
     }
 }
 
-// POST /api/admin/qr-settings - upload QR and/or save receiver info (SUPERUSER only)
+// POST /api/admin/qr-settings - save QR / receiver / payment display config
 export async function POST(req: NextRequest) {
     try {
         await requireRole('SUPERUSER')
@@ -57,24 +95,39 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         const qrImage = typeof body.qrImage === 'string' ? body.qrImage : ''
         const resetReceiver = body.resetReceiver === true
+
         const receiverInput = body.receiver && typeof body.receiver === 'object'
             ? body.receiver as Partial<ReceiverInfo>
             : null
-
         const receiver: ReceiverInfo | null = receiverInput
             ? {
                 name: String(receiverInput.name || '').trim(),
                 account: String(receiverInput.account || '').trim(),
+                bankName: String(receiverInput.bankName || '').trim(),
                 learnedAt: new Date().toISOString(),
                 autoLearned: false,
             }
             : null
 
-        if (!qrImage && !resetReceiver && !hasReceiverData(receiver)) {
+        const displayConfigInput = body.displayConfig && typeof body.displayConfig === 'object'
+            ? body.displayConfig as Partial<PaymentDisplayConfig>
+            : null
+        const displayConfig = displayConfigInput
+            ? {
+                enableQrCode: displayConfigInput.enableQrCode !== false,
+                enableBankDetails: displayConfigInput.enableBankDetails !== false,
+            }
+            : null
+
+        if (!qrImage && !resetReceiver && !receiver && !displayConfig) {
             return NextResponse.json({
-                error: 'กรุณาอัปโหลดรูป QR Code หรือกรอกข้อมูลบัญชีผู้รับ',
+                error: 'กรุณาระบุข้อมูลที่ต้องการบันทึก',
             }, { status: 400 })
         }
+
+        let nextQrImage = (await prisma.siteSetting.findUnique({
+            where: { key: 'payment_qr_image' },
+        }))?.value || null
 
         if (qrImage) {
             await prisma.siteSetting.upsert({
@@ -82,10 +135,10 @@ export async function POST(req: NextRequest) {
                 update: { value: qrImage },
                 create: { key: 'payment_qr_image', value: qrImage },
             })
+            nextQrImage = qrImage
         }
 
-        let nextReceiver: ReceiverInfo | null = null
-
+        let nextReceiver = parseReceiver((await prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } }))?.value || null)
         if (resetReceiver) {
             const cleared = emptyReceiver()
             await prisma.siteSetting.upsert({
@@ -93,10 +146,10 @@ export async function POST(req: NextRequest) {
                 update: { value: JSON.stringify(cleared) },
                 create: { key: 'payment_receiver', value: JSON.stringify(cleared) },
             })
-            nextReceiver = null
+            nextReceiver = cleared
         }
 
-        if (hasReceiverData(receiver)) {
+        if (receiver) {
             await prisma.siteSetting.upsert({
                 where: { key: 'payment_receiver' },
                 update: { value: JSON.stringify(receiver) },
@@ -105,20 +158,25 @@ export async function POST(req: NextRequest) {
             nextReceiver = receiver
         }
 
-        const status = hasReceiverData(nextReceiver) ? 'ready' : (qrImage ? 'learning' : 'no_qr')
-        const message = hasReceiverData(nextReceiver)
-            ? 'บันทึกข้อมูลบัญชีผู้รับสำเร็จ'
-            : qrImage && resetReceiver
-                ? 'อัปโหลด QR สำเร็จ ระบบจะเรียนรู้ผู้รับจากสลิปแรกอัตโนมัติ'
-                : qrImage
-                    ? 'อัปโหลด QR สำเร็จ'
-                    : 'รีเซ็ตข้อมูลผู้รับสำเร็จ'
+        let nextDisplayConfig = parseDisplayConfig((await prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } }))?.value || null)
+        if (displayConfig) {
+            await prisma.siteSetting.upsert({
+                where: { key: 'payment_display_config' },
+                update: { value: JSON.stringify(displayConfig) },
+                create: { key: 'payment_display_config', value: JSON.stringify(displayConfig) },
+            })
+            nextDisplayConfig = displayConfig
+        }
+
+        const status = hasReceiverData(nextReceiver) ? 'ready' : (nextQrImage ? 'learning' : 'no_qr')
 
         return NextResponse.json({
             success: true,
             status,
+            qrImage: nextQrImage,
             receiver: nextReceiver,
-            message,
+            displayConfig: nextDisplayConfig,
+            message: 'บันทึกการตั้งค่าชำระเงินสำเร็จ',
         })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {

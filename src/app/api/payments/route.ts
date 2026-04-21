@@ -45,6 +45,24 @@ const verifySlipToken = async (token: string) => {
     }
 }
 
+const isTransferPaymentEnabled = async () => {
+    const displaySetting = await prisma.siteSetting.findUnique({
+        where: { key: 'payment_display_config' },
+    })
+
+    if (!displaySetting?.value) return true
+
+    try {
+        const displayConfig = JSON.parse(displaySetting.value) as {
+            enableQrCode?: boolean
+            enableBankDetails?: boolean
+        }
+        return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
+    } catch {
+        return true
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
@@ -89,6 +107,10 @@ export async function POST(req: NextRequest) {
         let paymentSlipHash: string | null = null
         let verifiedSlipRefs: string[] = []
         let totalVerifiedAmount = 0
+
+        if (!(await isTransferPaymentEnabled())) {
+            return NextResponse.json({ error: 'ปิดการใช้งานการชำระเงินผ่านการโอนชั่วคราว' }, { status: 403 })
+        }
 
         if (slipTokens.length > 0) {
             let decodedSlips: Awaited<ReturnType<typeof verifySlipToken>>[]

@@ -89,12 +89,15 @@ export default function BookingPage() {
     const [slipVerifying, setSlipVerifying] = useState(false)
     const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string }>>([])
     const [qrImage, setQrImage] = useState<string | null>(null)
-    const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string } | null>(null)
+    const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string; bankName?: string } | null>(null)
+    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
 
     const total = cart.reduce((s, i) => s + i.price, 0)
     const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
     const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
     const remaining = total - paidTotal
+    const hasVisibleBankDetails = paymentDisplayConfig.enableBankDetails && Boolean(qrReceiver?.name || qrReceiver?.account || qrReceiver?.bankName)
+    const hasTransferChannel = paymentDisplayConfig.enableQrCode || hasVisibleBankDetails
 
     // Lock countdown timer for payment step
     const [lockSecondsLeft, setLockSecondsLeft] = useState<number | null>(null)
@@ -281,6 +284,17 @@ export default function BookingPage() {
                     const settingsRes = await fetch('/api/admin/qr-settings')
                     const settingsData = await settingsRes.json()
                     setQrReceiver(settingsData.receiver || null)
+                    if (settingsData.displayConfig) {
+                        setPaymentDisplayConfig(settingsData.displayConfig)
+                    } else {
+                        setPaymentDisplayConfig({ enableQrCode: true, enableBankDetails: true })
+                    }
+
+                    if (settingsData.displayConfig?.enableQrCode === false) {
+                        setQrImage(null)
+                        return
+                    }
+
                     if (settingsData.qrImage) {
                         setQrImage(settingsData.qrImage)
                         return
@@ -527,7 +541,7 @@ export default function BookingPage() {
 
     // Can submit if: all slips cover the total OR using package
     const canSubmit = paymentMethod === 'PACKAGE'
-        || (remaining <= 1 && verifiedSlips.length > 0)
+        || (hasTransferChannel && remaining <= 1 && verifiedSlips.length > 0)
 
     const handleSubmitBooking = async () => {
         if (!booker.name.trim() || !booker.email.trim() || !booker.phone.trim()) {
@@ -536,6 +550,10 @@ export default function BookingPage() {
         }
         if (participants.some(p => !p.name || !p.sportType)) {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
+            return
+        }
+        if (paymentMethod === 'PROMPTPAY' && !hasTransferChannel) {
+            toast.error('ช่องทางชำระเงินผ่านการโอนถูกปิดชั่วคราว กรุณาติดต่อแอดมิน')
             return
         }
         // Require slip verification for PromptPay
@@ -1062,40 +1080,73 @@ export default function BookingPage() {
                             </h3>
 
                             {/* QR Code display */}
-                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                                <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
-                                    <Image
-                                        src={qrImage || '/qr-payment.png'}
-                                        alt="QR Payment - SKI BKK"
-                                        width={260}
-                                        height={260}
-                                        unoptimized
-                                        style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }}
-                                    />
-                                </div>
-                                {qrReceiver?.name && (
-                                    <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: qrReceiver?.account ? '4px' : '8px' }}>
-                                        {qrReceiver.name}
-                                    </div>
-                                )}
-                                {qrReceiver?.account && (
-                                    <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '8px' }}>
-                                        {qrReceiver.account}
-                                    </div>
-                                )}
-                                {!qrReceiver?.name && <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>}
+                            {!hasTransferChannel ? (
                                 <div style={{
-                                    display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
-                                    background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
+                                    marginBottom: '20px',
+                                    padding: '16px',
+                                    borderRadius: '14px',
+                                    border: '1px solid rgba(225,112,85,0.35)',
+                                    background: 'rgba(225,112,85,0.08)',
+                                    color: '#ffd6cc',
+                                    textAlign: 'center',
                                 }}>
-                                    <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
-                                    <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{payableTotal.toLocaleString()}</div>
+                                    ช่องทางชำระเงินผ่านการโอนถูกปิดชั่วคราว กรุณาติดต่อแอดมิน
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#e17055', marginTop: '10px', fontWeight: 600 }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
-                            </div>
+                            ) : (
+                                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                    {paymentDisplayConfig.enableQrCode && qrImage && (
+                                        <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
+                                            <Image
+                                                src={qrImage}
+                                                alt="QR Payment - SKI BKK"
+                                                width={260}
+                                                height={260}
+                                                unoptimized
+                                                style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }}
+                                            />
+                                        </div>
+                                    )}
+                                    {hasVisibleBankDetails && (
+                                        <div style={{
+                                            margin: paymentDisplayConfig.enableQrCode && qrImage ? '0 auto 12px' : '0 auto 16px',
+                                            maxWidth: '360px',
+                                            textAlign: 'left',
+                                            padding: '14px 16px',
+                                            borderRadius: '14px',
+                                            background: 'rgba(255,255,255,0.04)',
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                        }}>
+                                            {qrReceiver?.bankName && (
+                                                <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '6px' }}>
+                                                    ธนาคาร: {qrReceiver.bankName}
+                                                </div>
+                                            )}
+                                            {qrReceiver?.name && (
+                                                <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: qrReceiver?.account ? '4px' : '0' }}>
+                                                    {qrReceiver.name}
+                                                </div>
+                                            )}
+                                            {qrReceiver?.account && (
+                                                <div style={{ fontSize: '13px', color: 'var(--c-text-muted)', wordBreak: 'break-word' }}>
+                                                    {qrReceiver.account}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div style={{
+                                        display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
+                                        background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
+                                    }}>
+                                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '2px' }}>ยอดที่ต้องชำระ</div>
+                                        <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: "'Inter'", color: 'var(--c-primary-light)' }}>฿{payableTotal.toLocaleString()}</div>
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#e17055', marginTop: '10px', fontWeight: 600 }}>⚠️ กรุณาโอนเงินให้ตรงจำนวน เพื่อให้ระบบตรวจสอบอัตโนมัติ</div>
+                                </div>
+                            )}
 
                             {/* Slip upload */}
-                            <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px' }}>
+                            {hasTransferChannel && (
+                                <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px' }}>
                                 <p style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>📸 อัปโหลดสลิปการโอนเงิน</p>
                                 <label style={{
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -1186,7 +1237,8 @@ export default function BookingPage() {
                                 )}
 
 
-                            </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

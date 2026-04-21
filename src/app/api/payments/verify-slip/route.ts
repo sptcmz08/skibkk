@@ -83,10 +83,35 @@ const loadExpectedReceiver = async () => {
     return { expectedReceiver, expectedAccount, isLearningMode }
 }
 
+const isTransferPaymentEnabled = async () => {
+    const displaySetting = await prisma.siteSetting.findUnique({
+        where: { key: 'payment_display_config' },
+    })
+
+    if (!displaySetting?.value) return true
+
+    try {
+        const displayConfig = JSON.parse(displaySetting.value) as {
+            enableQrCode?: boolean
+            enableBankDetails?: boolean
+        }
+        return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
+    } catch {
+        return true
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
         const { image } = await req.json()
+
+        if (!(await isTransferPaymentEnabled())) {
+            return NextResponse.json({
+                verified: false,
+                error: 'ปิดการใช้งานการชำระเงินผ่านการโอนชั่วคราว',
+            }, { status: 403 })
+        }
 
         if (!image) {
             return NextResponse.json({ error: 'กรุณาอัปโหลดรูปสลิป' }, { status: 400 })
