@@ -3,8 +3,9 @@
 import { formatPackageBookingWindow, formatPackageDate, resolvePackageBookingWindow } from '@/lib/package-window'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, Building2, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
+import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, CheckCircle, Upload, Package, AlertTriangle, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clearStoredCart, readStoredCart, syncCartWithServerLocks } from '@/lib/cart'
 
@@ -76,7 +77,6 @@ export default function BookingPage() {
     const [paymentMethod, setPaymentMethod] = useState<'PROMPTPAY' | 'BANK_TRANSFER' | 'PACKAGE'>('PROMPTPAY')
     const [loading, setLoading] = useState(false)
     const [bookingResult, setBookingResult] = useState<{ bookingNumber: string } | null>(null)
-    const [user, setUser] = useState<{ name: string; phone: string; email: string } | null>(null)
     const [booker, setBooker] = useState<{ name: string; phone: string; email: string }>({ name: '', phone: '', email: '' })
     const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
     const [slipFile, setSlipFile] = useState<File | null>(null)
@@ -87,8 +87,9 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string }>>([])
+    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string }>>([])
     const [qrImage, setQrImage] = useState<string | null>(null)
+    const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string } | null>(null)
 
     const total = cart.reduce((s, i) => s + i.price, 0)
     const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
@@ -223,6 +224,11 @@ export default function BookingPage() {
                 return
             }
 
+            if (!data.verificationToken) {
+                toast.error('ระบบยืนยันสลิปไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง')
+                return
+            }
+
             // Check for duplicate transRef
             if (data.transRef && verifiedSlips.some(s => s.transRef === data.transRef)) {
                 toast.error('สลิปนี้ถูกตรวจสอบแล้ว กรุณาอัปโหลดสลิปใบใหม่')
@@ -230,7 +236,12 @@ export default function BookingPage() {
             }
 
             // Add this slip to the list
-            const newSlip = { amount: parseFloat(data.amount), transRef: data.transRef || '', sender: data.sender || '' }
+            const newSlip = {
+                amount: parseFloat(data.amount),
+                transRef: data.transRef || '',
+                sender: data.sender || '',
+                token: data.verificationToken || '',
+            }
             const updatedSlips = [...verifiedSlips, newSlip]
             setVerifiedSlips(updatedSlips)
 
@@ -269,6 +280,7 @@ export default function BookingPage() {
                 try {
                     const settingsRes = await fetch('/api/admin/qr-settings')
                     const settingsData = await settingsRes.json()
+                    setQrReceiver(settingsData.receiver || null)
                     if (settingsData.qrImage) {
                         setQrImage(settingsData.qrImage)
                         return
@@ -362,7 +374,6 @@ export default function BookingPage() {
             .then(d => {
                 if (d.user) {
                     const cleanPhone = cleanProfilePhone(d.user.phone)
-                    setUser(d.user)
                     setBooker({
                         name: d.user.name || '',
                         phone: cleanPhone,
@@ -648,7 +659,7 @@ export default function BookingPage() {
                         bookingId: data.booking.id,
                         method: paymentMethodForRecord,
                         amount: total,
-                        slipData: verifiedSlips.map(s => s.transRef).filter(Boolean).join(',') || slipPreview,
+                        slipTokens: verifiedSlips.map(s => s.token).filter(Boolean),
                     }),
                 })
                 if (!paymentRes.ok) {
@@ -1053,9 +1064,26 @@ export default function BookingPage() {
                             {/* QR Code display */}
                             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                                 <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'inline-block', marginBottom: '12px' }}>
-                                    <img src={qrImage || '/qr-payment.png'} alt="QR Payment - SKI BKK" style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }} />
+                                    <Image
+                                        src={qrImage || '/qr-payment.png'}
+                                        alt="QR Payment - SKI BKK"
+                                        width={260}
+                                        height={260}
+                                        unoptimized
+                                        style={{ width: '100%', maxWidth: '260px', height: 'auto', borderRadius: '8px' }}
+                                    />
                                 </div>
-                                <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>
+                                {qrReceiver?.name && (
+                                    <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: qrReceiver?.account ? '4px' : '8px' }}>
+                                        {qrReceiver.name}
+                                    </div>
+                                )}
+                                {qrReceiver?.account && (
+                                    <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '8px' }}>
+                                        {qrReceiver.account}
+                                    </div>
+                                )}
+                                {!qrReceiver?.name && <div style={{ fontSize: '14px', color: 'var(--c-text-secondary)', marginBottom: '8px' }}>SKI BKK รามอินทรา40</div>}
                                 <div style={{
                                     display: 'inline-block', padding: '12px 32px', borderRadius: '12px',
                                     background: 'rgba(250,204,21,0.15)', border: '2px solid rgba(250,204,21,0.4)',
@@ -1077,7 +1105,14 @@ export default function BookingPage() {
                                     transition: 'all 0.2s',
                                 }}>
                                     {slipPreview ? (
-                                        <img src={slipPreview} alt="สลิป" style={{ maxHeight: '200px', borderRadius: '8px', objectFit: 'contain' }} />
+                                        <Image
+                                            src={slipPreview}
+                                            alt="สลิป"
+                                            width={320}
+                                            height={200}
+                                            unoptimized
+                                            style={{ maxHeight: '200px', width: 'auto', height: 'auto', borderRadius: '8px', objectFit: 'contain' }}
+                                        />
                                     ) : (
                                         <>
                                             <Upload size={28} style={{ color: 'var(--c-text-muted)' }} />

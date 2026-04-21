@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { jwtVerify, JWTPayload } from 'jose'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { getAuditRequestMeta } from '@/lib/audit'
@@ -6,7 +7,43 @@ import crypto from 'crypto'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
 
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
+const PAYMENT_TOLERANCE = 1
+
+type SlipVerificationPayload = JWTPayload & {
+    purpose?: string
+    transRef?: string
+    amount?: number
+    sender?: string
+    receiverName?: string
+    receiverAccount?: string
+}
+
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+
+const verifySlipToken = async (token: string) => {
+    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const slip = payload as SlipVerificationPayload
+
+    if (slip.purpose !== 'slip-verification') {
+        throw new Error('INVALID_SLIP_TOKEN')
+    }
+
+    const transRef = String(slip.transRef || '').trim()
+    const amount = Number(slip.amount || 0)
+
+    if (!transRef || !Number.isFinite(amount) || amount <= 0) {
+        throw new Error('INVALID_SLIP_TOKEN')
+    }
+
+    return {
+        transRef,
+        amount,
+        sender: String(slip.sender || '').trim(),
+        receiverName: String(slip.receiverName || '').trim(),
+        receiverAccount: String(slip.receiverAccount || '').trim(),
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -15,12 +52,14 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
 
         const { bookingId, method, amount, slipData, manualReview } = body
+        const slipTokens = Array.isArray(body.slipTokens)
+            ? body.slipTokens.filter((token: unknown): token is string => typeof token === 'string' && token.trim().length > 0)
+            : []
 
-        if (!bookingId || !amount || amount <= 0) {
+        if (!bookingId || !amount || Number(amount) <= 0) {
             return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 })
         }
 
-        // Verify booking exists and belongs to user
         const booking = await prisma.booking.findUnique({
             where: { id: bookingId },
         })
@@ -41,66 +80,129 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
         }
 
-        // Duplicate slip detection
-        let slipHash: string | null = null
-        if (slipData) {
-            slipHash = crypto.createHash('sha256').update(slipData).digest('hex')
+        if (Math.abs(Number(amount) - booking.totalAmount) > PAYMENT_TOLERANCE) {
+            return NextResponse.json({ error: 'ยอดชำระไม่ตรงกับยอดจอง' }, { status: 400 })
+        }
+
+        const paymentMethod = method || 'PROMPTPAY'
+        const payableAmount = booking.totalAmount
+        let paymentSlipHash: string | null = null
+        let verifiedSlipRefs: string[] = []
+        let totalVerifiedAmount = 0
+
+        if (slipTokens.length > 0) {
+            let decodedSlips
+            try {
+                decodedSlips = await Promise.all(slipTokens.map(token => verifySlipToken(token)))
+            } catch {
+                return NextResponse.json({ error: 'ข้อมูลการยืนยันสลิปไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสลิปใหม่' }, { status: 400 })
+            }
+
+            const uniqueRefs = new Set<string>()
+            for (const slip of decodedSlips) {
+                if (uniqueRefs.has(slip.transRef)) {
+                    return NextResponse.json({ error: 'พบสลิปซ้ำในรายการชำระ กรุณาตรวจสอบใหม่' }, { status: 400 })
+                }
+                uniqueRefs.add(slip.transRef)
+                totalVerifiedAmount += slip.amount
+            }
+
+            if (totalVerifiedAmount + PAYMENT_TOLERANCE < payableAmount) {
+                return NextResponse.json({ error: 'ยอดสลิปที่ตรวจสอบแล้วยังไม่ครบตามยอดจอง' }, { status: 400 })
+            }
+
+            verifiedSlipRefs = [...uniqueRefs]
+
+            const existingUsedSlips = await prisma.usedSlip.findMany({
+                where: { slipHash: { in: verifiedSlipRefs } },
+                select: { slipHash: true },
+            })
+
+            if (existingUsedSlips.length > 0) {
+                return NextResponse.json({ error: 'มีสลิปที่ถูกใช้งานไปแล้ว กรุณาตรวจสลิปใหม่' }, { status: 400 })
+            }
+
+            paymentSlipHash = verifiedSlipRefs.length === 1
+                ? verifiedSlipRefs[0]
+                : crypto.createHash('sha256').update(verifiedSlipRefs.sort().join('|')).digest('hex')
+        } else if (slipData) {
+            if (!manualReview) {
+                return NextResponse.json({ error: 'กรุณาตรวจสอบสลิปก่อนยืนยันการชำระเงิน' }, { status: 400 })
+            }
+
+            paymentSlipHash = crypto.createHash('sha256').update(String(slipData)).digest('hex')
 
             const existingSlip = await prisma.usedSlip.findUnique({
-                where: { slipHash },
+                where: { slipHash: paymentSlipHash },
             })
 
             if (existingSlip) {
                 await prisma.auditLog.create({
                     data: {
-                        userId: user.id, action: 'BOOKING_FAIL', entityType: 'payment', entityId: bookingId,
+                        userId: user.id,
+                        action: 'BOOKING_FAIL',
+                        entityType: 'payment',
+                        entityId: bookingId,
                         ipAddress: requestMeta.ipAddress,
                         details: JSON.stringify({
-                            reason: 'สลิปซ้ำ',
+                            reason: 'duplicate_slip_hash',
                             bookingNumber: booking.bookingNumber,
-                            payment: { method: method || 'PROMPTPAY', amount, manualReview: Boolean(manualReview) },
+                            payment: { method: paymentMethod, amount: payableAmount, manualReview: Boolean(manualReview) },
                             request: requestMeta,
                         }),
                     },
                 })
-                return NextResponse.json(
-                    { error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้' },
-                    { status: 400 }
-                )
+
+                return NextResponse.json({ error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้' }, { status: 400 })
             }
+        } else if (!manualReview) {
+            return NextResponse.json({ error: 'ไม่พบข้อมูลสลิปที่ผ่านการตรวจสอบ กรุณาตรวจสลิปก่อนยืนยันการชำระเงิน' }, { status: 400 })
         }
 
-        const payment = await prisma.payment.create({
-            data: {
-                bookingId,
-                userId: user.id,
-                method: method || 'PROMPTPAY',
-                amount,
-                slipUrl: body.slipUrl || null,
-                slipHash,
-                status: manualReview ? 'PENDING' : 'VERIFIED',
-                verifiedAt: manualReview ? null : new Date(),
-                verifiedBy: manualReview ? null : 'SYSTEM',
-            },
-        })
-
-        // Record used slip
-        if (slipHash) {
-            await prisma.usedSlip.create({
+        const payment = await prisma.$transaction(async tx => {
+            const createdPayment = await tx.payment.create({
                 data: {
-                    slipHash,
-                    paymentId: payment.id,
+                    bookingId,
+                    userId: user.id,
+                    method: paymentMethod,
+                    amount: payableAmount,
+                    slipUrl: body.slipUrl || null,
+                    slipHash: paymentSlipHash,
+                    status: manualReview ? 'PENDING' : 'VERIFIED',
+                    verifiedAt: manualReview ? null : new Date(),
+                    verifiedBy: manualReview ? null : 'SYSTEM',
                 },
             })
-        }
 
-        // Auto-confirm booking only if payment is verified (not manual review)
+            if (verifiedSlipRefs.length > 0) {
+                for (const transRef of verifiedSlipRefs) {
+                    await tx.usedSlip.create({
+                        data: {
+                            slipHash: transRef,
+                            paymentId: createdPayment.id,
+                        },
+                    })
+                }
+            } else if (paymentSlipHash) {
+                await tx.usedSlip.create({
+                    data: {
+                        slipHash: paymentSlipHash,
+                        paymentId: createdPayment.id,
+                    },
+                })
+            }
+
+            if (!manualReview) {
+                await tx.booking.update({
+                    where: { id: bookingId },
+                    data: { status: 'CONFIRMED' },
+                })
+            }
+
+            return createdPayment
+        })
+
         if (!manualReview) {
-            await prisma.booking.update({
-                where: { id: bookingId },
-                data: { status: 'CONFIRMED' },
-            })
-
             const confirmedBooking = await prisma.booking.findUnique({
                 where: { id: bookingId },
                 include: {

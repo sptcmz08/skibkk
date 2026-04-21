@@ -5,7 +5,8 @@ import ConfirmModal from '@/components/ConfirmModal'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw, CheckCircle } from 'lucide-react'
+import Image from 'next/image'
+import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
 import { DEFAULT_LINE_CONFIRMATION_NOTE, DEFAULT_LINE_UPDATE_NOTE, DEFAULT_LINE_REMINDER_NOTE, normalizeLineEditableNote } from '@/lib/line-booking-notify'
@@ -190,7 +191,14 @@ export default function AdminSettingsPage() {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             background: '#f8f9fa',
                         }}>
-                            <img src={logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            <Image
+                                src={logo}
+                                alt="Logo"
+                                width={120}
+                                height={120}
+                                unoptimized
+                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                            />
                         </div>
                     ) : (
                         <div style={{
@@ -248,7 +256,14 @@ export default function AdminSettingsPage() {
                             }}
                         >
                             {qrImage ? (
-                                <img src={qrImage} alt="QR Payment" style={{ width: '100%', maxWidth: '240px', height: 'auto' }} />
+                                <Image
+                                    src={qrImage}
+                                    alt="QR Payment"
+                                    width={240}
+                                    height={240}
+                                    unoptimized
+                                    style={{ width: '100%', maxWidth: '240px', height: 'auto' }}
+                                />
                             ) : (
                                 <div style={{
                                     width: '240px', height: '240px',

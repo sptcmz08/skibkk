@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SignJWT } from 'jose'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -36,6 +37,51 @@ const VERIFY_ENDPOINT = 'https://developer.easyslip.com/api/v1/verify'
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 15000
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
+
+const createSlipVerificationToken = async (payload: {
+    transRef: string
+    amount: number
+    sender: string
+    receiverName: string
+    receiverAccount: string
+}) => {
+    return new SignJWT({
+        purpose: 'slip-verification',
+        ...payload,
+    })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime('30m')
+        .sign(JWT_SECRET)
+}
+
+const loadExpectedReceiver = async () => {
+    let expectedReceiver = ''
+    let expectedAccount = ''
+    let isLearningMode = false
+
+    try {
+        const receiverSetting = await prisma.siteSetting.findUnique({
+            where: { key: 'payment_receiver' },
+        })
+
+        if (receiverSetting) {
+            const receiverData = JSON.parse(receiverSetting.value) as { name?: string; account?: string }
+            expectedReceiver = receiverData.name || ''
+            expectedAccount = receiverData.account || ''
+            isLearningMode = !expectedReceiver && !expectedAccount
+        } else {
+            expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
+            expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+        }
+    } catch {
+        expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
+        expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+    }
+
+    return { expectedReceiver, expectedAccount, isLearningMode }
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -152,14 +198,12 @@ export async function POST(req: NextRequest) {
 
         const slipData = result.data
         const amount = Number(slipData?.amount?.amount || 0)
-        const transRef = slipData?.transRef || ''
-        const sender = slipData?.sender?.displayName || slipData?.sender?.name || ''
-        const receiverName = slipData?.receiver?.displayName || slipData?.receiver?.name || ''
-        const receiverAccount = slipData?.receiver?.account?.value || ''
-        const receiverProxyName = slipData?.receiver?.proxy?.name || ''
-        const receiverProxyValue = slipData?.receiver?.proxy?.value || ''
-        const date = slipData?.date || ''
-        const bankCode = slipData?.sendingBank || ''
+        const transRef = String(slipData?.transRef || '').trim()
+        const sender = String(slipData?.sender?.displayName || slipData?.sender?.name || '').trim()
+        const receiverName = String(slipData?.receiver?.displayName || slipData?.receiver?.name || slipData?.receiver?.proxy?.name || '').trim()
+        const receiverAccount = String(slipData?.receiver?.account?.value || slipData?.receiver?.proxy?.value || '').trim()
+        const date = String(slipData?.date || '').trim()
+        const bankCode = String(slipData?.sendingBank || '').trim()
 
         if (!Number.isFinite(amount) || amount <= 0) {
             return NextResponse.json({
@@ -168,64 +212,43 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        if (transRef) {
-            const [existingPayment, existingUsedSlip] = await Promise.all([
-                prisma.payment.findFirst({ where: { slipHash: transRef } }),
-                prisma.usedSlip.findFirst({ where: { slipHash: transRef } }),
-            ])
-
-            if (existingPayment || existingUsedSlip) {
-                return NextResponse.json({
-                    verified: false,
-                    error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
-                }, { status: 400 })
-            }
+        if (!transRef) {
+            return NextResponse.json({
+                verified: false,
+                error: 'ไม่พบเลขอ้างอิงสลิป กรุณาใช้สลิปจากแอปธนาคารโดยตรง',
+            }, { status: 400 })
         }
 
-        let expectedReceiver = ''
-        let expectedAccount = ''
-        let isLearningMode = false
+        const [existingPayment, existingUsedSlip] = await Promise.all([
+            prisma.payment.findFirst({ where: { slipHash: transRef } }),
+            prisma.usedSlip.findFirst({ where: { slipHash: transRef } }),
+        ])
 
-        try {
-            const receiverSetting = await prisma.siteSetting.findUnique({
-                where: { key: 'payment_receiver' },
-            })
-
-            if (receiverSetting) {
-                const receiverData = JSON.parse(receiverSetting.value) as { name?: string; account?: string }
-                expectedReceiver = receiverData.name || ''
-                expectedAccount = receiverData.account || ''
-                isLearningMode = !expectedReceiver && !expectedAccount
-            } else {
-                expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
-                expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
-            }
-        } catch {
-            expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
-            expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
+        if (existingPayment || existingUsedSlip) {
+            return NextResponse.json({
+                verified: false,
+                error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
+            }, { status: 400 })
         }
+
+        const { expectedReceiver, expectedAccount, isLearningMode } = await loadExpectedReceiver()
 
         const receiverText = [
             receiverName,
             receiverAccount,
-            receiverProxyName,
-            receiverProxyValue,
             slipData?.receiver?.account?.bank?.short || '',
             slipData?.receiver?.account?.bank?.name || '',
         ].join(' ').toLowerCase()
 
         if (isLearningMode) {
-            const learnedName = receiverName || receiverProxyName || ''
-            const learnedAccount = receiverAccount || receiverProxyValue || ''
-
-            if (learnedName || learnedAccount) {
+            if (receiverName || receiverAccount) {
                 try {
                     await prisma.siteSetting.upsert({
                         where: { key: 'payment_receiver' },
                         update: {
                             value: JSON.stringify({
-                                name: learnedName,
-                                account: learnedAccount,
+                                name: receiverName,
+                                account: receiverAccount,
                                 learnedAt: new Date().toISOString(),
                                 autoLearned: true,
                             }),
@@ -233,8 +256,8 @@ export async function POST(req: NextRequest) {
                         create: {
                             key: 'payment_receiver',
                             value: JSON.stringify({
-                                name: learnedName,
-                                account: learnedAccount,
+                                name: receiverName,
+                                account: receiverAccount,
                                 learnedAt: new Date().toISOString(),
                                 autoLearned: true,
                             }),
@@ -251,7 +274,7 @@ export async function POST(req: NextRequest) {
             if (!nameMatch && !accountMatch) {
                 return NextResponse.json({
                     verified: false,
-                    error: `สลิปนี้ไม่ได้โอนให้บัญชีร้าน (ผู้รับ: ${receiverName || receiverProxyName || receiverAccount || 'ไม่ทราบ'})`,
+                    error: `สลิปนี้ไม่ได้โอนให้บัญชีร้าน (ผู้รับ: ${receiverName || receiverAccount || 'ไม่ทราบ'})`,
                 }, { status: 400 })
             }
         }
@@ -278,16 +301,24 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        console.log(`[SlipVerify] verified amount=${amount} transRef=${transRef}`)
+        const verificationToken = await createSlipVerificationToken({
+            transRef,
+            amount,
+            sender,
+            receiverName,
+            receiverAccount,
+        })
 
         return NextResponse.json({
             verified: true,
             amount,
             transRef,
             sender,
-            receiver: receiverName || receiverProxyName,
+            receiver: receiverName,
+            receiverAccount,
             date,
             bankCode,
+            verificationToken,
         })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
