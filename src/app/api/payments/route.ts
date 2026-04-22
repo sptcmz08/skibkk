@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify, JWTPayload } from 'jose'
+import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
-import { getAuditRequestMeta } from '@/lib/audit'
-import crypto from 'crypto'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
 import {
@@ -28,7 +27,11 @@ type SlipVerificationPayload = JWTPayload & {
     receiverBankName?: string
 }
 
-const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+})
 
 const verifySlipToken = async (token: string) => {
     const { payload } = await jwtVerify(token, JWT_SECRET)
@@ -81,7 +84,6 @@ const loadExpectedReceiver = async () => {
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
-        const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
 
         const { bookingId, method, amount, slipData, manualReview } = body
@@ -117,15 +119,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'ยอดชำระไม่ตรงกับยอดจอง' }, { status: 400 })
         }
 
+        if (!(await isTransferPaymentEnabled())) {
+            return NextResponse.json({ error: 'ปิดการใช้งานการชำระเงินผ่านการโอนชั่วคราว' }, { status: 403 })
+        }
+
         const paymentMethod = method || 'PROMPTPAY'
         const payableAmount = booking.totalAmount
         let paymentSlipHash: string | null = null
         let verifiedSlipRefs: string[] = []
         let totalVerifiedAmount = 0
-
-        if (!(await isTransferPaymentEnabled())) {
-            return NextResponse.json({ error: 'ปิดการใช้งานการชำระเงินผ่านการโอนชั่วคราว' }, { status: 403 })
-        }
 
         if (slipTokens.length > 0) {
             let decodedSlips: Awaited<ReturnType<typeof verifySlipToken>>[]
@@ -139,9 +141,10 @@ export async function POST(req: NextRequest) {
             if (channelStatus.status !== 'ready' || !isReceiverComplete(expectedReceiver)) {
                 return NextResponse.json({ error: 'ระบบชำระเงินยังตั้งค่าไม่ครบ กรุณาให้ผู้ดูแลตรวจสอบข้อมูลบัญชีก่อนรับชำระ' }, { status: 503 })
             }
-            const activeReceiver = expectedReceiver!
 
+            const activeReceiver = expectedReceiver!
             const uniqueRefs = new Set<string>()
+
             for (const slip of decodedSlips) {
                 const nameMatch = normalizeTextValue(slip.receiverName).includes(normalizeTextValue(activeReceiver.name))
                 const accountMatch = normalizeAccountValue(slip.receiverAccount) === normalizeAccountValue(activeReceiver.account)
@@ -154,6 +157,7 @@ export async function POST(req: NextRequest) {
                 if (uniqueRefs.has(slip.transRef)) {
                     return NextResponse.json({ error: 'พบสลิปซ้ำในรายการชำระ กรุณาตรวจสอบใหม่' }, { status: 400 })
                 }
+
                 uniqueRefs.add(slip.transRef)
                 totalVerifiedAmount += slip.amount
             }
@@ -180,32 +184,6 @@ export async function POST(req: NextRequest) {
             if (!manualReview) {
                 return NextResponse.json({ error: 'กรุณาตรวจสอบสลิปก่อนยืนยันการชำระเงิน' }, { status: 400 })
             }
-
-            paymentSlipHash = crypto.createHash('sha256').update(String(slipData)).digest('hex')
-
-            const existingSlip = await prisma.usedSlip.findUnique({
-                where: { slipHash: paymentSlipHash },
-            })
-
-            if (existingSlip) {
-                await prisma.auditLog.create({
-                    data: {
-                        userId: user.id,
-                        action: 'BOOKING_FAIL',
-                        entityType: 'payment',
-                        entityId: bookingId,
-                        ipAddress: requestMeta.ipAddress,
-                        details: JSON.stringify({
-                            reason: 'duplicate_slip_hash',
-                            bookingNumber: booking.bookingNumber,
-                            payment: { method: paymentMethod, amount: payableAmount, manualReview: Boolean(manualReview) },
-                            request: requestMeta,
-                        }),
-                    },
-                })
-
-                return NextResponse.json({ error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้' }, { status: 400 })
-            }
         } else if (!manualReview) {
             return NextResponse.json({ error: 'ไม่พบข้อมูลสลิปที่ผ่านการตรวจสอบ กรุณาตรวจสลิปก่อนยืนยันการชำระเงิน' }, { status: 400 })
         }
@@ -218,26 +196,18 @@ export async function POST(req: NextRequest) {
                     method: paymentMethod,
                     amount: payableAmount,
                     slipUrl: body.slipUrl || null,
-                    slipHash: paymentSlipHash,
+                    // Reserve slip references only after they pass verification.
+                    slipHash: verifiedSlipRefs.length > 0 ? paymentSlipHash : null,
                     status: manualReview ? 'PENDING' : 'VERIFIED',
                     verifiedAt: manualReview ? null : new Date(),
                     verifiedBy: manualReview ? null : 'SYSTEM',
                 },
             })
 
-            if (verifiedSlipRefs.length > 0) {
-                for (const transRef of verifiedSlipRefs) {
-                    await tx.usedSlip.create({
-                        data: {
-                            slipHash: transRef,
-                            paymentId: createdPayment.id,
-                        },
-                    })
-                }
-            } else if (paymentSlipHash) {
+            for (const transRef of verifiedSlipRefs) {
                 await tx.usedSlip.create({
                     data: {
-                        slipHash: paymentSlipHash,
+                        slipHash: transRef,
                         paymentId: createdPayment.id,
                     },
                 })
@@ -276,7 +246,12 @@ export async function POST(req: NextRequest) {
                     })),
                     totalAmount: confirmedBooking.totalAmount,
                 })
-                sendLinePush(confirmedBooking.user.lineUserId, [{ type: 'text', text: message }], { messageType: 'payment_confirmation', bookingId: confirmedBooking.id }).catch(err => console.error('Failed to send LINE confirmation:', err))
+
+                sendLinePush(
+                    confirmedBooking.user.lineUserId,
+                    [{ type: 'text', text: message }],
+                    { messageType: 'payment_confirmation', bookingId: confirmedBooking.id },
+                ).catch(err => console.error('Failed to send LINE confirmation:', err))
             }
         }
 
@@ -285,6 +260,7 @@ export async function POST(req: NextRequest) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
         }
+
         console.error('Payment POST error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }

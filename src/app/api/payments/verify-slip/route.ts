@@ -293,12 +293,11 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const [existingPayment, existingUsedSlip] = await Promise.all([
-            prisma.payment.findFirst({ where: { slipHash: transRef } }),
-            prisma.usedSlip.findFirst({ where: { slipHash: transRef } }),
-        ])
+        const existingUsedSlip = await prisma.usedSlip.findFirst({
+            where: { slipHash: transRef },
+        })
 
-        if (existingPayment || existingUsedSlip) {
+        if (existingUsedSlip) {
             return NextResponse.json({
                 verified: false,
                 error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
