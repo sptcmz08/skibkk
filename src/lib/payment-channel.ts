@@ -13,6 +13,108 @@ export type PaymentDisplayConfig = {
 
 export type PaymentChannelStatus = 'ready' | 'incomplete' | 'disabled'
 
+const CANDIDATE_SPLIT_REGEX = /[\n,;|]+|(?:\s\/\s)/g
+
+const THAI_DIGIT_MAP: Record<string, string> = {
+    '๐': '0',
+    '๑': '1',
+    '๒': '2',
+    '๓': '3',
+    '๔': '4',
+    '๕': '5',
+    '๖': '6',
+    '๗': '7',
+    '๘': '8',
+    '๙': '9',
+}
+
+const normalizeUnicodeValue = (value: string | null | undefined) =>
+    String(value || '').normalize('NFKC').trim()
+
+const normalizeThaiDigits = (value: string | null | undefined) =>
+    normalizeUnicodeValue(value).replace(/[๐-๙]/g, digit => THAI_DIGIT_MAP[digit] || digit)
+
+const splitCandidateValues = (value: string | null | undefined) =>
+    normalizeUnicodeValue(value)
+        .split(CANDIDATE_SPLIT_REGEX)
+        .map(item => item.trim())
+        .filter(Boolean)
+
+const BANK_ALIAS_GROUPS: Array<{ key: string; aliases: string[] }> = [
+    {
+        key: 'bbl',
+        aliases: ['002', 'bbl', 'bangkokbank', 'bangkok', 'ธนาคารกรุงเทพ', 'กรุงเทพ'],
+    },
+    {
+        key: 'kbank',
+        aliases: ['004', 'kbank', 'kasikorn', 'kasikornbank', 'ธนาคารกสิกรไทย', 'กสิกรไทย', 'กสิกร'],
+    },
+    {
+        key: 'ktb',
+        aliases: ['006', 'ktb', 'krungthai', 'ธนาคารกรุงไทย', 'กรุงไทย'],
+    },
+    {
+        key: 'ttb',
+        aliases: ['011', 'ttb', 'tmbthanachart', 'ธนาคารทหารไทยธนชาต', 'ทหารไทยธนชาต', 'ธนชาต', 'ทีทีบี'],
+    },
+    {
+        key: 'scb',
+        aliases: ['014', 'scb', 'siamcommercial', 'siamcommercialbank', 'ธนาคารไทยพาณิชย์', 'ไทยพาณิชย์'],
+    },
+    {
+        key: 'cimbt',
+        aliases: ['022', 'cimb', 'cimbthai', 'cimbt', 'ธนาคารซีไอเอ็มบีไทย', 'ซีไอเอ็มบีไทย', 'ซีไอเอ็มบี'],
+    },
+    {
+        key: 'uobt',
+        aliases: ['024', 'uob', 'uobt', 'uobthai', 'ธนาคารยูโอบี', 'ยูโอบี'],
+    },
+    {
+        key: 'bay',
+        aliases: ['025', 'bay', 'krungsri', 'ayudhya', 'bankofayudhya', 'ธนาคารกรุงศรีอยุธยา', 'กรุงศรีอยุธยา', 'กรุงศรี'],
+    },
+    {
+        key: 'gsb',
+        aliases: ['030', 'gsb', 'governmentsavings', 'governmentsavingsbank', 'ธนาคารออมสิน', 'ออมสิน'],
+    },
+    {
+        key: 'ghb',
+        aliases: ['033', 'ghb', 'governmenthousing', 'governmenthousingbank', 'ธนาคารอาคารสงเคราะห์', 'อาคารสงเคราะห์'],
+    },
+    {
+        key: 'baac',
+        aliases: ['034', 'baac', 'ธกส', 'ธ.ก.ส', 'ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร', 'เพื่อการเกษตร'],
+    },
+    {
+        key: 'exim',
+        aliases: ['035', 'exim', 'eximthai', 'exportimport', 'exportimportbank', 'ธนาคารเพื่อการส่งออกและนำเข้าแห่งประเทศไทย', 'เพื่อการส่งออกและนำเข้า'],
+    },
+    {
+        key: 'tisco',
+        aliases: ['067', 'tisco', 'ธนาคารทิสโก้', 'ทิสโก้'],
+    },
+    {
+        key: 'kkp',
+        aliases: ['069', 'kkp', 'kiatnakin', 'kiatnakinphatra', 'phatra', 'ธนาคารเกียรตินาคินภัทร', 'เกียรตินาคินภัทร'],
+    },
+    {
+        key: 'icbct',
+        aliases: ['070', 'icbc', 'icbct', 'industrialandcommercialbankofchina', 'ธนาคารไอซีบีซีไทย', 'ธนาคารไอซีบีซี(ไทย)', 'ไอซีบีซีไทย', 'ไอซีบีซี'],
+    },
+    {
+        key: 'tcd',
+        aliases: ['071', 'tcd', 'thaicredit', 'ไทยเครดิต', 'ธนาคารไทยเครดิตเพื่อรายย่อย'],
+    },
+    {
+        key: 'lhfg',
+        aliases: ['073', 'lhfg', 'lhbank', 'landandhouses', 'ธนาคารแลนด์แอนด์เฮ้าส์', 'แลนด์แอนด์เฮ้าส์', 'แลนด์แอนด์เฮาส์'],
+    },
+    {
+        key: 'sme',
+        aliases: ['098', 'sme', 'smebank', 'ธนาคารพัฒนาวิสาหกิจขนาดกลางและขนาดย่อมแห่งประเทศไทย', 'พัฒนาวิสาหกิจขนาดกลางและขนาดย่อม', 'เอสเอ็มอี'],
+    },
+]
+
 export const emptyReceiver = (): ReceiverInfo => ({
     name: '',
     account: '',
@@ -64,19 +166,22 @@ export const isReceiverComplete = (receiver: ReceiverInfo | null | undefined) =>
     Boolean(receiver?.name.trim() && receiver?.account.trim() && receiver?.bankName.trim())
 
 export const normalizeAccountValue = (value: string | null | undefined) =>
-    String(value || '').replace(/[^0-9A-Za-z]/g, '').trim().toLowerCase()
+    normalizeThaiDigits(value).replace(/[^0-9A-Za-z]/g, '').trim().toLowerCase()
 
 export const normalizeAccountDigits = (value: string | null | undefined) =>
-    String(value || '').replace(/\D/g, '').trim()
+    normalizeThaiDigits(value).replace(/\D/g, '').trim()
 
 export const normalizeTextValue = (value: string | null | undefined) =>
-    String(value || '').replace(/\s+/g, ' ').trim().toLowerCase()
+    normalizeThaiDigits(value).replace(/\s+/g, ' ').trim().toLowerCase()
 
 export const normalizeLooseTextValue = (value: string | null | undefined) =>
-    String(value || '')
-        .toLowerCase()
+    normalizeTextValue(value)
+        .replace(/[&]/g, ' and ')
+        .replace(/\b(?:public company limited|company limited|co ltd|co\. ltd|co\.ltd|corporation|corp|incorporated|inc|limited|company|plc|llc|holdings?|group)\b/gu, ' ')
+        .replace(/\b(?:mr|mrs|ms|miss|dr|prof)\b\.?/gu, ' ')
         .replace(/[^\p{L}\p{N}]+/gu, '')
         .replace(/บริษัท/gu, '')
+        .replace(/จำกัดมหาชน/gu, '')
         .replace(/จำกัด/gu, '')
         .replace(/บจก/gu, '')
         .replace(/บมจ/gu, '')
@@ -94,48 +199,42 @@ export const normalizeLooseTextValue = (value: string | null | undefined) =>
         .trim()
 
 export const normalizeBankValue = (value: string | null | undefined) => {
-    const normalized = String(value || '')
+    const normalized = normalizeThaiDigits(value)
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]+/gu, '')
         .replace(/^ธนาคาร/u, '')
         .replace(/^ธ/u, '')
+        .replace(/^bankof/u, '')
 
     if (!normalized) return ''
 
-    const aliases: Array<{ key: string; patterns: string[] }> = [
-        { key: 'kbank', patterns: ['กสิกรไทย', 'kbank', 'kasikorn', 'kasikornbank'] },
-        { key: 'scb', patterns: ['ไทยพาณิชย์', 'scb', 'siamcommercial', 'siamcommercialbank'] },
-        { key: 'bbl', patterns: ['กรุงเทพ', 'bangkokbank', 'bangkok'] },
-        { key: 'ktb', patterns: ['กรุงไทย', 'ktb', 'krungthai'] },
-        { key: 'bay', patterns: ['กรุงศรี', 'krungsri', 'bay', 'ayudhya'] },
-        { key: 'ttb', patterns: ['ttb', 'ทหารไทยธนชาต', 'ธนชาต'] },
-        { key: 'gsb', patterns: ['ออมสิน', 'gsb', 'governmentsavings'] },
-        { key: 'baac', patterns: ['ธกส', 'เพื่อการเกษตร', 'baac'] },
-        { key: 'cimb', patterns: ['cimbthai', 'cimb', 'ซีไอเอ็มบี'] },
-        { key: 'uob', patterns: ['uob', 'ยูโอบี'] },
-        { key: 'lhb', patterns: ['แลนด์แอนด์เฮ้าส์', 'แลนด์แอนด์เฮาส์', 'lhbank', 'lhb'] },
-    ]
-
-    const matched = aliases.find(alias => alias.patterns.some(pattern => normalized.includes(pattern)))
+    const matched = BANK_ALIAS_GROUPS.find(alias => alias.aliases.some(pattern => normalized === pattern || normalized.includes(pattern) || pattern.includes(normalized)))
     return matched?.key || normalized
 }
 
 export const accountValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
-    const actualNormalized = normalizeAccountValue(actual)
-    const expectedNormalized = normalizeAccountValue(expected)
+    const actualCandidates = splitCandidateValues(actual)
+    const expectedCandidates = splitCandidateValues(expected)
 
-    if (!actualNormalized || !expectedNormalized) {
-        return false
-    }
+    return actualCandidates.some(actualCandidate => expectedCandidates.some(expectedCandidate => {
+        const actualNormalized = normalizeAccountValue(actualCandidate)
+        const expectedNormalized = normalizeAccountValue(expectedCandidate)
 
-    if (actualNormalized === expectedNormalized) {
-        return true
-    }
+        if (!actualNormalized || !expectedNormalized) {
+            return false
+        }
 
-    const actualDigits = normalizeAccountDigits(actual)
-    const expectedDigits = normalizeAccountDigits(expected)
+        if (actualNormalized === expectedNormalized) {
+            return true
+        }
 
-    if (actualDigits && expectedDigits) {
+        const actualDigits = normalizeAccountDigits(actualCandidate)
+        const expectedDigits = normalizeAccountDigits(expectedCandidate)
+
+        if (!actualDigits || !expectedDigits) {
+            return false
+        }
+
         if (actualDigits === expectedDigits) {
             return true
         }
@@ -147,42 +246,54 @@ export const accountValuesMatch = (actual: string | null | undefined, expected: 
         if (expectedDigits.length >= 4 && actualDigits.endsWith(expectedDigits)) {
             return true
         }
-    }
 
-    return false
+        return actualDigits.slice(-4).length === 4
+            && expectedDigits.slice(-4).length === 4
+            && actualDigits.slice(-4) === expectedDigits.slice(-4)
+    }))
 }
 
 export const textValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
-    const actualNormalized = normalizeTextValue(actual)
-    const expectedNormalized = normalizeTextValue(expected)
-    const actualLoose = normalizeLooseTextValue(actual)
-    const expectedLoose = normalizeLooseTextValue(expected)
+    const actualCandidates = splitCandidateValues(actual)
+    const expectedCandidates = splitCandidateValues(expected)
 
-    if (!actualNormalized || !expectedNormalized) {
-        return false
-    }
+    return actualCandidates.some(actualCandidate => expectedCandidates.some(expectedCandidate => {
+        const actualNormalized = normalizeTextValue(actualCandidate)
+        const expectedNormalized = normalizeTextValue(expectedCandidate)
+        const actualLoose = normalizeLooseTextValue(actualCandidate)
+        const expectedLoose = normalizeLooseTextValue(expectedCandidate)
 
-    return actualNormalized === expectedNormalized
-        || actualNormalized.includes(expectedNormalized)
-        || expectedNormalized.includes(actualNormalized)
-        || (actualLoose && expectedLoose && (
-            actualLoose === expectedLoose
-            || actualLoose.includes(expectedLoose)
-            || expectedLoose.includes(actualLoose)
-        ))
+        if (!actualNormalized || !expectedNormalized) {
+            return false
+        }
+
+        return actualNormalized === expectedNormalized
+            || actualNormalized.includes(expectedNormalized)
+            || expectedNormalized.includes(actualNormalized)
+            || (actualLoose && expectedLoose && (
+                actualLoose === expectedLoose
+                || actualLoose.includes(expectedLoose)
+                || expectedLoose.includes(actualLoose)
+            ))
+    }))
 }
 
 export const bankValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
-    const actualNormalized = normalizeBankValue(actual)
-    const expectedNormalized = normalizeBankValue(expected)
+    const actualCandidates = splitCandidateValues(actual)
+    const expectedCandidates = splitCandidateValues(expected)
 
-    if (!actualNormalized || !expectedNormalized) {
-        return false
-    }
+    return actualCandidates.some(actualCandidate => expectedCandidates.some(expectedCandidate => {
+        const actualNormalized = normalizeBankValue(actualCandidate)
+        const expectedNormalized = normalizeBankValue(expectedCandidate)
 
-    return actualNormalized === expectedNormalized
-        || actualNormalized.includes(expectedNormalized)
-        || expectedNormalized.includes(actualNormalized)
+        if (!actualNormalized || !expectedNormalized) {
+            return false
+        }
+
+        return actualNormalized === expectedNormalized
+            || actualNormalized.includes(expectedNormalized)
+            || expectedNormalized.includes(actualNormalized)
+    }))
 }
 
 export const receiverValuesMatch = (
@@ -201,9 +312,10 @@ export const receiverValuesMatch = (
     const nameMatch = textValuesMatch(actual.name, expected.name)
     const accountMatch = accountValuesMatch(actual.account, expected.account)
     const bankMatch = bankValuesMatch(actual.bankName, expected.bankName)
+    const hasActualBank = splitCandidateValues(actual.bankName).length > 0
 
     return {
-        matched: bankMatch && (accountMatch || nameMatch),
+        matched: (bankMatch && (accountMatch || nameMatch)) || (!hasActualBank && accountMatch && nameMatch),
         nameMatch,
         accountMatch,
         bankMatch,

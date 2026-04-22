@@ -103,6 +103,14 @@ const extractNameValue = (value?: { th?: string; en?: string } | null) => {
     return String(value?.th || value?.en || '').trim()
 }
 
+const extractNameCandidates = (value?: { th?: string; en?: string } | null) =>
+    [value?.th, value?.en]
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+
+const joinUniqueValues = (...values: Array<string | null | undefined>) =>
+    [...new Set(values.map(item => String(item || '').trim()).filter(Boolean))].join('\n')
+
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
@@ -268,20 +276,37 @@ export async function POST(req: NextRequest) {
         const amount = Number(result.data?.amountInSlip || slipData?.amount?.amount || 0)
         const transRef = String(slipData?.transRef || '').trim()
         const sender = extractNameValue(slipData?.sender?.account?.name)
-        const receiverName = extractNameValue(slipData?.receiver?.account?.name) || String(matchedAccount?.accountName || '').trim()
-        const receiverAccount = String(
+        const displayReceiverName = extractNameValue(slipData?.receiver?.account?.name) || String(matchedAccount?.accountName || '').trim()
+        const displayReceiverAccount = String(
             slipData?.receiver?.account?.value
             || slipData?.receiver?.proxy?.value
             || matchedAccount?.accountNumber
             || '',
         ).trim()
-        const receiverBankName = String(
+        const displayReceiverBankName = String(
             slipData?.receiver?.bank?.name
             || slipData?.receiver?.bank?.short
+            || slipData?.receiver?.bank?.id
             || matchedAccount?.bankName
             || matchedAccount?.bankCode
             || '',
         ).trim()
+        const receiverName = joinUniqueValues(
+            ...extractNameCandidates(slipData?.receiver?.account?.name),
+            matchedAccount?.accountName,
+        )
+        const receiverAccount = joinUniqueValues(
+            slipData?.receiver?.account?.value,
+            slipData?.receiver?.proxy?.value,
+            matchedAccount?.accountNumber,
+        )
+        const receiverBankName = joinUniqueValues(
+            slipData?.receiver?.bank?.name,
+            slipData?.receiver?.bank?.short,
+            slipData?.receiver?.bank?.id,
+            matchedAccount?.bankName,
+            matchedAccount?.bankCode,
+        )
         const date = String(slipData?.date || '').trim()
         const bankCode = String(slipData?.sender?.bank?.short || slipData?.sender?.bank?.id || '').trim()
 
@@ -326,7 +351,7 @@ export async function POST(req: NextRequest) {
         if (!matched) {
             return NextResponse.json({
                 verified: false,
-                error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${receiverName || receiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${receiverBankName || 'ไม่ทราบ'})`,
+                error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${displayReceiverName || displayReceiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${displayReceiverBankName || 'ไม่ทราบ'})`,
             }, { status: 400 })
         }
 
@@ -370,9 +395,9 @@ export async function POST(req: NextRequest) {
             amount,
             transRef,
             sender,
-            receiver: receiverName,
-            receiverAccount,
-            receiverBankName,
+            receiver: displayReceiverName,
+            receiverAccount: displayReceiverAccount,
+            receiverBankName: displayReceiverBankName,
             date,
             bankCode,
             verificationToken,
