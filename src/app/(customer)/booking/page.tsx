@@ -144,7 +144,7 @@ export default function BookingPage() {
     const [pendingSlipBase64, setPendingSlipBase64] = useState<string | null>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
     const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string; bankName?: string } | null>(null)
-    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
+    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: false, enableBankDetails: true })
 
     const total = cart.reduce((s, i) => s + i.price, 0)
     const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
@@ -367,21 +367,10 @@ export default function BookingPage() {
                     const settingsRes = await fetch('/api/admin/qr-settings')
                     const settingsData = await settingsRes.json()
                     setQrReceiver(settingsData.receiver || null)
-                    if (settingsData.displayConfig) {
-                        setPaymentDisplayConfig(settingsData.displayConfig)
-                    } else {
-                        setPaymentDisplayConfig({ enableQrCode: true, enableBankDetails: true })
-                    }
-
-                    if (settingsData.displayConfig?.enableQrCode === false) {
-                        setQrImage(null)
-                        return
-                    }
-
-                    if (settingsData.qrImage) {
-                        setQrImage(settingsData.qrImage)
-                        return
-                    }
+                    setPaymentDisplayConfig({
+                        enableQrCode: false,
+                        enableBankDetails: settingsData.displayConfig?.enableBankDetails !== false,
+                    })
                 } catch { /* ignore */ }
 
                 setQrImage(null)

@@ -22,7 +22,7 @@ export const emptyReceiver = (): ReceiverInfo => ({
 })
 
 export const defaultDisplayConfig = (): PaymentDisplayConfig => ({
-    enableQrCode: true,
+    enableQrCode: false,
     enableBankDetails: true,
 })
 
@@ -47,7 +47,9 @@ export const parseDisplayConfig = (raw: string | null | undefined): PaymentDispl
     try {
         const value = JSON.parse(raw) as Partial<PaymentDisplayConfig>
         return {
-            enableQrCode: value.enableQrCode !== false,
+            // Simplify the payment flow: use bank details as the primary transfer channel.
+            // We keep the field for backward compatibility, but new UI/logic no longer depends on uploaded payment images.
+            enableQrCode: false,
             enableBankDetails: value.enableBankDetails !== false,
         }
     } catch {
@@ -74,6 +76,21 @@ export const normalizeLooseTextValue = (value: string | null | undefined) =>
     String(value || '')
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]+/gu, '')
+        .replace(/บริษัท/gu, '')
+        .replace(/จำกัด/gu, '')
+        .replace(/บจก/gu, '')
+        .replace(/บมจ/gu, '')
+        .replace(/หจก/gu, '')
+        .replace(/มหาชน/gu, '')
+        .replace(/ร้าน/gu, '')
+        .replace(/นาย/gu, '')
+        .replace(/นางสาว/gu, '')
+        .replace(/นาง/gu, '')
+        .replace(/คุณ/gu, '')
+        .replace(/company/gu, '')
+        .replace(/limited/gu, '')
+        .replace(/co/gu, '')
+        .replace(/ltd/gu, '')
         .trim()
 
 export const normalizeBankValue = (value: string | null | undefined) => {
@@ -166,6 +183,31 @@ export const bankValuesMatch = (actual: string | null | undefined, expected: str
     return actualNormalized === expectedNormalized
         || actualNormalized.includes(expectedNormalized)
         || expectedNormalized.includes(actualNormalized)
+}
+
+export const receiverValuesMatch = (
+    actual: { name?: string | null; account?: string | null; bankName?: string | null },
+    expected: ReceiverInfo | null | undefined,
+) => {
+    if (!expected) {
+        return {
+            matched: false,
+            nameMatch: false,
+            accountMatch: false,
+            bankMatch: false,
+        }
+    }
+
+    const nameMatch = textValuesMatch(actual.name, expected.name)
+    const accountMatch = accountValuesMatch(actual.account, expected.account)
+    const bankMatch = bankValuesMatch(actual.bankName, expected.bankName)
+
+    return {
+        matched: bankMatch && (accountMatch || nameMatch),
+        nameMatch,
+        accountMatch,
+        bankMatch,
+    }
 }
 
 export const computePaymentChannelStatus = (input: {

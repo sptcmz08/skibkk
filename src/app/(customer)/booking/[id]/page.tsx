@@ -66,6 +66,13 @@ const paymentStatusLabels: Record<string, { label: string; color: string }> = {
     REJECTED: { label: 'ปฏิเสธ', color: '#e17055' },
 }
 
+const getBookingDisplayStatus = (booking: BookingDetail) => {
+    if (booking.status === 'PENDING' && booking.payments.some(payment => payment.status === 'PENDING')) {
+        return { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', label: 'รอตรวจสอบสลิป', icon: AlertCircle }
+    }
+    return statusConfig[booking.status] || statusConfig.PENDING
+}
+
 export default function BookingDetailPage() {
     const router = useRouter()
     const params = useParams()
@@ -215,7 +222,7 @@ export default function BookingDetailPage() {
     if (loading) return <div className="loading-page"><div className="spinner" /></div>
     if (!booking) return null
 
-    const sc = statusConfig[booking.status] || statusConfig.PENDING
+    const sc = getBookingDisplayStatus(booking)
     const StatusIcon = sc.icon
     const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE')
 
@@ -284,6 +291,27 @@ export default function BookingDetailPage() {
                     </div>
                 </div>
             </motion.div>
+
+            {booking.status === 'PENDING' && booking.payments.some(payment => payment.status === 'PENDING') && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.03 }}
+                    style={{
+                        background: 'rgba(59,130,246,0.08)',
+                        border: '1px solid rgba(59,130,246,0.18)',
+                        borderRadius: '16px',
+                        padding: '16px 18px',
+                        marginBottom: '16px',
+                        color: '#1d4ed8',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        lineHeight: 1.6,
+                    }}
+                >
+                    ระบบได้รับสลิปแล้ว ตอนนี้อยู่ในขั้นตรวจสอบ ไม่จำเป็นต้องจองใหม่หรือชำระซ้ำ หากต้องการติดตาม คุณสามารถดูรายการชำระด้านล่างได้
+                </motion.div>
+            )}
 
             {/* Booking Items */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}

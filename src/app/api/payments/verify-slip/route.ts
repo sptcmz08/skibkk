@@ -7,9 +7,7 @@ import {
     parseDisplayConfig,
     computePaymentChannelStatus,
     isReceiverComplete,
-    accountValuesMatch,
-    bankValuesMatch,
-    textValuesMatch,
+    receiverValuesMatch,
 } from '@/lib/payment-channel'
 
 type EasySlipV2Response = {
@@ -319,11 +317,13 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const nameMatch = textValuesMatch(receiverName, activeReceiver.name)
-        const accountMatch = accountValuesMatch(receiverAccount, activeReceiver.account)
-        const bankMatch = bankValuesMatch(receiverBankName, activeReceiver.bankName)
+        const { matched } = receiverValuesMatch({
+            name: receiverName,
+            account: receiverAccount,
+            bankName: receiverBankName,
+        }, activeReceiver)
 
-        if (!nameMatch || !accountMatch || !bankMatch) {
+        if (!matched) {
             return NextResponse.json({
                 verified: false,
                 error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${receiverName || receiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${receiverBankName || 'ไม่ทราบ'})`,

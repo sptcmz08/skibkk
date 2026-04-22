@@ -127,6 +127,13 @@ export default function ProfilePage() {
         CANCELLED: { bg: 'rgba(245,87,108,0.12)', color: '#e17055', label: 'ยกเลิก' },
     }
 
+    const getBookingDisplayStatus = (booking: Booking) => {
+        if (booking.status === 'PENDING' && booking.payments.some(payment => payment.status === 'PENDING')) {
+            return { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', label: 'รอตรวจสอบสลิป' }
+        }
+        return statusConfig[booking.status] || { bg: 'rgba(250,204,21,0.1)', color: '#B38600', label: booking.status }
+    }
+
     if (loading) return <div className="loading-page"><div className="spinner" /></div>
     if (!user) return null
 
@@ -293,7 +300,7 @@ export default function ProfilePage() {
                                 return ea.localeCompare(eb)
                             })
                             .map((booking, i) => {
-                            const sc = statusConfig[booking.status] || { bg: 'rgba(250,204,21,0.1)', color: '#B38600', label: booking.status }
+                            const sc = getBookingDisplayStatus(booking)
                             return (
                                 <motion.div key={booking.id}
                                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}

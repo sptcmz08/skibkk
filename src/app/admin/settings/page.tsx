@@ -36,7 +36,7 @@ export default function AdminSettingsPage() {
     const [qrReceiverName, setQrReceiverName] = useState('')
     const [qrReceiverAccount, setQrReceiverAccount] = useState('')
     const [qrReceiverBankName, setQrReceiverBankName] = useState('')
-    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
+    const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: false, enableBankDetails: true })
     const [qrStatus, setQrStatus] = useState<'ready' | 'incomplete' | 'disabled'>('incomplete')
     const [qrUploading, setQrUploading] = useState(false)
     const [qrSaving, setQrSaving] = useState(false)
@@ -71,7 +71,9 @@ export default function AdminSettingsPage() {
                 setQrReceiverAccount(data.receiver.account || '')
                 setQrReceiverBankName(data.receiver.bankName || '')
             }
-            if (data.displayConfig) setPaymentDisplayConfig(data.displayConfig)
+            if (data.displayConfig) {
+                setPaymentDisplayConfig({ enableQrCode: false, enableBankDetails: data.displayConfig.enableBankDetails !== false })
+            }
             if (data.status) setQrStatus(data.status)
         }).catch(() => { })
     }, [])
@@ -90,7 +92,10 @@ export default function AdminSettingsPage() {
             const res = await fetch('/api/admin/qr-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ receiver: { name, account, bankName } }),
+                body: JSON.stringify({
+                    receiver: { name, account, bankName },
+                    displayConfig: { enableQrCode: false, enableBankDetails: true },
+                }),
             })
             const data = await res.json()
             if (!res.ok) {
@@ -113,12 +118,16 @@ export default function AdminSettingsPage() {
 
     const savePaymentDisplayConfig = async (nextConfig: { enableQrCode: boolean; enableBankDetails: boolean }) => {
         const previousConfig = paymentDisplayConfig
+        const normalizedConfig = {
+            enableQrCode: false,
+            enableBankDetails: nextConfig.enableBankDetails !== false,
+        }
         setQrSaving(true)
         try {
             const res = await fetch('/api/admin/qr-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ displayConfig: nextConfig }),
+                body: JSON.stringify({ displayConfig: normalizedConfig }),
             })
             const data = await res.json()
             if (!res.ok) {
@@ -127,7 +136,7 @@ export default function AdminSettingsPage() {
                 return
             }
 
-            setPaymentDisplayConfig(data.displayConfig || nextConfig)
+            setPaymentDisplayConfig(data.displayConfig || normalizedConfig)
             toast.success(data.message || 'บันทึกการตั้งค่าชำระเงินสำเร็จ')
         } catch {
             setPaymentDisplayConfig(previousConfig)
@@ -259,7 +268,7 @@ export default function AdminSettingsPage() {
             {/* QR Code Payment — เลขบัญชี */}
             <div style={cardStyle}>
                 <h2 style={sectionTitle}>
-                    <QrCode size={20} color="#6c5ce7" /> รูปช่องทางชำระเงิน
+                    <QrCode size={20} color="#6c5ce7" /> ข้อมูลบัญชีรับโอน
                 </h2>
 
                 <div style={{
@@ -269,7 +278,7 @@ export default function AdminSettingsPage() {
                     marginBottom: '20px',
                 }}>
                     <label style={{
-                        display: 'flex',
+                        display: 'none',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: '12px',
@@ -305,8 +314,8 @@ export default function AdminSettingsPage() {
                         background: paymentDisplayConfig.enableBankDetails ? '#eefbf3' : '#f8f9fa',
                     }}>
                         <div>
-                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>เปิดใช้งานข้อมูลบัญชี</div>
-                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นชื่อบัญชี เลขบัญชี และธนาคารร่วมกับรูปที่อัปโหลด</div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2d3436' }}>ข้อมูลบัญชีที่ใช้รับโอน</div>
+                            <div style={{ fontSize: '12px', color: '#636e72', marginTop: '4px' }}>ลูกค้าจะเห็นชื่อบัญชี เลขบัญชี และธนาคารตามที่กรอกไว้ โดยไม่ต้องพึ่งรูปช่องทางชำระเงิน</div>
                         </div>
                         <input
                             type="checkbox"
@@ -323,7 +332,7 @@ export default function AdminSettingsPage() {
 
                 <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
                     {/* Left: QR Display */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto' }}>
+                    <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto' }}>
                         {/* Payment image header */}
                         <div style={{
                             background: 'linear-gradient(135deg, #1a237e, #283593)',
@@ -504,7 +513,7 @@ export default function AdminSettingsPage() {
                             )}
 
                             <p style={{ fontSize: '11px', color: '#b2bec3', lineHeight: 1.6 }}>
-                                💡 เมื่อเปลี่ยนรูป QR ระบบจะล้างข้อมูลบัญชีเดิมเพื่อกันข้อมูลค้างผิดบัญชี กรุณากรอกชื่อบัญชี เลขบัญชี และธนาคารใหม่ทุกครั้ง
+                                💡 ตอนนี้ระบบใช้ข้อมูลบัญชีรับโอนด้านบนเป็นหลักในการแสดงผลและตรวจสลิป รูปช่องทางชำระเงินจึงไม่จำเป็นแล้ว
                             </p>
                         </div>
                     </div>
