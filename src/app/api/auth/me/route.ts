@@ -9,7 +9,7 @@ export async function GET() {
         const user = await getCurrentUser()
         const headers = {
             'Cache-Control': 'no-store, max-age=0, must-revalidate',
-            'Pragma': 'no-cache',
+            Pragma: 'no-cache',
         }
         if (!user) {
             return NextResponse.json({ user: null }, { status: 401, headers })
@@ -24,12 +24,14 @@ export async function PUT(req: NextRequest) {
     try {
         const user = await requireAuth()
         const body = await req.json()
-        const nextName = typeof body.name === 'string' ? body.name.trim() : user.name
+        const nextFirstName = typeof body.firstName === 'string' ? body.firstName.trim() : (user.firstName || '')
+        const nextLastName = typeof body.lastName === 'string' ? body.lastName.trim() : (user.lastName || '')
+        const nextName = [nextFirstName, nextLastName].filter(Boolean).join(' ').trim() || user.name
         const nextEmail = typeof body.email === 'string' ? body.email.trim() : user.email
         const nextPhone = typeof body.phone === 'string' ? body.phone.trim() : user.phone
 
-        if (!nextName || !nextEmail || !nextPhone) {
-            return NextResponse.json({ error: 'กรุณากรอกชื่อ อีเมล และเบอร์โทรให้ครบ' }, { status: 400 })
+        if (!nextFirstName || !nextLastName || !nextEmail || !nextPhone) {
+            return NextResponse.json({ error: 'กรุณากรอกชื่อจริง นามสกุล อีเมล และเบอร์โทรให้ครบ' }, { status: 400 })
         }
 
         const duplicate = await prisma.user.findFirst({
@@ -42,6 +44,7 @@ export async function PUT(req: NextRequest) {
             },
             select: { id: true, email: true, phone: true },
         })
+
         if (duplicate) {
             if (duplicate.email === nextEmail) {
                 return NextResponse.json({ error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 409 })
@@ -55,16 +58,22 @@ export async function PUT(req: NextRequest) {
             where: { id: user.id },
             data: {
                 name: nextName,
+                firstName: nextFirstName,
+                lastName: nextLastName,
                 email: nextEmail,
                 phone: nextPhone,
             },
             select: {
                 id: true,
                 name: true,
+                firstName: true,
+                lastName: true,
                 email: true,
                 phone: true,
                 role: true,
                 isActive: true,
+                lineDisplayName: true,
+                lineAvatar: true,
             },
         })
 

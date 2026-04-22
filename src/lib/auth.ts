@@ -60,9 +60,13 @@ export async function getCurrentUser() {
             id: true,
             email: true,
             name: true,
+            firstName: true,
+            lastName: true,
             phone: true,
             role: true,
             isActive: true,
+            lineDisplayName: true,
+            lineAvatar: true,
         },
     })
 

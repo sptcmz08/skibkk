@@ -8,8 +8,15 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface UserData {
-    id: string; name: string; email: string; phone: string; role: string
-    lineDisplayName?: string; lineAvatar?: string
+    id: string
+    name: string
+    firstName?: string | null
+    lastName?: string | null
+    email: string
+    phone: string
+    role: string
+    lineDisplayName?: string | null
+    lineAvatar?: string | null
 }
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string
@@ -45,7 +52,7 @@ export default function ProfilePage() {
     const [loading, setLoading] = useState(true)
     const [tab, setTab] = useState<'bookings' | 'packages' | 'settings'>('bookings')
     const [editProfile, setEditProfile] = useState(false)
-    const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '' })
+    const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
     const [savingProfile, setSavingProfile] = useState(false)
 
     useEffect(() => {
@@ -57,10 +64,16 @@ export default function ProfilePage() {
             if (authData.user) {
                 setUser(authData.user)
                 setProfileForm({
-                    name: authData.user.name || '',
+                    firstName: authData.user.firstName || '',
+                    lastName: authData.user.lastName || '',
                     email: authData.user.email || '',
                     phone: authData.user.phone?.startsWith('LINE-') ? '' : (authData.user.phone || ''),
                 })
+                const shouldCompleteProfile = !authData.user.firstName || !authData.user.lastName || window.location.search.includes('complete=1')
+                if (shouldCompleteProfile) {
+                    setTab('settings')
+                    setEditProfile(true)
+                }
             }
             else { router.push('/login'); return }
             if (bookingsData.bookings) setBookings(bookingsData.bookings)
@@ -70,8 +83,8 @@ export default function ProfilePage() {
     }, [router])
 
     const handleSaveProfile = async () => {
-        if (!profileForm.name.trim() || !profileForm.email.trim() || !profileForm.phone.trim()) {
-            toast.error('กรุณากรอกชื่อ อีเมล และเบอร์โทรให้ครบ')
+        if (!profileForm.firstName.trim() || !profileForm.lastName.trim() || !profileForm.email.trim() || !profileForm.phone.trim()) {
+            toast.error('กรุณากรอกชื่อจริง นามสกุล อีเมล และเบอร์โทรให้ครบ')
             return
         }
         setSavingProfile(true)
@@ -87,6 +100,12 @@ export default function ProfilePage() {
                 return
             }
             setUser(data.user)
+            setProfileForm({
+                firstName: data.user.firstName || '',
+                lastName: data.user.lastName || '',
+                email: data.user.email || '',
+                phone: data.user.phone?.startsWith('LINE-') ? '' : (data.user.phone || ''),
+            })
             setEditProfile(false)
             toast.success('บันทึกข้อมูลส่วนตัวแล้ว')
         } catch {
@@ -99,6 +118,8 @@ export default function ProfilePage() {
     const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED')
     const totalSpent = confirmedBookings.reduce((s, b) => s + b.totalAmount, 0)
     const totalHours = confirmedBookings.reduce((s, b) => s + b.bookingItems.length, 0)
+    const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.name || user?.lineDisplayName || 'ลูกค้า'
+    const avatarLabel = (user?.lineDisplayName || fullName || 'ล').charAt(0).toUpperCase()
 
     const statusConfig: Record<string, { bg: string; color: string; label: string }> = {
         PENDING: { bg: 'rgba(255,193,7,0.12)', color: '#ffc107', label: 'รอชำระเงิน' },
@@ -132,7 +153,7 @@ export default function ProfilePage() {
                     {user.lineAvatar ? (
                         <img
                             src={user.lineAvatar}
-                            alt={user.name}
+                            alt={fullName}
                             style={{ width: '88px', height: '88px', borderRadius: '24px', border: '3px solid rgba(255,255,255,0.15)', objectFit: 'cover' }}
                         />
                     ) : (
@@ -144,14 +165,14 @@ export default function ProfilePage() {
                             fontFamily: "'Inter'", border: '3px solid rgba(255,255,255,0.15)',
                             boxShadow: '0 8px 32px rgba(250,204,21,0.3)',
                         }}>
-                            {user.name.charAt(0).toUpperCase()}
+                            {avatarLabel}
                         </div>
                     )}
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: '200px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                            <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>{user.name}</h1>
+                            <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>{fullName}</h1>
                             <span style={{
                                 padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
                                 background: 'rgba(250,204,21,0.2)', color: 'var(--c-primary-light)',
@@ -160,6 +181,11 @@ export default function ProfilePage() {
                                 <Shield size={12} /> {user.role === 'CUSTOMER' ? 'สมาชิก' : user.role}
                             </span>
                         </div>
+                        {user.lineDisplayName && (
+                            <div style={{ marginBottom: '10px', fontSize: '13px', color: 'var(--c-text-muted)' }}>
+                                LINE: <span style={{ fontWeight: 700, color: 'var(--c-text-secondary)' }}>{user.lineDisplayName}</span>
+                            </div>
+                        )}
                         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px', color: 'var(--c-text-secondary)' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Mail size={14} style={{ color: 'var(--c-primary)' }} /> {user.email}
@@ -372,9 +398,36 @@ export default function ProfilePage() {
                                 </button>
                             )}
                         </div>
+                        {(!user.firstName || !user.lastName) && (
+                            <div style={{
+                                marginBottom: '20px',
+                                padding: '14px 16px',
+                                borderRadius: '14px',
+                                background: 'rgba(250,204,21,0.1)',
+                                border: '1px solid rgba(250,204,21,0.2)',
+                                color: 'var(--c-text-secondary)',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                            }}>
+                                กรุณากรอกชื่อจริงและนามสกุลของลูกค้าให้ครบ เพื่อใช้ในโปรไฟล์และเอกสารการจอง
+                            </div>
+                        )}
                         <div style={{ display: 'grid', gap: '18px' }}>
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--c-text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <User size={16} /> ชื่อ LINE
+                                </label>
+                                <div style={{
+                                    padding: '14px 18px', borderRadius: '12px',
+                                    background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.18)',
+                                    fontSize: '15px', fontWeight: 700, color: 'var(--c-text)',
+                                }}>
+                                    {user.lineDisplayName || '-'}
+                                </div>
+                            </div>
                             {[
-                                { label: 'ชื่อ-สกุล', key: 'name' as const, value: profileForm.name, fallback: user.name, icon: <User size={16} /> },
+                                { label: 'ชื่อจริง', key: 'firstName' as const, value: profileForm.firstName, fallback: user.firstName || '-', icon: <User size={16} /> },
+                                { label: 'นามสกุล', key: 'lastName' as const, value: profileForm.lastName, fallback: user.lastName || '-', icon: <User size={16} /> },
                                 { label: 'อีเมล', key: 'email' as const, value: profileForm.email, fallback: user.email, icon: <Mail size={16} /> },
                                 { label: 'เบอร์โทรศัพท์', key: 'phone' as const, value: profileForm.phone, fallback: user.phone?.startsWith('LINE-') ? 'ยังไม่ได้ระบุ' : (user.phone || '-'), icon: <Phone size={16} /> },
                             ].map(field => (

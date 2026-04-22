@@ -49,6 +49,8 @@ model User {
   email           String   @unique
   password        String? // optional for LINE-only users
   name            String
+  firstName       String?
+  lastName        String?
   phone           String   @unique
   role            Role     @default(CUSTOMER)
   isActive        Boolean  @default(true)

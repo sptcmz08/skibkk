@@ -123,6 +123,8 @@ export async function GET(req: NextRequest) {
                 data: {
                     email: placeholderEmail,
                     name: profile.displayName,
+                    firstName: null,
+                    lastName: null,
                     phone: placeholderPhone,
                     lineUserId: profile.userId,
                     lineDisplayName: profile.displayName,
