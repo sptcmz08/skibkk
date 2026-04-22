@@ -108,6 +108,7 @@ export default function CalendarPage() {
     const [revenueTo, setRevenueTo] = useState(initialRangeTo)
     const [revenueSummary, setRevenueSummary] = useState<RevenueRangeSummary>({ totalAmount: 0, bookingHours: 0 })
     const [loadingRevenueSummary, setLoadingRevenueSummary] = useState(false)
+    const [calendarZoom, setCalendarZoom] = useState<'compact' | 'comfortable' | 'expanded'>('comfortable')
 
     const formatDateInputDisplay = (dateStr: string) => {
         if (!dateStr) return ''
@@ -948,6 +949,35 @@ export default function CalendarPage() {
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '999px', background: '#f8fafc', border: '1px solid var(--a-border)' }}>
+                                {[
+                                    { key: 'compact' as const, label: 'S' },
+                                    { key: 'comfortable' as const, label: 'M' },
+                                    { key: 'expanded' as const, label: 'L' },
+                                ].map(option => (
+                                    <button
+                                        key={option.key}
+                                        type="button"
+                                        onClick={() => setCalendarZoom(option.key)}
+                                        title={`ขนาดตาราง ${option.label}`}
+                                        style={{
+                                            minWidth: '32px',
+                                            height: '30px',
+                                            padding: '0 10px',
+                                            borderRadius: '999px',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            fontWeight: 800,
+                                            background: calendarZoom === option.key ? 'var(--a-gradient)' : 'transparent',
+                                            color: calendarZoom === option.key ? '#fff' : 'var(--a-text-secondary)',
+                                            boxShadow: calendarZoom === option.key ? '0 4px 12px rgba(250, 204, 21, 0.28)' : 'none',
+                                        }}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
                             {venues.length > 1 && (
                                 <select className="admin-input" style={{ minWidth: '160px', fontSize: '13px' }} value={selectedVenueId} onChange={e => setSelectedVenueId(e.target.value)}>
                                     <option value="">ทุกสาขา</option>
@@ -1166,7 +1196,7 @@ export default function CalendarPage() {
 
                                     {/* Time grid — absolute positioning for proper visual spanning */}
                                     {(() => {
-                                        const ROW_H = 70  // px per hour
+                                        const ROW_H = calendarZoom === 'compact' ? 72 : calendarZoom === 'expanded' ? 108 : 90
                                         const totalH = gridTimes.length * ROW_H
 
                                         return (
@@ -1312,6 +1342,10 @@ export default function CalendarPage() {
                                                                 const leftPercent = col * widthPercent
 
                                                                 const isAdminBooking = cb.booking.createdByAdmin
+                                                                const compactCard = calendarZoom === 'compact'
+                                                                const showPhone = hours >= 1
+                                                                const showSport = hours >= 2 || calendarZoom === 'expanded'
+                                                                const showTeacher = hours >= 2 || calendarZoom === 'expanded'
                                                                 const bgGrad = isAdminBooking
                                                                     ? 'linear-gradient(135deg, #D4A017, #B8860B)'
                                                                     : 'linear-gradient(135deg, #2196F3, #1976D2)'
@@ -1333,11 +1367,11 @@ export default function CalendarPage() {
                                                                             height: `${heightPx - 3}px`,
                                                                             maxHeight: `${heightPx - 3}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: '6px 8px', cursor: 'pointer',
+                                                                            padding: compactCard ? '5px 7px' : '7px 9px', cursor: 'pointer',
                                                                             background: bgGrad,
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
-                                                                            gap: '1px',
+                                                                            gap: compactCard ? '1px' : '3px',
                                                                             boxShadow: shadow,
                                                                             overflow: 'hidden', zIndex: 2,
                                                                             boxSizing: 'border-box',
@@ -1345,34 +1379,34 @@ export default function CalendarPage() {
                                                                         onMouseEnter={e => { e.currentTarget.style.boxShadow = shadowHover }}
                                                                         onMouseLeave={e => { e.currentTarget.style.boxShadow = shadow }}
                                                                     >
-                                                                        <div style={{ fontWeight: 800, fontSize: hours >= 2 ? '14px' : '12px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                        <div style={{ fontWeight: 800, fontSize: hours >= 2 || calendarZoom === 'expanded' ? '14px' : '12px', lineHeight: 1.2, whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: hours >= 2 || calendarZoom === 'expanded' ? 2 : 1, WebkitBoxOrient: 'vertical', wordBreak: 'break-word' }}>
                                                                             {cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'}
                                                                         </div>
-                                                                        <div style={{ fontSize: '11px', fontWeight: 700, opacity: 0.9 }}>
+                                                                        <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 700, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                             🕐 {cb.startTime}–{cb.endTime} ({hours} ชม.)
                                                                         </div>
-                                                                        {hours >= 2 && (
+                                                                        {showPhone && (
                                                                             <>
-                                                                                <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 600, opacity: 0.92, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                                     {cb.booking.user?.phone?.startsWith('LINE-') ? '🟢 LINE' : (cb.booking.user?.phone || '-')}
                                                                                 </div>
-                                                                                {sportLabel && (
-                                                                                    <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9 }}>
+                                                                                {showSport && sportLabel && (
+                                                                                    <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 600, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                                         {getSportEmoji(sportLabel)} {sportLabel}
                                                                                     </div>
                                                                                 )}
                                                                             </>
                                                                         )}
-                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
-                                                                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginTop: 'auto' }}>
+                                                                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: compactCard ? '10px' : '11px', fontWeight: 800, flexShrink: 0 }}>
                                                                                 ฿{cb.totalPrice.toLocaleString()}
                                                                             </span>
-                                                                            <span style={{ background: isPaid ? '#4caf50' : '#ff9800', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
+                                                                            <span style={{ background: isPaid ? '#4caf50' : '#ff9800', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, flexShrink: 0 }}>
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {hasTeachers && (
-                                                                            <div style={{ fontSize: '10px', opacity: 0.85, lineHeight: 1.4 }}>
+                                                                        {showTeacher && hasTeachers && (
+                                                                            <div style={{ fontSize: '10px', opacity: 0.85, lineHeight: 1.35 }}>
                                                                                 {teacherByHour.length === 1 ? (
                                                                                     <span>🎓 {teacherByHour[0].name}</span>
                                                                                 ) : (

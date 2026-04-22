@@ -123,3 +123,51 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }
 }
+
+// DELETE — remove teacher
+export async function DELETE(req: NextRequest) {
+    try {
+        const user = await requireAuth()
+        if (!['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
+            return NextResponse.json({ error: 'ไม่มีสิทธิ์' }, { status: 403 })
+        }
+
+        const { searchParams } = new URL(req.url)
+        const id = searchParams.get('id')
+
+        if (!id) {
+            return NextResponse.json({ error: 'ไม่พบรหัสครูผู้สอน' }, { status: 400 })
+        }
+
+        const [teacher, bookingItemsCount, participantsCount, evaluationsCount] = await Promise.all([
+            prisma.teacher.findUnique({ where: { id }, select: { id: true, name: true } }),
+            prisma.bookingItem.count({ where: { teacherId: id } }),
+            prisma.participant.count({ where: { teacherId: id } }),
+            prisma.teacherEvaluation.count({ where: { teacherId: id } }),
+        ])
+
+        if (!teacher) {
+            return NextResponse.json({ error: 'ไม่พบครูผู้สอน' }, { status: 404 })
+        }
+
+        if (bookingItemsCount > 0 || participantsCount > 0 || evaluationsCount > 0) {
+            return NextResponse.json({
+                error: 'ไม่สามารถลบครูผู้สอนนี้ได้ เนื่องจากยังมีประวัติการสอนหรือข้อมูลที่เกี่ยวข้อง',
+                counts: {
+                    bookingItems: bookingItemsCount,
+                    participants: participantsCount,
+                    evaluations: evaluationsCount,
+                },
+            }, { status: 409 })
+        }
+
+        await prisma.teacherSchedule.deleteMany({ where: { teacherId: id } })
+        await prisma.teacher.delete({ where: { id } })
+
+        return NextResponse.json({ success: true, id, name: teacher.name })
+    } catch (error) {
+        if ((error as Error).message === 'Unauthorized') return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
+        console.error('DELETE /api/teachers error:', error)
+        return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    }
+}
