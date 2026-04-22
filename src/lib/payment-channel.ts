@@ -64,8 +64,109 @@ export const isReceiverComplete = (receiver: ReceiverInfo | null | undefined) =>
 export const normalizeAccountValue = (value: string | null | undefined) =>
     String(value || '').replace(/[^0-9A-Za-z]/g, '').trim().toLowerCase()
 
+export const normalizeAccountDigits = (value: string | null | undefined) =>
+    String(value || '').replace(/\D/g, '').trim()
+
 export const normalizeTextValue = (value: string | null | undefined) =>
     String(value || '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+export const normalizeLooseTextValue = (value: string | null | undefined) =>
+    String(value || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, '')
+        .trim()
+
+export const normalizeBankValue = (value: string | null | undefined) => {
+    const normalized = String(value || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, '')
+        .replace(/^ธนาคาร/u, '')
+        .replace(/^ธ/u, '')
+
+    if (!normalized) return ''
+
+    const aliases: Array<{ key: string; patterns: string[] }> = [
+        { key: 'kbank', patterns: ['กสิกรไทย', 'kbank', 'kasikorn', 'kasikornbank'] },
+        { key: 'scb', patterns: ['ไทยพาณิชย์', 'scb', 'siamcommercial', 'siamcommercialbank'] },
+        { key: 'bbl', patterns: ['กรุงเทพ', 'bangkokbank', 'bangkok'] },
+        { key: 'ktb', patterns: ['กรุงไทย', 'ktb', 'krungthai'] },
+        { key: 'bay', patterns: ['กรุงศรี', 'krungsri', 'bay', 'ayudhya'] },
+        { key: 'ttb', patterns: ['ttb', 'ทหารไทยธนชาต', 'ธนชาต'] },
+        { key: 'gsb', patterns: ['ออมสิน', 'gsb', 'governmentsavings'] },
+        { key: 'baac', patterns: ['ธกส', 'เพื่อการเกษตร', 'baac'] },
+        { key: 'cimb', patterns: ['cimbthai', 'cimb', 'ซีไอเอ็มบี'] },
+        { key: 'uob', patterns: ['uob', 'ยูโอบี'] },
+        { key: 'lhb', patterns: ['แลนด์แอนด์เฮ้าส์', 'แลนด์แอนด์เฮาส์', 'lhbank', 'lhb'] },
+    ]
+
+    const matched = aliases.find(alias => alias.patterns.some(pattern => normalized.includes(pattern)))
+    return matched?.key || normalized
+}
+
+export const accountValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
+    const actualNormalized = normalizeAccountValue(actual)
+    const expectedNormalized = normalizeAccountValue(expected)
+
+    if (!actualNormalized || !expectedNormalized) {
+        return false
+    }
+
+    if (actualNormalized === expectedNormalized) {
+        return true
+    }
+
+    const actualDigits = normalizeAccountDigits(actual)
+    const expectedDigits = normalizeAccountDigits(expected)
+
+    if (actualDigits && expectedDigits) {
+        if (actualDigits === expectedDigits) {
+            return true
+        }
+
+        if (actualDigits.length >= 4 && expectedDigits.endsWith(actualDigits)) {
+            return true
+        }
+
+        if (expectedDigits.length >= 4 && actualDigits.endsWith(expectedDigits)) {
+            return true
+        }
+    }
+
+    return false
+}
+
+export const textValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
+    const actualNormalized = normalizeTextValue(actual)
+    const expectedNormalized = normalizeTextValue(expected)
+    const actualLoose = normalizeLooseTextValue(actual)
+    const expectedLoose = normalizeLooseTextValue(expected)
+
+    if (!actualNormalized || !expectedNormalized) {
+        return false
+    }
+
+    return actualNormalized === expectedNormalized
+        || actualNormalized.includes(expectedNormalized)
+        || expectedNormalized.includes(actualNormalized)
+        || (actualLoose && expectedLoose && (
+            actualLoose === expectedLoose
+            || actualLoose.includes(expectedLoose)
+            || expectedLoose.includes(actualLoose)
+        ))
+}
+
+export const bankValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
+    const actualNormalized = normalizeBankValue(actual)
+    const expectedNormalized = normalizeBankValue(expected)
+
+    if (!actualNormalized || !expectedNormalized) {
+        return false
+    }
+
+    return actualNormalized === expectedNormalized
+        || actualNormalized.includes(expectedNormalized)
+        || expectedNormalized.includes(actualNormalized)
+}
 
 export const computePaymentChannelStatus = (input: {
     qrImage?: string | null

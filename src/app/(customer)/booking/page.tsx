@@ -53,6 +53,13 @@ const readResponseError = async (response: Response, fallback: string) => {
     return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback
 }
 
+const dataUrlToFile = async (dataUrl: string, filename: string) => {
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+    const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg'
+    return new File([blob], `${filename}.${extension}`, { type: blob.type || 'image/jpeg' })
+}
+
 const dateOnlyUTC = (value: string | Date) => new Date(value).toISOString().split('T')[0]
 
 const formatCartDate = (dateStr: string) => {
@@ -133,7 +140,8 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string }>>([])
+    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string; isPending?: boolean; image?: string | null }>>([])
+    const [pendingSlipBase64, setPendingSlipBase64] = useState<string | null>(null)
     const [qrImage, setQrImage] = useState<string | null>(null)
     const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string; bankName?: string } | null>(null)
     const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
@@ -284,7 +292,20 @@ export default function BookingPage() {
 
             // Check response
             if (!data.verified) {
-                toast.error(data.error || 'สลิปไม่ถูกต้อง')
+                const errMsg: string = data.error || 'สลิปไม่ถูกต้อง'
+
+                // Provider still processing the slip: accept it into manual review instead of blocking the customer.
+                if (data.acceptManualReview || data.isBankPending) {
+                    const pendingSlip = { amount: total, transRef: '', sender: 'รอตรวจสอบอัตโนมัติ', token: '', isPending: true, image: base64 }
+                    setVerifiedSlips([pendingSlip])
+                    setPendingSlipBase64(base64)
+                    setSlipFile(null)
+                    setSlipPreview(null)
+                    toast('✅ รับสลิปแล้ว! คุณสามารถกดยืนยันการจองได้เลย ระบบจะตรวจสอบต่อให้อัตโนมัติ/รอแอดมินตรวจสอบ', { icon: '⏳', duration: 8000 })
+                    return
+                }
+
+                toast.error(errMsg, { duration: 6000 })
                 return
             }
 
@@ -305,6 +326,7 @@ export default function BookingPage() {
                 transRef: data.transRef || '',
                 sender: data.sender || '',
                 token: data.verificationToken || '',
+                image: base64,
             }
             const updatedSlips = [...verifiedSlips, newSlip]
             setVerifiedSlips(updatedSlips)
@@ -587,7 +609,8 @@ export default function BookingPage() {
 
 
 
-    // Can submit if: all slips cover the total OR using package
+    // Can submit if: all slips cover the total OR using package OR pending slip (manual review)
+    const hasPendingSlip = verifiedSlips.some(s => s.isPending)
     const canSubmit = paymentMethod === 'PACKAGE'
         || (hasTransferChannel && remaining <= 1 && verifiedSlips.length > 0)
 
@@ -609,7 +632,7 @@ export default function BookingPage() {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
             return
         }
-        if (paymentMethod === 'PROMPTPAY' && remaining > 1) {
+        if (paymentMethod === 'PROMPTPAY' && remaining > 1 && !hasPendingSlip) {
             toast.error('ยอดโอนยังไม่ครบ กรุณาโอนเพิ่มและแนบสลิป')
             return
         }
@@ -716,8 +739,35 @@ export default function BookingPage() {
                     throw new Error(await readResponseError(pkgRes, 'ใช้แพ็คเกจไม่สำเร็จ'))
                 }
             } else {
-                // Create payment — status depends on whether slip was auto-verified or fallback
+                // Create payment. Pending/provider-delayed slips are accepted into manual review without blocking checkout.
                 const paymentMethodForRecord = paymentMethod === 'PROMPTPAY' ? 'BANK_TRANSFER' : paymentMethod
+                const isManualReview = hasPendingSlip
+                let slipUrl: string | undefined
+
+                const manualReviewImage = isManualReview ? pendingSlipBase64 : null
+                const singleVerifiedSlipImage = !isManualReview && verifiedSlips.length === 1 ? verifiedSlips[0]?.image || null : null
+                const imageForUpload = manualReviewImage || singleVerifiedSlipImage
+
+                if (imageForUpload) {
+                    const uploadFile = await dataUrlToFile(imageForUpload, `payment-slip-${Date.now()}`)
+                    const formData = new FormData()
+                    formData.append('file', uploadFile)
+
+                    const uploadRes = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData,
+                    })
+
+                    if (!uploadRes.ok) {
+                        throw new Error(await readResponseError(uploadRes, 'อัปโหลดรูปสลิปไม่สำเร็จ'))
+                    }
+
+                    const uploadData = await uploadRes.json().catch(() => null)
+                    if (typeof uploadData?.url === 'string' && uploadData.url.trim()) {
+                        slipUrl = uploadData.url
+                    }
+                }
+
                 const paymentRes = await fetch('/api/payments', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -725,7 +775,10 @@ export default function BookingPage() {
                         bookingId: data.booking.id,
                         method: paymentMethodForRecord,
                         amount: total,
-                        slipTokens: verifiedSlips.map(s => s.token).filter(Boolean),
+                        slipTokens: isManualReview ? [] : verifiedSlips.map(s => s.token).filter(Boolean),
+                        slipData: isManualReview ? { base64: pendingSlipBase64 } : undefined,
+                        slipUrl,
+                        manualReview: isManualReview,
                     }),
                 })
                 if (!paymentRes.ok) {
@@ -1364,10 +1417,12 @@ export default function BookingPage() {
                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px',
                                             }}>
                                                 <div style={{ color: 'var(--c-text-secondary)' }}>
-                                                    <CheckCircle size={14} style={{ color: '#10b981', verticalAlign: 'middle', marginRight: '6px' }} />
-                                                    สลิป {i + 1}: {slip.sender}
+                                                    {slip.isPending
+                                                        ? <span style={{ color: '#B38600' }}>⏳ สลิป {i + 1}: รอระบบยืนยัน/แอดมินตรวจสอบ</span>
+                                                        : <><CheckCircle size={14} style={{ color: '#10b981', verticalAlign: 'middle', marginRight: '6px' }} />สลิป {i + 1}: {slip.sender}</>
+                                                    }
                                                 </div>
-                                                <strong style={{ color: '#10b981' }}>฿{slip.amount.toLocaleString()}</strong>
+                                                <strong style={{ color: slip.isPending ? '#B38600' : '#10b981' }}>฿{slip.amount.toLocaleString()}</strong>
                                             </div>
                                         ))}
 
@@ -1385,9 +1440,9 @@ export default function BookingPage() {
                                                     💰 โอนเพิ่มอีก ฿{remaining.toLocaleString()} แล้วแนบสลิปใหม่
                                                 </div>
                                             )}
-                                            {remaining <= 1 && (
-                                                <div style={{ marginTop: '8px', fontSize: '14px', color: '#10b981', fontWeight: 700, textAlign: 'center' }}>
-                                                    ✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย
+                                            {(remaining <= 1 || hasPendingSlip) && (
+                                                <div style={{ marginTop: '8px', fontSize: '14px', color: hasPendingSlip ? '#B38600' : '#10b981', fontWeight: 700, textAlign: 'center' }}>
+                                                    {hasPendingSlip ? '⏳ รับสลิปแล้ว — กดยืนยันการจองได้เลย!' : '✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย'}
                                                 </div>
                                             )}
                                             {paidTotal > total + 1 && (

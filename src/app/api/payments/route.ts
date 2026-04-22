@@ -10,8 +10,9 @@ import {
     parseDisplayConfig,
     computePaymentChannelStatus,
     isReceiverComplete,
-    normalizeAccountValue,
-    normalizeTextValue,
+    accountValuesMatch,
+    bankValuesMatch,
+    textValuesMatch,
 } from '@/lib/payment-channel'
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
@@ -146,9 +147,9 @@ export async function POST(req: NextRequest) {
             const uniqueRefs = new Set<string>()
 
             for (const slip of decodedSlips) {
-                const nameMatch = normalizeTextValue(slip.receiverName).includes(normalizeTextValue(activeReceiver.name))
-                const accountMatch = normalizeAccountValue(slip.receiverAccount) === normalizeAccountValue(activeReceiver.account)
-                const bankMatch = normalizeTextValue(slip.receiverBankName).includes(normalizeTextValue(activeReceiver.bankName))
+                const nameMatch = textValuesMatch(slip.receiverName, activeReceiver.name)
+                const accountMatch = accountValuesMatch(slip.receiverAccount, activeReceiver.account)
+                const bankMatch = bankValuesMatch(slip.receiverBankName, activeReceiver.bankName)
 
                 if (!nameMatch || !accountMatch || !bankMatch) {
                     return NextResponse.json({ error: 'ข้อมูลสลิปไม่ตรงกับบัญชีที่ตั้งค่าอยู่ในระบบ กรุณาตรวจสลิปใหม่' }, { status: 400 })

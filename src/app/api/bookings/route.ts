@@ -688,6 +688,24 @@ export async function PATCH(req: NextRequest) {
             }
         }
 
+        if (updateData.status === 'CONFIRMED') {
+            const latestPayment = await prisma.payment.findFirst({
+                where: { bookingId },
+                orderBy: { createdAt: 'desc' },
+            })
+
+            if (latestPayment && latestPayment.status !== 'VERIFIED') {
+                await prisma.payment.update({
+                    where: { id: latestPayment.id },
+                    data: {
+                        status: 'VERIFIED',
+                        verifiedAt: latestPayment.verifiedAt || new Date(),
+                        verifiedBy: latestPayment.verifiedBy || user.id,
+                    },
+                })
+            }
+        }
+
         const updatedWithPayments = await prisma.booking.findUnique({
             where: { id: bookingId },
             include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true, lineUserId: true } } },

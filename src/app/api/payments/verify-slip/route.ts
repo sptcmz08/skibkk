@@ -7,8 +7,9 @@ import {
     parseDisplayConfig,
     computePaymentChannelStatus,
     isReceiverComplete,
-    normalizeAccountValue,
-    normalizeTextValue,
+    accountValuesMatch,
+    bankValuesMatch,
+    textValuesMatch,
 } from '@/lib/payment-channel'
 
 type EasySlipV2Response = {
@@ -221,6 +222,8 @@ export async function POST(req: NextRequest) {
             if (errorCode === 'SLIP_PENDING') {
                 return NextResponse.json({
                     verified: false,
+                    acceptManualReview: true,
+                    isBankPending: true,
                     error: 'สลิปธนาคารกรุงเทพเพิ่งทำรายการไม่นาน กรุณารอ 3-5 นาทีแล้วกดตรวจสอบสลิปอีกครั้ง',
                 }, { status: 400 })
             }
@@ -263,12 +266,24 @@ export async function POST(req: NextRequest) {
         }
 
         const slipData = result.data?.rawSlip
+        const matchedAccount = result.data?.matchedAccount
         const amount = Number(result.data?.amountInSlip || slipData?.amount?.amount || 0)
         const transRef = String(slipData?.transRef || '').trim()
         const sender = extractNameValue(slipData?.sender?.account?.name)
-        const receiverName = extractNameValue(slipData?.receiver?.account?.name)
-        const receiverAccount = String(slipData?.receiver?.account?.value || slipData?.receiver?.proxy?.value || '').trim()
-        const receiverBankName = String(slipData?.receiver?.bank?.name || slipData?.receiver?.bank?.short || '').trim()
+        const receiverName = extractNameValue(slipData?.receiver?.account?.name) || String(matchedAccount?.accountName || '').trim()
+        const receiverAccount = String(
+            slipData?.receiver?.account?.value
+            || slipData?.receiver?.proxy?.value
+            || matchedAccount?.accountNumber
+            || '',
+        ).trim()
+        const receiverBankName = String(
+            slipData?.receiver?.bank?.name
+            || slipData?.receiver?.bank?.short
+            || matchedAccount?.bankName
+            || matchedAccount?.bankCode
+            || '',
+        ).trim()
         const date = String(slipData?.date || '').trim()
         const bankCode = String(slipData?.sender?.bank?.short || slipData?.sender?.bank?.id || '').trim()
 
@@ -304,9 +319,9 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const nameMatch = normalizeTextValue(receiverName).includes(normalizeTextValue(activeReceiver.name))
-        const accountMatch = normalizeAccountValue(receiverAccount) === normalizeAccountValue(activeReceiver.account)
-        const bankMatch = normalizeTextValue(receiverBankName).includes(normalizeTextValue(activeReceiver.bankName))
+        const nameMatch = textValuesMatch(receiverName, activeReceiver.name)
+        const accountMatch = accountValuesMatch(receiverAccount, activeReceiver.account)
+        const bankMatch = bankValuesMatch(receiverBankName, activeReceiver.bankName)
 
         if (!nameMatch || !accountMatch || !bankMatch) {
             return NextResponse.json({
@@ -319,19 +334,23 @@ export async function POST(req: NextRequest) {
             const slipDate = new Date(date)
             if (!Number.isNaN(slipDate.getTime())) {
                 const now = new Date()
+                // diffMinutes > 0  → สลิปเก่ากว่าปัจจุบัน (ปกติ)
+                // diffMinutes < 0  → สลิปอยู่ "ในอนาคต" (timezone offset หรือ clock drift)
                 const diffMinutes = (now.getTime() - slipDate.getTime()) / (1000 * 60)
 
-                if (diffMinutes > 20) {
+                if (diffMinutes > 30) {
                     return NextResponse.json({
                         verified: false,
-                        error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนใหม่ภายใน 20 นาที`,
+                        error: `สลิปนี้เก่าเกินไป (${date}) กรุณาโอนใหม่ภายใน 30 นาที`,
                     }, { status: 400 })
                 }
 
-                if (diffMinutes < -5) {
+                // อนุญาต timezone offset ได้ถึง 8 ชั่วโมง (480 นาที)
+                // เพราะ EasySlip อาจส่ง date เป็น UTC+0 หรือ timezone อื่น
+                if (diffMinutes < -480) {
                     return NextResponse.json({
                         verified: false,
-                        error: 'วันที่ในสลิปไม่ถูกต้อง',
+                        error: 'วันที่ในสลิปไม่ถูกต้อง กรุณาใช้สลิปจากแอปธนาคารโดยตรง',
                     }, { status: 400 })
                 }
             }
