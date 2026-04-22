@@ -213,8 +213,8 @@ export default function BookingPage() {
     // Compress image for better EasySlip verification
     const compressImage = (file: File): Promise<File> => {
         return new Promise((resolve) => {
-            // If file is already small (<500KB), use as-is
-            if (file.size < 500 * 1024) { resolve(file); return }
+            // The API already accepts up to 10MB, so only recompress truly large images.
+            if (file.size < 8 * 1024 * 1024) { resolve(file); return }
 
             const img = new window.Image()
             const canvas = document.createElement('canvas')
@@ -222,8 +222,8 @@ export default function BookingPage() {
 
             reader.onload = (e) => {
                 img.onload = () => {
-                    // Resize to max 1600px while maintaining aspect ratio
-                    const maxDim = 1600
+                    // Keep resolution relatively high for OCR/QR extraction.
+                    const maxDim = 2400
                     let { width, height } = img
                     if (width > maxDim || height > maxDim) {
                         if (width > height) { height = Math.round(height * maxDim / width); width = maxDim }
@@ -234,13 +234,17 @@ export default function BookingPage() {
                     const ctx = canvas.getContext('2d')!
                     ctx.drawImage(img, 0, 0, width, height)
 
+                    const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
                     canvas.toBlob((blob) => {
                         if (blob) {
-                            const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' })
+                            const nextName = outputType === 'image/png'
+                                ? file.name.replace(/\.\w+$/, '.png')
+                                : file.name.replace(/\.\w+$/, '.jpg')
+                            const compressed = new File([blob], nextName, { type: outputType })
                             console.log(`Slip compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`)
-                            resolve(compressed)
+                            resolve(compressed.size < file.size ? compressed : file)
                         } else { resolve(file) }
-                    }, 'image/jpeg', 0.85)
+                    }, outputType, outputType === 'image/png' ? undefined : 0.96)
                 }
                 img.src = e.target?.result as string
             }
