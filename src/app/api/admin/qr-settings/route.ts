@@ -1,66 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+    ReceiverInfo,
+    PaymentDisplayConfig,
+    emptyReceiver,
+    parseReceiver,
+    parseDisplayConfig,
+    computePaymentChannelStatus,
+    isReceiverComplete,
+} from '@/lib/payment-channel'
 
 export const dynamic = 'force-dynamic'
-
-type ReceiverInfo = {
-    name: string
-    account: string
-    bankName: string
-    learnedAt: string | null
-    autoLearned: boolean
-}
-
-type PaymentDisplayConfig = {
-    enableQrCode: boolean
-    enableBankDetails: boolean
-}
-
-const emptyReceiver = (): ReceiverInfo => ({
-    name: '',
-    account: '',
-    bankName: '',
-    learnedAt: null,
-    autoLearned: false,
-})
-
-const defaultDisplayConfig = (): PaymentDisplayConfig => ({
-    enableQrCode: true,
-    enableBankDetails: true,
-})
-
-const hasReceiverData = (receiver: ReceiverInfo | null | undefined) =>
-    Boolean(receiver?.name.trim() || receiver?.account.trim() || receiver?.bankName.trim())
-
-const parseReceiver = (raw: string | null | undefined): ReceiverInfo | null => {
-    if (!raw) return null
-    try {
-        const value = JSON.parse(raw) as Partial<ReceiverInfo>
-        return {
-            name: String(value.name || '').trim(),
-            account: String(value.account || '').trim(),
-            bankName: String(value.bankName || '').trim(),
-            learnedAt: value.learnedAt || null,
-            autoLearned: Boolean(value.autoLearned),
-        }
-    } catch {
-        return null
-    }
-}
-
-const parseDisplayConfig = (raw: string | null | undefined): PaymentDisplayConfig => {
-    if (!raw) return defaultDisplayConfig()
-    try {
-        const value = JSON.parse(raw) as Partial<PaymentDisplayConfig>
-        return {
-            enableQrCode: value.enableQrCode !== false,
-            enableBankDetails: value.enableBankDetails !== false,
-        }
-    } catch {
-        return defaultDisplayConfig()
-    }
-}
 
 // GET /api/admin/qr-settings - get payment display settings
 export async function GET() {
@@ -79,7 +30,7 @@ export async function GET() {
             qrImage,
             receiver,
             displayConfig,
-            status: hasReceiverData(receiver) ? 'ready' : (qrImage ? 'learning' : 'no_qr'),
+            status: computePaymentChannelStatus({ qrImage, receiver, displayConfig }).status,
         })
     } catch (error) {
         console.error('GET /api/admin/qr-settings error:', error)
@@ -119,6 +70,12 @@ export async function POST(req: NextRequest) {
             }
             : null
 
+        if (receiver && !isReceiverComplete(receiver)) {
+            return NextResponse.json({
+                error: 'กรุณากรอกชื่อบัญชี เลขบัญชี และธนาคารให้ครบถ้วน',
+            }, { status: 400 })
+        }
+
         if (!qrImage && !resetReceiver && !receiver && !displayConfig) {
             return NextResponse.json({
                 error: 'กรุณาระบุข้อมูลที่ต้องการบันทึก',
@@ -128,6 +85,7 @@ export async function POST(req: NextRequest) {
         let nextQrImage = (await prisma.siteSetting.findUnique({
             where: { key: 'payment_qr_image' },
         }))?.value || null
+        const previousQrImage = nextQrImage
 
         if (qrImage) {
             await prisma.siteSetting.upsert({
@@ -139,6 +97,17 @@ export async function POST(req: NextRequest) {
         }
 
         let nextReceiver = parseReceiver((await prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } }))?.value || null)
+        const qrImageChanged = Boolean(qrImage && qrImage !== previousQrImage)
+        if (qrImageChanged && !receiver) {
+            const cleared = emptyReceiver()
+            await prisma.siteSetting.upsert({
+                where: { key: 'payment_receiver' },
+                update: { value: JSON.stringify(cleared) },
+                create: { key: 'payment_receiver', value: JSON.stringify(cleared) },
+            })
+            nextReceiver = cleared
+        }
+
         if (resetReceiver) {
             const cleared = emptyReceiver()
             await prisma.siteSetting.upsert({
@@ -160,6 +129,18 @@ export async function POST(req: NextRequest) {
 
         let nextDisplayConfig = parseDisplayConfig((await prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } }))?.value || null)
         if (displayConfig) {
+            if (displayConfig.enableQrCode && !nextQrImage) {
+                return NextResponse.json({
+                    error: 'กรุณาอัปโหลดรูป QR Code หรือรูปช่องทางชำระเงินก่อนเปิดใช้งานรูปชำระเงิน',
+                }, { status: 400 })
+            }
+
+            if (displayConfig.enableBankDetails && !isReceiverComplete(nextReceiver)) {
+                return NextResponse.json({
+                    error: 'กรุณากรอกชื่อบัญชี เลขบัญชี และธนาคารให้ครบก่อนเปิดใช้งานข้อมูลบัญชี',
+                }, { status: 400 })
+            }
+
             await prisma.siteSetting.upsert({
                 where: { key: 'payment_display_config' },
                 update: { value: JSON.stringify(displayConfig) },
@@ -168,7 +149,11 @@ export async function POST(req: NextRequest) {
             nextDisplayConfig = displayConfig
         }
 
-        const status = hasReceiverData(nextReceiver) ? 'ready' : (nextQrImage ? 'learning' : 'no_qr')
+        const status = computePaymentChannelStatus({
+            qrImage: nextQrImage,
+            receiver: nextReceiver,
+            displayConfig: nextDisplayConfig,
+        }).status
 
         return NextResponse.json({
             success: true,
@@ -176,7 +161,9 @@ export async function POST(req: NextRequest) {
             qrImage: nextQrImage,
             receiver: nextReceiver,
             displayConfig: nextDisplayConfig,
-            message: 'บันทึกการตั้งค่าชำระเงินสำเร็จ',
+            message: qrImageChanged && !receiver
+                ? 'อัปโหลดรูปสำเร็จ กรุณาตรวจสอบและบันทึกข้อมูลบัญชีใหม่ให้ตรงกับ QR ก่อนเปิดใช้งาน'
+                : 'บันทึกการตั้งค่าชำระเงินสำเร็จ',
         })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {

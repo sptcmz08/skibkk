@@ -37,7 +37,7 @@ export default function AdminSettingsPage() {
     const [qrReceiverAccount, setQrReceiverAccount] = useState('')
     const [qrReceiverBankName, setQrReceiverBankName] = useState('')
     const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: true, enableBankDetails: true })
-    const [qrStatus, setQrStatus] = useState<'ready' | 'learning' | 'no_qr'>('no_qr')
+    const [qrStatus, setQrStatus] = useState<'ready' | 'incomplete' | 'disabled'>('incomplete')
     const [qrUploading, setQrUploading] = useState(false)
     const [qrSaving, setQrSaving] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -80,8 +80,8 @@ export default function AdminSettingsPage() {
         const name = qrReceiverName.trim()
         const account = qrReceiverAccount.trim()
         const bankName = qrReceiverBankName.trim()
-        if (!name && !account && !bankName) {
-            toast.error('กรุณากรอกชื่อผู้รับหรือเลขบัญชีอย่างน้อย 1 ช่อง')
+        if (!name || !account || !bankName) {
+            toast.error('กรุณากรอกชื่อบัญชี เลขบัญชี และธนาคารให้ครบ')
             return
         }
 
@@ -401,22 +401,27 @@ export default function AdminSettingsPage() {
                         {/* Status indicator */}
                         <div style={{
                             padding: '14px 18px', borderRadius: '10px', marginBottom: '20px',
-                            background: qrStatus === 'ready' ? '#e8f5e9' : qrStatus === 'learning' ? '#fff8e1' : '#f5f5f5',
-                            border: `1px solid ${qrStatus === 'ready' ? '#a5d6a7' : qrStatus === 'learning' ? '#ffe082' : '#e0e0e0'}`,
+                            background: qrStatus === 'ready' ? '#e8f5e9' : qrStatus === 'incomplete' ? '#fff8e1' : '#f5f5f5',
+                            border: `1px solid ${qrStatus === 'ready' ? '#a5d6a7' : qrStatus === 'incomplete' ? '#ffe082' : '#e0e0e0'}`,
                             display: 'flex', alignItems: 'center', gap: '10px',
                         }}>
                             <span style={{ fontSize: '20px' }}>
-                                {qrStatus === 'ready' ? '🟢' : qrStatus === 'learning' ? '🟡' : '⚪'}
+                                {qrStatus === 'ready' ? '🟢' : qrStatus === 'incomplete' ? '🟡' : '⚪'}
                             </span>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '14px', color: '#2d3436' }}>
                                     {qrStatus === 'ready' ? 'ระบบพร้อมใช้งาน'
-                                        : qrStatus === 'learning' ? 'รอกรอกข้อมูลบัญชีหรือเรียนรู้จากสลิปแรก'
-                                            : 'ยังไม่ได้อัปโหลดรูปช่องทางชำระเงิน'}
+                                        : qrStatus === 'incomplete' ? 'ข้อมูลชำระเงินยังไม่ครบ'
+                                            : 'ปิดการใช้งานช่องทางชำระเงิน'}
                                 </div>
                                 {qrStatus === 'ready' && qrReceiver?.learnedAt && (
                                     <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
-                                        เรียนรู้เมื่อ: {new Date(qrReceiver.learnedAt).toLocaleString('th-TH')}
+                                        อัปเดตล่าสุด: {new Date(qrReceiver.learnedAt).toLocaleString('th-TH')}
+                                    </div>
+                                )}
+                                {qrStatus === 'incomplete' && (
+                                    <div style={{ fontSize: '12px', color: '#636e72', marginTop: '2px' }}>
+                                        ต้องมีรูปชำระเงินหรือข้อมูลบัญชีที่ครบถ้วนก่อนเปิดใช้งานจริง
                                     </div>
                                 )}
                             </div>
@@ -430,7 +435,7 @@ export default function AdminSettingsPage() {
                                     padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
                                     background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
                                 }}>
-                                    {qrReceiver?.name || 'รอกรอกหรือเรียนรู้จากสลิป...'}
+                                    {qrReceiver?.name || 'รอกรอกข้อมูลบัญชี...'}
                                 </div>
                             </div>
                             <div>
@@ -439,7 +444,7 @@ export default function AdminSettingsPage() {
                                     padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
                                     background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
                                 }}>
-                                    {qrReceiver?.account || 'รอกรอกหรือเรียนรู้จากสลิป...'}
+                                    {qrReceiver?.account || 'รอกรอกข้อมูลบัญชี...'}
                                 </div>
                             </div>
                             <div>
@@ -494,12 +499,12 @@ export default function AdminSettingsPage() {
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e17055' }}
                                     onClick={() => setShowResetConfirm(true)}
                                 >
-                                    <RefreshCw size={16} /> รีเซ็ตผู้รับ (เรียนรู้ใหม่)
+                                    <RefreshCw size={16} /> ล้างข้อมูลบัญชี
                                 </button>
                             )}
 
                             <p style={{ fontSize: '11px', color: '#b2bec3', lineHeight: 1.6 }}>
-                                💡 คลิกที่รูปเพื่อเปลี่ยนได้ทั้ง QR Code และรูปบัญชี ส่วนข้อมูลผู้รับให้กรอกเองหรือรอเรียนรู้จากสลิปแรกที่ตรวจสำเร็จ
+                                💡 เมื่อเปลี่ยนรูป QR ระบบจะล้างข้อมูลบัญชีเดิมเพื่อกันข้อมูลค้างผิดบัญชี กรุณากรอกชื่อบัญชี เลขบัญชี และธนาคารใหม่ทุกครั้ง
                             </p>
                         </div>
                     </div>
@@ -524,13 +529,17 @@ export default function AdminSettingsPage() {
                         const data = await res.json()
                         if (res.ok) {
                             setQrImage(data.qrImage || base64)
-                            setQrStatus(data.status || 'learning')
-                            setQrReceiver(data.receiver || qrReceiver)
+                            setQrStatus(data.status || 'incomplete')
+                            setQrReceiver(data.receiver || null)
                             if (data.displayConfig) setPaymentDisplayConfig(data.displayConfig)
                             if (data.receiver) {
                                 setQrReceiverName(data.receiver.name || '')
                                 setQrReceiverAccount(data.receiver.account || '')
                                 setQrReceiverBankName(data.receiver.bankName || '')
+                            } else {
+                                setQrReceiverName('')
+                                setQrReceiverAccount('')
+                                setQrReceiverBankName('')
                             }
                             toast.success(data.message || 'อัปโหลดรูปช่องทางชำระเงินสำเร็จ')
                         } else {
@@ -751,8 +760,8 @@ export default function AdminSettingsPage() {
 
             <ConfirmModal
                 open={showResetConfirm}
-                title="รีเซ็ตผู้รับ"
-                message="รีเซ็ตผู้รับ? ระบบจะเรียนรู้ใหม่จากสลิปถัดไป"
+                title="ล้างข้อมูลบัญชี"
+                message="ล้างข้อมูลบัญชีปัจจุบัน? หลังจากนี้ต้องกรอกชื่อบัญชี เลขบัญชี และธนาคารใหม่ก่อนเปิดใช้งาน"
                 confirmText="รีเซ็ต"
                 type="warning"
                 icon="🔄"
@@ -763,14 +772,14 @@ export default function AdminSettingsPage() {
                         body: JSON.stringify({ resetReceiver: true }),
                     })
                     const data = await res.json().catch(() => null)
-                    setQrStatus(data?.status || (qrImage ? 'learning' : 'no_qr'))
+                    setQrStatus(data?.status || 'incomplete')
                     setQrReceiver(data?.receiver || null)
                     if (data?.displayConfig) setPaymentDisplayConfig(data.displayConfig)
                     setQrReceiverName('')
                     setQrReceiverAccount('')
                     setQrReceiverBankName('')
                     setShowResetConfirm(false)
-                    toast.success('รีเซ็ตผู้รับแล้ว — จะเรียนรู้ใหม่จากสลิปถัดไป')
+                    toast.success('ล้างข้อมูลบัญชีแล้ว กรุณากรอกข้อมูลใหม่ก่อนเปิดใช้งาน')
                 }}
                 onCancel={() => setShowResetConfirm(false)}
             />

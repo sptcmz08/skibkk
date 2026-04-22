@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SignJWT } from 'jose'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+    parseReceiver,
+    parseDisplayConfig,
+    computePaymentChannelStatus,
+    isReceiverComplete,
+    normalizeAccountValue,
+    normalizeTextValue,
+} from '@/lib/payment-channel'
 
 type EasySlipResult = {
     status?: number
@@ -45,6 +53,7 @@ const createSlipVerificationToken = async (payload: {
     sender: string
     receiverName: string
     receiverAccount: string
+    receiverBankName: string
 }) => {
     return new SignJWT({
         purpose: 'slip-verification',
@@ -56,49 +65,24 @@ const createSlipVerificationToken = async (payload: {
         .sign(JWT_SECRET)
 }
 
-const loadExpectedReceiver = async () => {
-    let expectedReceiver = ''
-    let expectedAccount = ''
-    let isLearningMode = false
+const loadPaymentVerificationConfig = async () => {
+    const [receiverSetting, displaySetting, qrSetting] = await Promise.all([
+        prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } }),
+        prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } }),
+        prisma.siteSetting.findUnique({ where: { key: 'payment_qr_image' } }),
+    ])
 
-    try {
-        const receiverSetting = await prisma.siteSetting.findUnique({
-            where: { key: 'payment_receiver' },
-        })
+    const receiver = parseReceiver(receiverSetting?.value || null)
+    const displayConfig = parseDisplayConfig(displaySetting?.value || null)
+    const qrImage = qrSetting?.value || null
+    const channelStatus = computePaymentChannelStatus({ qrImage, receiver, displayConfig })
 
-        if (receiverSetting) {
-            const receiverData = JSON.parse(receiverSetting.value) as { name?: string; account?: string }
-            expectedReceiver = receiverData.name || ''
-            expectedAccount = receiverData.account || ''
-            isLearningMode = !expectedReceiver && !expectedAccount
-        } else {
-            expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
-            expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
-        }
-    } catch {
-        expectedReceiver = process.env.PAYMENT_RECEIVER_NAME || ''
-        expectedAccount = process.env.PAYMENT_RECEIVER_ACCOUNT || ''
-    }
-
-    return { expectedReceiver, expectedAccount, isLearningMode }
+    return { receiver, displayConfig, qrImage, channelStatus }
 }
 
 const isTransferPaymentEnabled = async () => {
-    const displaySetting = await prisma.siteSetting.findUnique({
-        where: { key: 'payment_display_config' },
-    })
-
-    if (!displaySetting?.value) return true
-
-    try {
-        const displayConfig = JSON.parse(displaySetting.value) as {
-            enableQrCode?: boolean
-            enableBankDetails?: boolean
-        }
-        return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
-    } catch {
-        return true
-    }
+    const { displayConfig } = await loadPaymentVerificationConfig()
+    return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
 }
 
 export async function POST(req: NextRequest) {
@@ -124,6 +108,22 @@ export async function POST(req: NextRequest) {
                 error: 'ระบบตรวจสลิปอัตโนมัติยังไม่พร้อม กรุณาติดต่อผู้ดูแลระบบ',
             }, { status: 500 })
         }
+
+        const { receiver: expectedReceiver, channelStatus } = await loadPaymentVerificationConfig()
+        if (!isReceiverComplete(expectedReceiver)) {
+            return NextResponse.json({
+                verified: false,
+                error: 'ระบบชำระเงินยังตั้งค่าไม่ครบ กรุณาให้ผู้ดูแลกรอกชื่อบัญชี เลขบัญชี และธนาคารให้ครบก่อนใช้งาน',
+            }, { status: 503 })
+        }
+
+        if (channelStatus.status !== 'ready') {
+            return NextResponse.json({
+                verified: false,
+                error: 'ช่องทางชำระเงินยังไม่พร้อมใช้งาน กรุณาตรวจสอบรูปชำระเงินหรือข้อมูลบัญชีในหลังบ้าน',
+            }, { status: 503 })
+        }
+        const activeReceiver = expectedReceiver!
 
         const mimeMatch = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)
         if (!mimeMatch) {
@@ -227,6 +227,7 @@ export async function POST(req: NextRequest) {
         const sender = String(slipData?.sender?.displayName || slipData?.sender?.name || '').trim()
         const receiverName = String(slipData?.receiver?.displayName || slipData?.receiver?.name || slipData?.receiver?.proxy?.name || '').trim()
         const receiverAccount = String(slipData?.receiver?.account?.value || slipData?.receiver?.proxy?.value || '').trim()
+        const receiverBankName = String(slipData?.receiver?.account?.bank?.name || slipData?.receiver?.account?.bank?.short || '').trim()
         const date = String(slipData?.date || '').trim()
         const bankCode = String(slipData?.sendingBank || '').trim()
 
@@ -256,52 +257,15 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const { expectedReceiver, expectedAccount, isLearningMode } = await loadExpectedReceiver()
+        const nameMatch = normalizeTextValue(receiverName).includes(normalizeTextValue(activeReceiver.name))
+        const accountMatch = normalizeAccountValue(receiverAccount) === normalizeAccountValue(activeReceiver.account)
+        const bankMatch = normalizeTextValue(receiverBankName).includes(normalizeTextValue(activeReceiver.bankName))
 
-        const receiverText = [
-            receiverName,
-            receiverAccount,
-            slipData?.receiver?.account?.bank?.short || '',
-            slipData?.receiver?.account?.bank?.name || '',
-        ].join(' ').toLowerCase()
-
-        if (isLearningMode) {
-            if (receiverName || receiverAccount) {
-                try {
-                    await prisma.siteSetting.upsert({
-                        where: { key: 'payment_receiver' },
-                        update: {
-                            value: JSON.stringify({
-                                name: receiverName,
-                                account: receiverAccount,
-                                learnedAt: new Date().toISOString(),
-                                autoLearned: true,
-                            }),
-                        },
-                        create: {
-                            key: 'payment_receiver',
-                            value: JSON.stringify({
-                                name: receiverName,
-                                account: receiverAccount,
-                                learnedAt: new Date().toISOString(),
-                                autoLearned: true,
-                            }),
-                        },
-                    })
-                } catch (saveError) {
-                    console.error('[SlipVerify] Failed to save learned receiver:', saveError)
-                }
-            }
-        } else if (expectedReceiver || expectedAccount) {
-            const nameMatch = expectedReceiver && receiverText.includes(expectedReceiver.toLowerCase())
-            const accountMatch = expectedAccount && receiverText.includes(expectedAccount.toLowerCase())
-
-            if (!nameMatch && !accountMatch) {
-                return NextResponse.json({
-                    verified: false,
-                    error: `สลิปนี้ไม่ได้โอนให้บัญชีร้าน (ผู้รับ: ${receiverName || receiverAccount || 'ไม่ทราบ'})`,
-                }, { status: 400 })
-            }
+        if (!nameMatch || !accountMatch || !bankMatch) {
+            return NextResponse.json({
+                verified: false,
+                error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${receiverName || receiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${receiverBankName || 'ไม่ทราบ'})`,
+            }, { status: 400 })
         }
 
         if (date) {
@@ -332,6 +296,7 @@ export async function POST(req: NextRequest) {
             sender,
             receiverName,
             receiverAccount,
+            receiverBankName,
         })
 
         return NextResponse.json({
@@ -341,6 +306,7 @@ export async function POST(req: NextRequest) {
             sender,
             receiver: receiverName,
             receiverAccount,
+            receiverBankName,
             date,
             bankCode,
             verificationToken,

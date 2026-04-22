@@ -142,9 +142,10 @@ export default function BookingPage() {
     const payableTotal = paymentMethod === 'PACKAGE' ? 0 : total
     const paidTotal = verifiedSlips.reduce((s, slip) => s + slip.amount, 0)
     const remaining = total - paidTotal
-    const hasVisibleBankDetails = paymentDisplayConfig.enableBankDetails && Boolean(qrReceiver?.name || qrReceiver?.account || qrReceiver?.bankName)
-    const hasTransferChannel = paymentDisplayConfig.enableQrCode || hasVisibleBankDetails
-    const showPaymentImage = paymentDisplayConfig.enableQrCode && Boolean(qrImage)
+    const hasCompleteReceiver = Boolean(qrReceiver?.name && qrReceiver?.account && qrReceiver?.bankName)
+    const hasVisibleBankDetails = paymentDisplayConfig.enableBankDetails && hasCompleteReceiver
+    const showPaymentImage = paymentDisplayConfig.enableQrCode && Boolean(qrImage) && hasCompleteReceiver
+    const hasTransferChannel = showPaymentImage || hasVisibleBankDetails
     const copyPaymentText = async (value: string | undefined, label: string) => {
         if (!value) return
         try {
@@ -353,19 +354,6 @@ export default function BookingPage() {
 
                     if (settingsData.qrImage) {
                         setQrImage(settingsData.qrImage)
-                        return
-                    }
-                } catch { /* ignore */ }
-
-                try {
-                    const qrRes = await fetch('/api/payments/qr', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: total }),
-                    })
-                    const qrData = await qrRes.json()
-                    if (qrRes.ok && qrData.qrDataUrl) {
-                        setQrImage(qrData.qrDataUrl)
                         return
                     }
                 } catch { /* ignore */ }

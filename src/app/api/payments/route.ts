@@ -6,6 +6,14 @@ import { getAuditRequestMeta } from '@/lib/audit'
 import crypto from 'crypto'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineConfirmationMessage, DEFAULT_LINE_CONFIRMATION_NOTE } from '@/lib/line-booking-notify'
+import {
+    parseReceiver,
+    parseDisplayConfig,
+    computePaymentChannelStatus,
+    isReceiverComplete,
+    normalizeAccountValue,
+    normalizeTextValue,
+} from '@/lib/payment-channel'
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
 const PAYMENT_TOLERANCE = 1
@@ -17,6 +25,7 @@ type SlipVerificationPayload = JWTPayload & {
     sender?: string
     receiverName?: string
     receiverAccount?: string
+    receiverBankName?: string
 }
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -42,24 +51,30 @@ const verifySlipToken = async (token: string) => {
         sender: String(slip.sender || '').trim(),
         receiverName: String(slip.receiverName || '').trim(),
         receiverAccount: String(slip.receiverAccount || '').trim(),
+        receiverBankName: String(slip.receiverBankName || '').trim(),
     }
 }
 
 const isTransferPaymentEnabled = async () => {
-    const displaySetting = await prisma.siteSetting.findUnique({
-        where: { key: 'payment_display_config' },
-    })
+    const displaySetting = await prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } })
+    const displayConfig = parseDisplayConfig(displaySetting?.value || null)
+    return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
+}
 
-    if (!displaySetting?.value) return true
+const loadExpectedReceiver = async () => {
+    const [receiverSetting, displaySetting, qrSetting] = await Promise.all([
+        prisma.siteSetting.findUnique({ where: { key: 'payment_receiver' } }),
+        prisma.siteSetting.findUnique({ where: { key: 'payment_display_config' } }),
+        prisma.siteSetting.findUnique({ where: { key: 'payment_qr_image' } }),
+    ])
 
-    try {
-        const displayConfig = JSON.parse(displaySetting.value) as {
-            enableQrCode?: boolean
-            enableBankDetails?: boolean
-        }
-        return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
-    } catch {
-        return true
+    const receiver = parseReceiver(receiverSetting?.value || null)
+    const displayConfig = parseDisplayConfig(displaySetting?.value || null)
+    const qrImage = qrSetting?.value || null
+
+    return {
+        receiver,
+        channelStatus: computePaymentChannelStatus({ receiver, displayConfig, qrImage }),
     }
 }
 
@@ -120,8 +135,22 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'ข้อมูลการยืนยันสลิปไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสลิปใหม่' }, { status: 400 })
             }
 
+            const { receiver: expectedReceiver, channelStatus } = await loadExpectedReceiver()
+            if (channelStatus.status !== 'ready' || !isReceiverComplete(expectedReceiver)) {
+                return NextResponse.json({ error: 'ระบบชำระเงินยังตั้งค่าไม่ครบ กรุณาให้ผู้ดูแลตรวจสอบข้อมูลบัญชีก่อนรับชำระ' }, { status: 503 })
+            }
+            const activeReceiver = expectedReceiver!
+
             const uniqueRefs = new Set<string>()
             for (const slip of decodedSlips) {
+                const nameMatch = normalizeTextValue(slip.receiverName).includes(normalizeTextValue(activeReceiver.name))
+                const accountMatch = normalizeAccountValue(slip.receiverAccount) === normalizeAccountValue(activeReceiver.account)
+                const bankMatch = normalizeTextValue(slip.receiverBankName).includes(normalizeTextValue(activeReceiver.bankName))
+
+                if (!nameMatch || !accountMatch || !bankMatch) {
+                    return NextResponse.json({ error: 'ข้อมูลสลิปไม่ตรงกับบัญชีที่ตั้งค่าอยู่ในระบบ กรุณาตรวจสลิปใหม่' }, { status: 400 })
+                }
+
                 if (uniqueRefs.has(slip.transRef)) {
                     return NextResponse.json({ error: 'พบสลิปซ้ำในรายการชำระ กรุณาตรวจสอบใหม่' }, { status: 400 })
                 }
