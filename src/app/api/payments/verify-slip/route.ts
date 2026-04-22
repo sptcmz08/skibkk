@@ -182,7 +182,9 @@ export async function POST(req: NextRequest) {
                 },
                 body: JSON.stringify({
                     base64: image,
-                    checkDuplicate: true,
+                    // Let our own database be the source of truth for duplicate prevention.
+                    // This avoids provider-level duplicate flags before the slip is actually used.
+                    checkDuplicate: false,
                 }),
                 signal: controller.signal,
             })
