@@ -8,6 +8,7 @@ import { motion } from 'framer-motion'
 import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, CheckCircle, Upload, Package, AlertTriangle, Timer, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clearStoredCart, readStoredCart, syncCartWithServerLocks } from '@/lib/cart'
+import { getBankBrand } from '@/lib/bank-brand'
 
 import type { CartItem } from '@/lib/cart'
 interface Participant {
@@ -70,52 +71,6 @@ const formatCartDate = (dateStr: string) => {
     })
 }
 
-const getBankBadgeText = (bankName?: string) => {
-    if (!bankName) return 'BANK'
-    const name = bankName.toLowerCase()
-    if (name.includes('กสิกร') || name.includes('kasikorn')) return 'KBank'
-    if (name.includes('กรุงเทพ') || name.includes('bangkok')) return 'BBL'
-    if (name.includes('ไทยพาณิชย์') || name.includes('scb')) return 'SCB'
-    if (name.includes('กรุงไทย') || name.includes('krungthai')) return 'KTB'
-    if (name.includes('กรุงศรี') || name.includes('bay') || name.includes('ayudhya')) return 'BAY'
-    if (name.includes('ttb') || name.includes('ทหารไทย') || name.includes('ธนชาต')) return 'ttb'
-    if (name.includes('ออมสิน') || name.includes('government savings')) return 'GSB'
-    if (name.includes('ยูโอบี') || name.includes('uob')) return 'UOB'
-    if (name.includes('cimb') || name.includes('ซีไอเอ็มบี')) return 'CIMB'
-    return bankName.replace(/ธนาคาร|bank/gi, '').trim().slice(0, 4).toUpperCase() || 'BANK'
-}
-
-const getBankVisual = (bankName?: string) => {
-    const name = (bankName || '').toLowerCase()
-
-    if (name.includes('กสิกร') || name.includes('kasikorn')) {
-        return { short: 'K', bg: 'linear-gradient(135deg, #34d399, #16a34a)', ring: 'rgba(22,163,74,0.18)', text: '#166534' }
-    }
-    if (name.includes('กรุงเทพ') || name.includes('bangkok')) {
-        return { short: 'BBL', bg: 'linear-gradient(135deg, #60a5fa, #2563eb)', ring: 'rgba(37,99,235,0.18)', text: '#1d4ed8' }
-    }
-    if (name.includes('ไทยพาณิชย์') || name.includes('scb')) {
-        return { short: 'SCB', bg: 'linear-gradient(135deg, #a78bfa, #7c3aed)', ring: 'rgba(124,58,237,0.18)', text: '#6d28d9' }
-    }
-    if (name.includes('กรุงไทย') || name.includes('krungthai')) {
-        return { short: 'KTB', bg: 'linear-gradient(135deg, #67e8f9, #06b6d4)', ring: 'rgba(6,182,212,0.18)', text: '#0f766e' }
-    }
-    if (name.includes('กรุงศรี') || name.includes('bay') || name.includes('ayudhya')) {
-        return { short: 'BAY', bg: 'linear-gradient(135deg, #fde68a, #facc15)', ring: 'rgba(250,204,21,0.24)', text: '#a16207' }
-    }
-    if (name.includes('ttb') || name.includes('ทหารไทย') || name.includes('ธนชาต')) {
-        return { short: 'ttb', bg: 'linear-gradient(135deg, #93c5fd, #3b82f6)', ring: 'rgba(59,130,246,0.18)', text: '#1d4ed8' }
-    }
-    if (name.includes('ออมสิน') || name.includes('government savings')) {
-        return { short: 'GSB', bg: 'linear-gradient(135deg, #f9a8d4, #ec4899)', ring: 'rgba(236,72,153,0.18)', text: '#be185d' }
-    }
-    if (name.includes('ยูโอบี') || name.includes('uob')) {
-        return { short: 'UOB', bg: 'linear-gradient(135deg, #93c5fd, #2563eb)', ring: 'rgba(37,99,235,0.18)', text: '#1d4ed8' }
-    }
-
-    return { short: getBankBadgeText(bankName), bg: 'linear-gradient(135deg, #fef3c7, #facc15)', ring: 'rgba(250,204,21,0.24)', text: '#a16207' }
-}
-
 export default function BookingPage() {
     const router = useRouter()
     const [step, setStep] = useState(1) // 1=participants, 2=payment
@@ -154,6 +109,7 @@ export default function BookingPage() {
     const hasVisibleBankDetails = paymentDisplayConfig.enableBankDetails && hasCompleteReceiver
     const showPaymentImage = paymentDisplayConfig.enableQrCode && Boolean(qrImage) && hasCompleteReceiver
     const hasTransferChannel = showPaymentImage || hasVisibleBankDetails
+    const bankBrand = getBankBrand(qrReceiver?.bankName)
     const copyPaymentText = async (value: string | undefined, label: string) => {
         if (!value) return
         try {
@@ -1214,8 +1170,8 @@ export default function BookingPage() {
                                                     width: '50px',
                                                     height: '50px',
                                                     borderRadius: '15px',
-                                                    background: getBankVisual(qrReceiver?.bankName).bg,
-                                                    border: `1px solid ${getBankVisual(qrReceiver?.bankName).ring}`,
+                                                    background: bankBrand.bg,
+                                                    border: `1px solid ${bankBrand.ring}`,
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -1223,8 +1179,19 @@ export default function BookingPage() {
                                                     color: '#fff',
                                                     fontSize: '13px',
                                                     fontWeight: 800,
+                                                    overflow: 'hidden',
                                                 }}>
-                                                    {getBankVisual(qrReceiver?.bankName).short}
+                                                    {bankBrand.logoSrc ? (
+                                                        <Image
+                                                            src={bankBrand.logoSrc}
+                                                            alt={bankBrand.logoAlt}
+                                                            width={36}
+                                                            height={36}
+                                                            style={{ width: '36px', height: '36px', objectFit: 'contain' }}
+                                                        />
+                                                    ) : (
+                                                        bankBrand.short
+                                                    )}
                                                 </div>
                                                 <div style={{ minWidth: 0 }}>
                                                     <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-text-muted)', marginBottom: '3px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
@@ -1321,7 +1288,7 @@ export default function BookingPage() {
 
                                             {qrReceiver?.bankName && (
                                                 <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', paddingLeft: '2px' }}>
-                                                    ธนาคาร: <span style={{ color: getBankVisual(qrReceiver?.bankName).text, fontWeight: 700 }}>{qrReceiver.bankName}</span>
+                                                    ธนาคาร: <span style={{ color: bankBrand.text, fontWeight: 700 }}>{qrReceiver.bankName}</span>
                                                 </div>
                                             )}
                                         </div>

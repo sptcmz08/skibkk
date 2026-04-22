@@ -10,6 +10,7 @@ import { Upload, Trash2, Plus, CalendarOff, FileText, Clock, UserPlus, QrCode, R
 import toast from 'react-hot-toast'
 import { ImageIcon } from 'lucide-react'
 import { DEFAULT_LINE_CONFIRMATION_NOTE, DEFAULT_LINE_UPDATE_NOTE, DEFAULT_LINE_REMINDER_NOTE, normalizeLineEditableNote } from '@/lib/line-booking-notify'
+import { getBankBrand } from '@/lib/bank-brand'
 
 export default function AdminSettingsPage() {
     const [logo, setLogo] = useState('')
@@ -38,6 +39,7 @@ export default function AdminSettingsPage() {
     const [qrReceiverBankName, setQrReceiverBankName] = useState('')
     const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: false, enableBankDetails: true })
     const [qrStatus, setQrStatus] = useState<'ready' | 'incomplete' | 'disabled'>('incomplete')
+    const bankBrand = getBankBrand(qrReceiver?.bankName || qrReceiverBankName)
     const [qrUploading, setQrUploading] = useState(false)
     const [qrSaving, setQrSaving] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -461,8 +463,35 @@ export default function AdminSettingsPage() {
                                 <div style={{
                                     padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9ecef',
                                     background: '#f8f9fa', fontWeight: 600, fontSize: '14px', color: '#2d3436',
+                                    display: 'flex', alignItems: 'center', gap: '10px',
                                 }}>
-                                    {qrReceiver?.bankName || '-'}
+                                    {bankBrand.logoSrc ? (
+                                        <Image
+                                            src={bankBrand.logoSrc}
+                                            alt={bankBrand.logoAlt}
+                                            width={28}
+                                            height={28}
+                                            style={{ width: '28px', height: '28px', objectFit: 'contain', flexShrink: 0 }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: '28px',
+                                            height: '28px',
+                                            borderRadius: '999px',
+                                            background: bankBrand.bg,
+                                            border: `1px solid ${bankBrand.ring}`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '10px',
+                                            fontWeight: 800,
+                                            color: '#fff',
+                                            flexShrink: 0,
+                                        }}>
+                                            {bankBrand.short.slice(0, 3)}
+                                        </div>
+                                    )}
+                                    <span>{qrReceiver?.bankName || '-'}</span>
                                 </div>
                             </div>
                         </div>
