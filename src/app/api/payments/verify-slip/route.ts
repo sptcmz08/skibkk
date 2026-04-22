@@ -228,9 +228,7 @@ export async function POST(req: NextRequest) {
             if (errorCode === 'SLIP_PENDING') {
                 return NextResponse.json({
                     verified: false,
-                    acceptManualReview: true,
-                    isBankPending: true,
-                    error: 'สลิปธนาคารกรุงเทพเพิ่งทำรายการไม่นาน กรุณารอ 3-5 นาทีแล้วกดตรวจสอบสลิปอีกครั้ง',
+                    error: 'Slip verification is still pending. Please verify this slip again.',
                 }, { status: 400 })
             }
 
