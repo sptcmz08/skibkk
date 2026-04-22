@@ -11,38 +11,53 @@ import {
     normalizeTextValue,
 } from '@/lib/payment-channel'
 
-type EasySlipResult = {
-    status?: number
+type EasySlipV2Response = {
+    success?: boolean
     message?: string
+    error?: {
+        code?: string
+        message?: string
+    }
     data?: {
-        amount?: { amount?: number | string }
-        transRef?: string
-        date?: string
-        sendingBank?: string
-        sender?: {
-            displayName?: string
-            name?: string
-        }
-        receiver?: {
-            displayName?: string
-            name?: string
-            account?: {
-                value?: string
-                bank?: {
-                    short?: string
-                    name?: string
+        isDuplicate?: boolean
+        matchedAccount?: {
+            id?: string
+            accountName?: string
+            accountNumber?: string
+            bankCode?: string
+            bankName?: string
+        } | null
+        amountInOrder?: number
+        amountInSlip?: number
+        isAmountMatched?: boolean
+        rawSlip?: {
+            transRef?: string
+            date?: string
+            amount?: { amount?: number | string }
+            sender?: {
+                bank?: { id?: string; name?: string; short?: string }
+                account?: {
+                    name?: { th?: string; en?: string }
+                    value?: string
                 }
             }
-            proxy?: {
-                name?: string
-                value?: string
+            receiver?: {
+                bank?: { id?: string; name?: string; short?: string }
+                account?: {
+                    name?: { th?: string; en?: string }
+                    value?: string
+                }
+                proxy?: {
+                    type?: string
+                    value?: string
+                }
             }
         }
     }
 }
 
-const VERIFY_ENDPOINT = 'https://developer.easyslip.com/api/v1/verify'
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024
+const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
+const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 15000
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
@@ -85,6 +100,10 @@ const isTransferPaymentEnabled = async () => {
     return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
 }
 
+const extractNameValue = (value?: { th?: string; en?: string } | null) => {
+    return String(value?.th || value?.en || '').trim()
+}
+
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
@@ -123,8 +142,8 @@ export async function POST(req: NextRequest) {
                 error: 'ช่องทางชำระเงินยังไม่พร้อมใช้งาน กรุณาตรวจสอบรูปชำระเงินหรือข้อมูลบัญชีในหลังบ้าน',
             }, { status: 503 })
         }
-        const activeReceiver = expectedReceiver!
 
+        const activeReceiver = expectedReceiver!
         const mimeMatch = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)
         if (!mimeMatch) {
             return NextResponse.json({
@@ -146,17 +165,9 @@ export async function POST(req: NextRequest) {
         if (binaryData.length > MAX_IMAGE_SIZE) {
             return NextResponse.json({
                 verified: false,
-                error: 'ไฟล์ใหญ่เกินไป (สูงสุด 10MB)',
+                error: 'ไฟล์สลิปใหญ่เกินไป กรุณาใช้รูปที่มีขนาดไม่เกิน 4MB',
             }, { status: 400 })
         }
-
-        const mimeType = mimeMatch[1]
-        let extension = mimeType.split('/')[1] || 'jpg'
-        if (extension === 'jpeg') extension = 'jpg'
-
-        const formData = new FormData()
-        const blob = new Blob([binaryData], { type: mimeType })
-        formData.append('file', blob, `slip.${extension}`)
 
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
@@ -167,8 +178,12 @@ export async function POST(req: NextRequest) {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${easySlipApiKey}`,
+                    'Content-Type': 'application/json',
                 },
-                body: formData,
+                body: JSON.stringify({
+                    base64: image,
+                    checkDuplicate: true,
+                }),
                 signal: controller.signal,
             })
         } catch (fetchError) {
@@ -184,7 +199,7 @@ export async function POST(req: NextRequest) {
             clearTimeout(timeout)
         }
 
-        let result: EasySlipResult
+        let result: EasySlipV2Response
         try {
             result = await easySlipResponse.json()
         } catch {
@@ -195,16 +210,40 @@ export async function POST(req: NextRequest) {
             }, { status: 500 })
         }
 
-        if (!easySlipResponse.ok || result.status !== 200) {
-            const errorMessage = result.data && 'message' in result.data
-                ? String((result.data as Record<string, unknown>).message || '')
-                : (result.message || '')
-            const statusCode = result.status || easySlipResponse.status
+        if (!easySlipResponse.ok || !result.success) {
+            const errorCode = String(result.error?.code || '')
+            const errorMessage = String(result.error?.message || result.message || '')
 
             console.error('[SlipVerify] EasySlip error:', JSON.stringify(result))
 
+            if (errorCode === 'SLIP_PENDING') {
+                return NextResponse.json({
+                    verified: false,
+                    error: 'สลิปธนาคารกรุงเทพเพิ่งทำรายการไม่นาน กรุณารอ 3-5 นาทีแล้วกดตรวจสอบสลิปอีกครั้ง',
+                }, { status: 400 })
+            }
+
+            if (errorCode === 'IMAGE_SIZE_TOO_LARGE') {
+                return NextResponse.json({
+                    verified: false,
+                    error: 'ไฟล์สลิปใหญ่เกินไป กรุณาใช้รูปที่มีขนาดไม่เกิน 4MB',
+                }, { status: 400 })
+            }
+
             if (
-                statusCode === 404
+                errorCode === 'VALIDATION_ERROR'
+                || errorCode === 'UNSUPPORTED_FILE_TYPE'
+                || errorMessage.toLowerCase().includes('invalid base64')
+                || errorMessage.toLowerCase().includes('unsupported')
+            ) {
+                return NextResponse.json({
+                    verified: false,
+                    error: 'รูปสลิปไม่ถูกต้อง กรุณาใช้รูปสลิปจากแอปธนาคารโดยตรง',
+                }, { status: 400 })
+            }
+
+            if (
+                easySlipResponse.status === 404
                 || errorMessage.includes('ไม่พบ')
                 || errorMessage.toLowerCase().includes('not found')
                 || errorMessage.includes('No slip')
@@ -221,15 +260,15 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const slipData = result.data
-        const amount = Number(slipData?.amount?.amount || 0)
+        const slipData = result.data?.rawSlip
+        const amount = Number(result.data?.amountInSlip || slipData?.amount?.amount || 0)
         const transRef = String(slipData?.transRef || '').trim()
-        const sender = String(slipData?.sender?.displayName || slipData?.sender?.name || '').trim()
-        const receiverName = String(slipData?.receiver?.displayName || slipData?.receiver?.name || slipData?.receiver?.proxy?.name || '').trim()
+        const sender = extractNameValue(slipData?.sender?.account?.name)
+        const receiverName = extractNameValue(slipData?.receiver?.account?.name)
         const receiverAccount = String(slipData?.receiver?.account?.value || slipData?.receiver?.proxy?.value || '').trim()
-        const receiverBankName = String(slipData?.receiver?.account?.bank?.name || slipData?.receiver?.account?.bank?.short || '').trim()
+        const receiverBankName = String(slipData?.receiver?.bank?.name || slipData?.receiver?.bank?.short || '').trim()
         const date = String(slipData?.date || '').trim()
-        const bankCode = String(slipData?.sendingBank || '').trim()
+        const bankCode = String(slipData?.sender?.bank?.short || slipData?.sender?.bank?.id || '').trim()
 
         if (!Number.isFinite(amount) || amount <= 0) {
             return NextResponse.json({
@@ -242,6 +281,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 verified: false,
                 error: 'ไม่พบเลขอ้างอิงสลิป กรุณาใช้สลิปจากแอปธนาคารโดยตรง',
+            }, { status: 400 })
+        }
+
+        if (result.data?.isDuplicate) {
+            return NextResponse.json({
+                verified: false,
+                error: 'สลิปนี้ถูกใช้งานแล้ว ไม่สามารถใช้ซ้ำได้',
             }, { status: 400 })
         }
 

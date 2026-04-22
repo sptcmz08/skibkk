@@ -213,8 +213,8 @@ export default function BookingPage() {
     // Compress image for better EasySlip verification
     const compressImage = (file: File): Promise<File> => {
         return new Promise((resolve) => {
-            // The API already accepts up to 10MB, so only recompress truly large images.
-            if (file.size < 8 * 1024 * 1024) { resolve(file); return }
+            // EasySlip v2 accepts base64 images up to 4MB decoded size.
+            if (file.size < 3.8 * 1024 * 1024) { resolve(file); return }
 
             const img = new window.Image()
             const canvas = document.createElement('canvas')
@@ -223,7 +223,7 @@ export default function BookingPage() {
             reader.onload = (e) => {
                 img.onload = () => {
                     // Keep resolution relatively high for OCR/QR extraction.
-                    const maxDim = 2400
+                    const maxDim = 2200
                     let { width, height } = img
                     if (width > maxDim || height > maxDim) {
                         if (width > height) { height = Math.round(height * maxDim / width); width = maxDim }
@@ -244,7 +244,7 @@ export default function BookingPage() {
                             console.log(`Slip compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`)
                             resolve(compressed.size < file.size ? compressed : file)
                         } else { resolve(file) }
-                    }, outputType, outputType === 'image/png' ? undefined : 0.96)
+                    }, outputType, outputType === 'image/png' ? undefined : 0.92)
                 }
                 img.src = e.target?.result as string
             }
