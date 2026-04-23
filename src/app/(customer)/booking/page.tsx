@@ -1493,7 +1493,7 @@ export default function BookingPage() {
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={handleSubmitBooking}
+                            onClick={() => { void handleSubmitBooking() }}
                             className="btn btn-success"
                             style={{ flex: 2, opacity: !canSubmit ? 0.5 : 1 }}
                             disabled={loading || slipVerifying || !canSubmit}
