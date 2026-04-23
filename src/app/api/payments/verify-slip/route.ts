@@ -371,8 +371,9 @@ export async function POST(req: NextRequest) {
             account: receiverAccount,
             bankName: receiverBankName,
         }, activeReceiver)
+        const matchedByEasySlip = Boolean(matchedAccount)
 
-        if (!matched) {
+        if (!(matched || matchedByEasySlip)) {
             return NextResponse.json({
                 verified: false,
                 error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${displayReceiverName || displayReceiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${displayReceiverBankName || 'ไม่ทราบ'})`,
