@@ -55,15 +55,11 @@ type EasySlipV2Response = {
     }
 }
 
-const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
+const VERIFY_ENDPOINT = 'https://api.easyslip.com/v1/verify'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 180000
-const SLIP_PENDING_RETRY_LIMIT = 3
-const SLIP_PENDING_RETRY_DELAY = 1200
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const createSlipVerificationToken = async (payload: {
     transRef: string
@@ -104,43 +100,29 @@ const isTransferPaymentEnabled = async () => {
 }
 
 const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response> => {
-    for (let attempt = 1; attempt <= SLIP_PENDING_RETRY_LIMIT; attempt += 1) {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
 
-        try {
-            const slipResponse = await fetch(VERIFY_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ base64: base64Image, checkDuplicate: false }),
-                signal: controller.signal,
-            })
+    try {
+        const slipResponse = await fetch(VERIFY_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ base64: base64Image, checkDuplicate: false }),
+            signal: controller.signal,
+        })
 
-            const result = await slipResponse.json().catch(() => null) as EasySlipV2Response
-            if (result?.error?.code === 'SLIP_PENDING' && attempt < SLIP_PENDING_RETRY_LIMIT) {
-                await sleep(SLIP_PENDING_RETRY_DELAY)
-                continue
-            }
-
-            return result || { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปได้' }
-        } catch (fetchError) {
-            const isTimeout = (fetchError as Error).name === 'AbortError'
-            console.error('[SlipVerify] EasySlip request failed:', isTimeout ? 'TIMEOUT' : fetchError)
-            return { success: false, error: { message: isTimeout ? 'ระบบตรวจสลิปใช้เวลานานเกินไป' : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้' } }
-        } finally {
-            clearTimeout(timeout)
-        }
-    }
-
-    return {
-        success: false,
-        error: {
-            code: 'SLIP_PENDING',
-            message: 'ระบบกำลังตรวจสอบสลิป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง',
-        },
+        const result = await slipResponse.json().catch(() => null) as EasySlipV2Response
+        console.log('[SlipVerify] EasySlip response:', JSON.stringify(result))
+        return result || { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปได้' }
+    } catch (fetchError) {
+        const isTimeout = (fetchError as Error).name === 'AbortError'
+        console.error('[SlipVerify] EasySlip request failed:', isTimeout ? 'TIMEOUT' : fetchError)
+        return { success: false, error: { message: isTimeout ? 'ระบบตรวจสลิปใช้เวลานานเกินไป' : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้' } }
+    } finally {
+        clearTimeout(timeout)
     }
 }
 
@@ -231,7 +213,8 @@ export async function POST(req: NextRequest) {
             if (errorCode === 'SLIP_PENDING') {
                 return NextResponse.json({
                     verified: false,
-                    error: 'ระบบกำลังตรวจสอบสลิป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง (Slip verification is pending. Please wait a moment and try again.)',
+                    error: 'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองอัปโหลดใหม่หรือใช้รูปสลิปจากแอปธนาคารโดยตรง',
+                    debug: { code: errorCode, message: errorMessage },
                 }, { status: 400 })
             }
 
