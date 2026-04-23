@@ -55,7 +55,7 @@ type EasySlipV2Response = {
     }
 }
 
-const VERIFY_ENDPOINT = 'https://api.easyslip.com/v1/verify'
+const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 180000
@@ -110,7 +110,7 @@ const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response>
                 Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ base64: base64Image, checkDuplicate: false }),
+            body: JSON.stringify({ base64: base64Image, checkDuplicate: true }),
             signal: controller.signal,
         })
 
