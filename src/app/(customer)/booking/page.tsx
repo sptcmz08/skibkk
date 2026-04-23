@@ -313,11 +313,10 @@ export default function BookingPage() {
                 // Clear current slip for next upload
                 setSlipFile(null)
                 setSlipPreview(null)
-                const shouldAutoSubmit = paymentMethod === 'PROMPTPAY' && newRemaining <= 1
                 setSlipVerifyState({
                     phase: 'success',
-                    message: shouldAutoSubmit
-                        ? 'ตรวจสอบสลิปสำเร็จ กำลังยืนยันการจอง...'
+                    message: newRemaining <= 1
+                        ? 'ตรวจสอบสลิปสำเร็จแล้ว สามารถกดยืนยันการจองได้'
                         : 'ตรวจสอบสลิปสำเร็จแล้ว สามารถแนบสลิปเพิ่มได้หากยอดยังไม่ครบ',
                 })
 
@@ -329,10 +328,6 @@ export default function BookingPage() {
                     toast.success(`ยอดครบแล้ว! ✅ (โอนเกิน ฿${overpaid.toLocaleString()} กรุณา Add Line: @skibkk เพื่อรับเงินคืน)`, { duration: 8000 })
                 } else {
                     toast.success('ยอดครบแล้ว! ตรวจสอบสลิปสำเร็จ ✅')
-                }
-
-                if (shouldAutoSubmit) {
-                    await handleSubmitBooking({ verifiedSlipsOverride: updatedSlips })
                 }
                 return
             }
@@ -1468,7 +1463,7 @@ export default function BookingPage() {
                                             )}
                                             {remaining <= 1 && (
                                                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#10b981', fontWeight: 700, textAlign: 'center' }}>
-                                                    ✅ ยอดครบแล้ว! ระบบจะยืนยันการจองและพาไปหน้าประวัติอัตโนมัติหลังตรวจสลิปเสร็จ
+                                                    ✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย
                                                 </div>
                                             )}
                                             {paidTotal > total + 1 && (
