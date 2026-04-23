@@ -198,6 +198,66 @@ export const normalizeLooseTextValue = (value: string | null | undefined) =>
         .replace(/ltd/gu, '')
         .trim()
 
+const getEnglishNameTokens = (value: string | null | undefined) =>
+    normalizeTextValue(value)
+        .replace(/[&]/g, ' and ')
+        .replace(/\b(?:public company limited|company limited|co ltd|co\. ltd|co\.ltd|corporation|corp|incorporated|inc|limited|company|plc|llc|holdings?|group)\b/gu, ' ')
+        .split(/[^a-z0-9]+/g)
+        .map(token => token.trim())
+        .filter(Boolean)
+
+const getEnglishInitials = (tokens: string[]) =>
+    tokens.map(token => token[0] || '').join('')
+
+const englishAbbreviationValuesMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
+    const actualTokens = getEnglishNameTokens(actual)
+    const expectedTokens = getEnglishNameTokens(expected)
+
+    if (actualTokens.length < 2 || expectedTokens.length < 2 || actualTokens.length !== expectedTokens.length) {
+        return false
+    }
+
+    const actualInitials = getEnglishInitials(actualTokens)
+    const expectedInitials = getEnglishInitials(expectedTokens)
+    const actualJoined = actualTokens.join('')
+    const expectedJoined = expectedTokens.join('')
+
+    if (actualInitials.length >= 3 && expectedInitials.length >= 3 && actualInitials === expectedInitials) {
+        return true
+    }
+
+    if (actualInitials.length >= 3 && expectedJoined.startsWith(actualInitials)) {
+        return true
+    }
+
+    if (expectedInitials.length >= 3 && actualJoined.startsWith(expectedInitials)) {
+        return true
+    }
+
+    let sawAbbreviation = false
+
+    const tokensMatch = actualTokens.every((actualToken, index) => {
+        const expectedToken = expectedTokens[index]
+        if (!expectedToken) return false
+
+        if (actualToken === expectedToken) {
+            return true
+        }
+
+        const shorter = actualToken.length <= expectedToken.length ? actualToken : expectedToken
+        const longer = actualToken.length > expectedToken.length ? actualToken : expectedToken
+
+        if (shorter.length <= 2 && longer.startsWith(shorter)) {
+            sawAbbreviation = true
+            return true
+        }
+
+        return false
+    })
+
+    return tokensMatch && sawAbbreviation
+}
+
 export const normalizeBankValue = (value: string | null | undefined) => {
     const normalized = normalizeThaiDigits(value)
         .toLowerCase()
@@ -275,6 +335,7 @@ export const textValuesMatch = (actual: string | null | undefined, expected: str
                 || actualLoose.includes(expectedLoose)
                 || expectedLoose.includes(actualLoose)
             ))
+            || englishAbbreviationValuesMatch(actualCandidate, expectedCandidate)
     }))
 }
 

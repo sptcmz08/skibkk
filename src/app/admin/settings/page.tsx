@@ -499,12 +499,17 @@ export default function AdminSettingsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
                             <div>
                                 <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>กรอกชื่อผู้รับเอง (ทางเลือก)</div>
-                                <input
+                                <textarea
                                     className="admin-input"
-                                    placeholder="เช่น SKI BKK"
+                                    rows={3}
+                                    style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
+                                    placeholder={'เช่น SKI BKK\nCN WORLD CO.,LTD.\nCN W'}
                                     value={qrReceiverName}
                                     onChange={e => setQrReceiverName(e.target.value)}
                                 />
+                                <div style={{ fontSize: '11px', color: '#636e72', marginTop: '6px', lineHeight: 1.6 }}>
+                                    รองรับหลาย alias โดยแยกคนละบรรทัด เช่นชื่อไทย, ชื่ออังกฤษเต็ม และชื่อย่ออย่าง CN W
+                                </div>
                             </div>
                             <div>
                                 <div style={{ fontSize: '12px', color: '#636e72', marginBottom: '4px' }}>กรอกเลขบัญชีเอง (ทางเลือก)</div>
