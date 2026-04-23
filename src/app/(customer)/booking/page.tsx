@@ -54,6 +54,13 @@ const readResponseError = async (response: Response, fallback: string) => {
     return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback
 }
 
+const dataUrlToFile = async (dataUrl: string, filename: string) => {
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+    const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg'
+    return new File([blob], `${filename}.${extension}`, { type: blob.type || 'image/jpeg' })
+}
+
 const dateOnlyUTC = (value: string | Date) => new Date(value).toISOString().split('T')[0]
 
 const formatCartDate = (dateStr: string) => {
@@ -87,7 +94,7 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string; file?: File | null }>>([])
+    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string; image?: string | null }>>([])
     const [qrImage, setQrImage] = useState<string | null>(null)
     const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string; bankName?: string } | null>(null)
     const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: false, enableBankDetails: true })
@@ -168,7 +175,7 @@ export default function BookingPage() {
     // Compress image for better EasySlip verification
     const compressImage = (file: File): Promise<File> => {
         return new Promise((resolve) => {
-            // EasySlip v2 accepts uploaded images up to 4MB.
+            // EasySlip v1 accepts base64 images up to 4MB after encoding.
             if (file.size < 3.8 * 1024 * 1024) { resolve(file); return }
 
             const img = new window.Image()
@@ -225,11 +232,15 @@ export default function BookingPage() {
         if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
         setSlipVerifying(true)
         try {
-            const formData = new FormData()
-            formData.append('image', slipFile)
+            const reader = new FileReader()
+            const base64 = await new Promise<string>((resolve) => {
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.readAsDataURL(slipFile)
+            })
             const res = await fetch('/api/payments/verify-slip', {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 }),
             })
             const data = await res.json()
 
@@ -258,7 +269,7 @@ export default function BookingPage() {
                 transRef: data.transRef || '',
                 sender: data.sender || '',
                 token: data.verificationToken || '',
-                file: slipFile,
+                image: base64,
             }
             const updatedSlips = [...verifiedSlips, newSlip]
             setVerifiedSlips(updatedSlips)
@@ -661,11 +672,12 @@ export default function BookingPage() {
                 const paymentMethodForRecord = paymentMethod === 'PROMPTPAY' ? 'BANK_TRANSFER' : paymentMethod
                 let slipUrl: string | undefined
 
-                const fileForUpload = verifiedSlips.length === 1 ? verifiedSlips[0]?.file || null : null
+                const imageForUpload = verifiedSlips.length === 1 ? verifiedSlips[0]?.image || null : null
 
-                if (fileForUpload) {
+                if (imageForUpload) {
+                    const uploadFile = await dataUrlToFile(imageForUpload, `payment-slip-${Date.now()}`)
                     const formData = new FormData()
-                    formData.append('file', fileForUpload)
+                    formData.append('file', uploadFile)
 
                     const uploadRes = await fetch('/api/upload', {
                         method: 'POST',
