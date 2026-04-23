@@ -91,6 +91,9 @@ type EasySlipV1Response = {
     }
 }
 
+const isEasySlipV1Response = (value: EasySlipV1Response | EasySlipV2Response): value is EasySlipV1Response =>
+    'status' in value
+
 const VERIFY_ENDPOINT = 'https://developer.easyslip.com/api/v1/verify'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
@@ -161,7 +164,7 @@ const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response>
             return rawResult
         }
 
-        if ((rawResult.status || 0) >= 200 && (rawResult.status || 0) < 300 && rawResult.data) {
+        if (isEasySlipV1Response(rawResult) && (rawResult.status || 0) >= 200 && (rawResult.status || 0) < 300 && rawResult.data) {
             return {
                 success: true,
                 data: {
@@ -197,7 +200,7 @@ const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response>
         return {
             success: false,
             error: {
-                code: String(rawResult.message || '').toUpperCase(),
+                code: String((isEasySlipV1Response(rawResult) ? rawResult.message : '') || '').toUpperCase(),
                 message: String(rawResult.message || 'ตรวจสอบสลิปไม่สำเร็จ'),
             },
         }
