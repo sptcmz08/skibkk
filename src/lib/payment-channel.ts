@@ -213,7 +213,7 @@ const englishAbbreviationValuesMatch = (actual: string | null | undefined, expec
     const actualTokens = getEnglishNameTokens(actual)
     const expectedTokens = getEnglishNameTokens(expected)
 
-    if (actualTokens.length < 2 || expectedTokens.length < 2 || actualTokens.length !== expectedTokens.length) {
+    if (actualTokens.length < 2 || expectedTokens.length < 2) {
         return false
     }
 
@@ -232,6 +232,27 @@ const englishAbbreviationValuesMatch = (actual: string | null | undefined, expec
 
     if (expectedInitials.length >= 3 && actualJoined.startsWith(expectedInitials)) {
         return true
+    }
+
+    // Handle truncated names where actual has fewer tokens than expected (e.g. "CN W" vs "CN WORLD CO LTD")
+    if (actualTokens.length < expectedTokens.length) {
+        let expectedIndex = 0
+        const allPrefixMatch = actualTokens.every(actualToken => {
+            while (expectedIndex < expectedTokens.length) {
+                if (expectedTokens[expectedIndex].startsWith(actualToken)) {
+                    expectedIndex++
+                    return true
+                }
+                expectedIndex++
+            }
+            return false
+        })
+        if (allPrefixMatch) return true
+    }
+
+    // Equal-length token comparison
+    if (actualTokens.length !== expectedTokens.length) {
+        return false
     }
 
     let sawAbbreviation = false
@@ -304,6 +325,15 @@ export const accountValuesMatch = (actual: string | null | undefined, expected: 
         }
 
         if (expectedDigits.length >= 4 && actualDigits.endsWith(expectedDigits)) {
+            return true
+        }
+
+        // Handle partially masked accounts where visible digits are a substring (e.g. "211112" inside "9842111126")
+        if (actualDigits.length >= 4 && expectedDigits.includes(actualDigits)) {
+            return true
+        }
+
+        if (expectedDigits.length >= 4 && actualDigits.includes(expectedDigits)) {
             return true
         }
 
