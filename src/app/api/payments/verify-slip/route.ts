@@ -58,7 +58,7 @@ type EasySlipV2Response = {
 const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
-const VERIFY_TIMEOUT_MS = 15000
+const VERIFY_TIMEOUT_MS = 180000
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
 
 const createSlipVerificationToken = async (payload: {
@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 verified: false,
                 error: isTimeout
-                    ? 'ระบบตรวจสลิปตอบช้าเกินไป กรุณาลองใหม่อีกครั้ง'
+                    ? 'ระบบตรวจสลิปใช้เวลานานเกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง (Slip verification took too long. Please wait and try again.)'
                     : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้ กรุณาลองใหม่อีกครั้ง',
             }, { status: 500 })
         } finally {
@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
             if (errorCode === 'SLIP_PENDING') {
                 return NextResponse.json({
                     verified: false,
-                    error: 'Slip verification is still pending. Please verify this slip again.',
+                    error: 'ระบบกำลังตรวจสอบสลิป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง (Slip verification is pending. Please wait a moment and try again.)',
                 }, { status: 400 })
             }
 
