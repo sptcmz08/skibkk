@@ -118,7 +118,13 @@ const verifySlipImage = async (imageFile: File): Promise<EasySlipV2Response> => 
     try {
         const formData = new FormData()
         formData.append('image', imageFile)
-        formData.append('checkDuplicate', 'true')
+        // Let our own database reserve slips only after payment confirmation.
+        // This avoids "used already" responses when verification fails for a
+        // recoverable reason such as receiver matching or a temporary config issue.
+        formData.append('checkDuplicate', 'false')
+        // Ask EasySlip v2 to match the receiver with registered accounts for
+        // better normalization across banks that abbreviate account names.
+        formData.append('matchAccount', 'true')
 
         const slipResponse = await fetch(VERIFY_ENDPOINT, {
             method: 'POST',
