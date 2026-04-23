@@ -64,41 +64,14 @@ type EasySlipV2Response = {
     }
 }
 
-type EasySlipV1Response = {
-    status?: number
-    message?: string
-    data?: {
-        payload?: string
-        transRef?: string
-        date?: string
-        amount?: { amount?: number | string }
-        sender?: {
-            bank?: { id?: string; name?: string; short?: string }
-            account?: {
-                name?: { th?: string; en?: string }
-                bank?: { account?: string }
-                proxy?: { account?: string }
-            }
-        }
-        receiver?: {
-            bank?: { id?: string; name?: string; short?: string }
-            account?: {
-                name?: { th?: string; en?: string }
-                bank?: { account?: string }
-                proxy?: { account?: string }
-            }
-        }
-    }
-}
+type EasySlipMatchedAccount = NonNullable<NonNullable<EasySlipV2Response['data']>['matchedAccount']>
 
-const isEasySlipV1Response = (value: EasySlipV1Response | EasySlipV2Response): value is EasySlipV1Response =>
-    'status' in value
-
-const VERIFY_ENDPOINT = 'https://developer.easyslip.com/api/v1/verify'
+const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 180000
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 const createSlipVerificationToken = async (payload: {
     transRef: string
@@ -138,72 +111,27 @@ const isTransferPaymentEnabled = async () => {
     return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
 }
 
-const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response> => {
+const verifySlipImage = async (imageFile: File): Promise<EasySlipV2Response> => {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
 
     try {
+        const formData = new FormData()
+        formData.append('image', imageFile)
+        formData.append('checkDuplicate', 'true')
+
         const slipResponse = await fetch(VERIFY_ENDPOINT, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
-                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ image: base64Image, checkDuplicate: false }),
+            body: formData,
             signal: controller.signal,
         })
 
-        const rawResult = await slipResponse.json().catch(() => null) as EasySlipV1Response | EasySlipV2Response | null
-        console.log('[SlipVerify] EasySlip response:', JSON.stringify(rawResult))
-
-        if (!rawResult) {
-            return { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปได้' }
-        }
-
-        if ('success' in rawResult) {
-            return rawResult
-        }
-
-        if (isEasySlipV1Response(rawResult) && (rawResult.status || 0) >= 200 && (rawResult.status || 0) < 300 && rawResult.data) {
-            return {
-                success: true,
-                data: {
-                    isDuplicate: false,
-                    amountInSlip: Number(rawResult.data.amount?.amount || 0),
-                    rawSlip: {
-                        transRef: rawResult.data.transRef,
-                        date: rawResult.data.date,
-                        amount: rawResult.data.amount,
-                        sender: {
-                            bank: rawResult.data.sender?.bank,
-                            account: {
-                                name: rawResult.data.sender?.account?.name,
-                                value: rawResult.data.sender?.account?.bank?.account || rawResult.data.sender?.account?.proxy?.account,
-                            },
-                        },
-                        receiver: {
-                            bank: rawResult.data.receiver?.bank,
-                            account: {
-                                name: rawResult.data.receiver?.account?.name,
-                                value: rawResult.data.receiver?.account?.bank?.account,
-                            },
-                            proxy: {
-                                value: rawResult.data.receiver?.account?.proxy?.account,
-                            },
-                        },
-                    },
-                },
-                message: rawResult.message,
-            }
-        }
-
-        return {
-            success: false,
-            error: {
-                code: String((isEasySlipV1Response(rawResult) ? rawResult.message : '') || '').toUpperCase(),
-                message: String(rawResult.message || 'ตรวจสอบสลิปไม่สำเร็จ'),
-            },
-        }
+        const result = await slipResponse.json().catch(() => null) as EasySlipV2Response
+        console.log('[SlipVerify] EasySlip response:', JSON.stringify(result))
+        return result || { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปได้' }
     } catch (fetchError) {
         const isTimeout = (fetchError as Error).name === 'AbortError'
         console.error('[SlipVerify] EasySlip request failed:', isTimeout ? 'TIMEOUT' : fetchError)
@@ -225,10 +153,31 @@ const extractNameCandidates = (value?: { th?: string; en?: string } | null) =>
 const joinUniqueValues = (...values: Array<string | null | undefined>) =>
     [...new Set(values.map(item => String(item || '').trim()).filter(Boolean))].join('\n')
 
+const getMatchedAccountName = (matchedAccount?: EasySlipMatchedAccount | null) =>
+    String(matchedAccount?.accountName || matchedAccount?.nameTh || matchedAccount?.nameEn || '').trim()
+
+const getMatchedAccountNumber = (matchedAccount?: EasySlipMatchedAccount | null) =>
+    String(matchedAccount?.accountNumber || matchedAccount?.bankNumber || '').trim()
+
+const getMatchedBankName = (matchedAccount?: EasySlipMatchedAccount | null) =>
+    String(
+        matchedAccount?.bankName
+        || matchedAccount?.bank?.nameTh
+        || matchedAccount?.bank?.nameEn
+        || matchedAccount?.bank?.shortCode
+        || matchedAccount?.bankCode
+        || matchedAccount?.bank?.code
+        || '',
+    ).trim()
+
+const getMatchedBankCode = (matchedAccount?: EasySlipMatchedAccount | null) =>
+    String(matchedAccount?.bankCode || matchedAccount?.bank?.shortCode || matchedAccount?.bank?.code || '').trim()
+
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
-        const { image } = await req.json()
+        const formData = await req.formData()
+        const image = formData.get('image')
 
         if (!(await isTransferPaymentEnabled())) {
             return NextResponse.json({
@@ -237,7 +186,7 @@ export async function POST(req: NextRequest) {
             }, { status: 403 })
         }
 
-        if (!image) {
+        if (!(image instanceof File)) {
             return NextResponse.json({ error: 'กรุณาอัปโหลดรูปสลิป' }, { status: 400 })
         }
 
@@ -265,25 +214,21 @@ export async function POST(req: NextRequest) {
         }
 
         const activeReceiver = expectedReceiver!
-        const mimeMatch = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)
-        if (!mimeMatch) {
+        if (!ALLOWED_IMAGE_TYPES.has(image.type)) {
             return NextResponse.json({
                 verified: false,
                 error: 'รูปสลิปไม่ถูกต้อง กรุณาลองอัปโหลดใหม่',
             }, { status: 400 })
         }
 
-        const base64Data = image.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
-        const binaryData = Buffer.from(base64Data, 'base64')
-
-        if (binaryData.length < MIN_IMAGE_SIZE) {
+        if (image.size < MIN_IMAGE_SIZE) {
             return NextResponse.json({
                 verified: false,
                 error: 'ไฟล์รูปภาพไม่ถูกต้องหรือเสียหาย',
             }, { status: 400 })
         }
 
-        if (binaryData.length > MAX_IMAGE_SIZE) {
+        if (image.size > MAX_IMAGE_SIZE) {
             return NextResponse.json({
                 verified: false,
                 error: 'ไฟล์สลิปใหญ่เกินไป กรุณาใช้รูปที่มีขนาดไม่เกิน 4MB',
@@ -300,7 +245,7 @@ export async function POST(req: NextRequest) {
             if (errorCode === 'SLIP_PENDING' || errorMessage.toLowerCase() === 'slip_pending') {
                 return NextResponse.json({
                     verified: false,
-                    error: 'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองอัปโหลดใหม่หรือใช้รูปสลิปจากแอปธนาคารโดยตรง',
+                    error: 'สลิปธนาคารกรุงเทพอาจใช้เวลา 1-5 นาทีในการตรวจสอบ กรุณารอสักครู่แล้วกดตรวจสอบใหม่',
                     debug: { code: errorCode, message: errorMessage },
                 }, { status: 400 })
             }
@@ -315,7 +260,6 @@ export async function POST(req: NextRequest) {
             if (
                 errorCode === 'VALIDATION_ERROR'
                 || errorCode === 'UNSUPPORTED_FILE_TYPE'
-                || errorMessage.toLowerCase().includes('invalid base64')
                 || errorMessage.toLowerCase().includes('invalid image')
                 || errorMessage.toLowerCase() === 'invalid_image'
                 || errorMessage.toLowerCase().includes('unsupported')
@@ -350,36 +294,36 @@ export async function POST(req: NextRequest) {
         const amount = Number(result.data?.amountInSlip || slipData?.amount?.amount || 0)
         const transRef = String(slipData?.transRef || '').trim()
         const sender = extractNameValue(slipData?.sender?.account?.name)
-        const displayReceiverName = extractNameValue(slipData?.receiver?.account?.name) || String(matchedAccount?.accountName || '').trim()
+        const displayReceiverName = extractNameValue(slipData?.receiver?.account?.name) || getMatchedAccountName(matchedAccount)
         const displayReceiverAccount = String(
             slipData?.receiver?.account?.value
             || slipData?.receiver?.proxy?.value
-            || matchedAccount?.accountNumber
+            || getMatchedAccountNumber(matchedAccount)
             || '',
         ).trim()
         const displayReceiverBankName = String(
             slipData?.receiver?.bank?.name
             || slipData?.receiver?.bank?.short
             || slipData?.receiver?.bank?.id
-            || matchedAccount?.bankName
-            || matchedAccount?.bankCode
+            || getMatchedBankName(matchedAccount)
+            || getMatchedBankCode(matchedAccount)
             || '',
         ).trim()
         const receiverName = joinUniqueValues(
             ...extractNameCandidates(slipData?.receiver?.account?.name),
-            matchedAccount?.accountName,
+            getMatchedAccountName(matchedAccount),
         )
         const receiverAccount = joinUniqueValues(
             slipData?.receiver?.account?.value,
             slipData?.receiver?.proxy?.value,
-            matchedAccount?.accountNumber,
+            getMatchedAccountNumber(matchedAccount),
         )
         const receiverBankName = joinUniqueValues(
             slipData?.receiver?.bank?.name,
             slipData?.receiver?.bank?.short,
             slipData?.receiver?.bank?.id,
-            matchedAccount?.bankName,
-            matchedAccount?.bankCode,
+            getMatchedBankName(matchedAccount),
+            getMatchedBankCode(matchedAccount),
         )
         const date = String(slipData?.date || '').trim()
         const bankCode = String(slipData?.sender?.bank?.short || slipData?.sender?.bank?.id || '').trim()

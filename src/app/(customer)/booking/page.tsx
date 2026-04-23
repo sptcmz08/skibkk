@@ -54,12 +54,7 @@ const readResponseError = async (response: Response, fallback: string) => {
     return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback
 }
 
-const dataUrlToFile = async (dataUrl: string, filename: string) => {
-    const response = await fetch(dataUrl)
-    const blob = await response.blob()
-    const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg'
-    return new File([blob], `${filename}.${extension}`, { type: blob.type || 'image/jpeg' })
-}
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const dateOnlyUTC = (value: string | Date) => new Date(value).toISOString().split('T')[0]
 
@@ -72,6 +67,8 @@ const formatCartDate = (dateStr: string) => {
 }
 
 export default function BookingPage() {
+    const BANGKOK_BANK_WAIT_MS = 5 * 60 * 1000
+    const BANGKOK_BANK_RETRY_MS = 15000
     const router = useRouter()
     const [step, setStep] = useState(1) // 1=participants, 2=payment
     const [cart, setCart] = useState<CartItem[]>([])
@@ -94,7 +91,11 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string; image?: string | null }>>([])
+    const [slipVerifyState, setSlipVerifyState] = useState<{ phase: 'idle' | 'checking' | 'pending' | 'success' | 'error'; message: string }>({
+        phase: 'idle',
+        message: '',
+    })
+    const [verifiedSlips, setVerifiedSlips] = useState<Array<{ amount: number; transRef: string; sender: string; token: string; file?: File | null }>>([])
     const [qrImage, setQrImage] = useState<string | null>(null)
     const [qrReceiver, setQrReceiver] = useState<{ name?: string; account?: string; bankName?: string } | null>(null)
     const [paymentDisplayConfig, setPaymentDisplayConfig] = useState({ enableQrCode: false, enableBankDetails: true })
@@ -171,11 +172,23 @@ export default function BookingPage() {
         return () => { clearInterval(pollId); clearInterval(tickId) }
     }, [step, router])
 
+    useEffect(() => {
+        if (!slipVerifying || slipVerifyState.phase !== 'pending') return
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault()
+            event.returnValue = ''
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload)
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+    }, [slipVerifying, slipVerifyState.phase])
+
 
     // Compress image for better EasySlip verification
     const compressImage = (file: File): Promise<File> => {
         return new Promise((resolve) => {
-            // EasySlip v1 accepts base64 images up to 4MB after encoding.
+            // EasySlip v2 accepts uploaded images up to 4MB.
             if (file.size < 3.8 * 1024 * 1024) { resolve(file); return }
 
             const img = new window.Image()
@@ -222,6 +235,7 @@ export default function BookingPage() {
         }
         const compressed = await compressImage(file)
         setSlipFile(compressed)
+        setSlipVerifyState({ phase: 'idle', message: '' })
         const reader = new FileReader()
         reader.onload = (e) => setSlipPreview(e.target?.result as string)
         reader.readAsDataURL(compressed)
@@ -231,67 +245,99 @@ export default function BookingPage() {
     const handleVerifySlip = async () => {
         if (!slipFile) { toast.error('กรุณาอัปโหลดรูปสลิป'); return }
         setSlipVerifying(true)
+        setSlipVerifyState({ phase: 'checking', message: 'กำลังตรวจสอบสลิป...' })
         try {
-            const reader = new FileReader()
-            const base64 = await new Promise<string>((resolve) => {
-                reader.onload = (e) => resolve(e.target?.result as string)
-                reader.readAsDataURL(slipFile)
-            })
-            const res = await fetch('/api/payments/verify-slip', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64 }),
-            })
-            const data = await res.json()
+            const currentFile = slipFile
+            const startedAt = Date.now()
+            let attempt = 0
 
-            // Check response
-            if (!data.verified) {
-                const errMsg: string = data.error || 'สลิปไม่ถูกต้อง'
+            while (true) {
+                attempt += 1
+                const verifyFormData = new FormData()
+                verifyFormData.append('image', currentFile)
 
-                toast.error(errMsg, { duration: 6000 })
+                const res = await fetch('/api/payments/verify-slip', {
+                    method: 'POST',
+                    body: verifyFormData,
+                })
+                const data = await res.json()
+
+                if (!data.verified) {
+                    const errMsg: string = data.error || 'สลิปไม่ถูกต้อง'
+                    const isBangkokPending = data?.debug?.code === 'SLIP_PENDING'
+
+                    if (isBangkokPending && Date.now() - startedAt < BANGKOK_BANK_WAIT_MS) {
+                        setSlipVerifyState({
+                            phase: 'pending',
+                            message: `กำลังตรวจสอบสลิปธนาคารกรุงเทพ อาจใช้เวลา 1-5 นาที โปรดอย่าออกจากหน้านี้ (รอบที่ ${attempt})`,
+                        })
+                        await delay(BANGKOK_BANK_RETRY_MS)
+                        continue
+                    }
+
+                    setSlipVerifyState({ phase: 'error', message: errMsg })
+                    toast.error(errMsg, { duration: 6000 })
+                    return
+                }
+
+                if (!data.verificationToken) {
+                    const fallbackMessage = 'ระบบยืนยันสลิปไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง'
+                    setSlipVerifyState({ phase: 'error', message: fallbackMessage })
+                    toast.error(fallbackMessage)
+                    return
+                }
+
+                // Check for duplicate transRef
+                if (data.transRef && verifiedSlips.some(s => s.transRef === data.transRef)) {
+                    const duplicateMessage = 'สลิปนี้ถูกตรวจสอบแล้ว กรุณาอัปโหลดสลิปใบใหม่'
+                    setSlipVerifyState({ phase: 'error', message: duplicateMessage })
+                    toast.error(duplicateMessage)
+                    return
+                }
+
+                // Add this slip to the list
+                const newSlip = {
+                    amount: parseFloat(data.amount),
+                    transRef: data.transRef || '',
+                    sender: data.sender || '',
+                    token: data.verificationToken || '',
+                    file: currentFile,
+                }
+                const updatedSlips = [...verifiedSlips, newSlip]
+                setVerifiedSlips(updatedSlips)
+
+                const newPaidTotal = updatedSlips.reduce((s, slip) => s + slip.amount, 0)
+                const newRemaining = total - newPaidTotal
+                const overpaid = newPaidTotal - total
+
+                // Clear current slip for next upload
+                setSlipFile(null)
+                setSlipPreview(null)
+                const shouldAutoSubmit = paymentMethod === 'PROMPTPAY' && newRemaining <= 1
+                setSlipVerifyState({
+                    phase: 'success',
+                    message: shouldAutoSubmit
+                        ? 'ตรวจสอบสลิปสำเร็จ กำลังยืนยันการจอง...'
+                        : 'ตรวจสอบสลิปสำเร็จแล้ว สามารถแนบสลิปเพิ่มได้หากยอดยังไม่ครบ',
+                })
+
+                if (newRemaining > 1) {
+                    // Still short — tell customer to transfer more
+                    toast(`ตรวจสลิปสำเร็จ ✅ ยอดค้างจ่าย ฿${newPaidTotal.toLocaleString()} / ฿${total.toLocaleString()} — โอนเพิ่มอีก ฿${newRemaining.toLocaleString()}`, { icon: '💰', duration: 8000 })
+                } else if (overpaid > 1) {
+                    // Overpaid
+                    toast.success(`ยอดครบแล้ว! ✅ (โอนเกิน ฿${overpaid.toLocaleString()} กรุณา Add Line: @skibkk เพื่อรับเงินคืน)`, { duration: 8000 })
+                } else {
+                    toast.success('ยอดครบแล้ว! ตรวจสอบสลิปสำเร็จ ✅')
+                }
+
+                if (shouldAutoSubmit) {
+                    await handleSubmitBooking({ verifiedSlipsOverride: updatedSlips })
+                }
                 return
-            }
-
-            if (!data.verificationToken) {
-                toast.error('ระบบยืนยันสลิปไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง')
-                return
-            }
-
-            // Check for duplicate transRef
-            if (data.transRef && verifiedSlips.some(s => s.transRef === data.transRef)) {
-                toast.error('สลิปนี้ถูกตรวจสอบแล้ว กรุณาอัปโหลดสลิปใบใหม่')
-                return
-            }
-
-            // Add this slip to the list
-            const newSlip = {
-                amount: parseFloat(data.amount),
-                transRef: data.transRef || '',
-                sender: data.sender || '',
-                token: data.verificationToken || '',
-                image: base64,
-            }
-            const updatedSlips = [...verifiedSlips, newSlip]
-            setVerifiedSlips(updatedSlips)
-
-            const newPaidTotal = updatedSlips.reduce((s, slip) => s + slip.amount, 0)
-            const newRemaining = total - newPaidTotal
-            const overpaid = newPaidTotal - total
-
-            // Clear current slip for next upload
-            setSlipFile(null)
-            setSlipPreview(null)
-
-            if (newRemaining > 1) {
-                // Still short — tell customer to transfer more
-                toast(`ตรวจสลิปสำเร็จ ✅ ยอดค้างจ่าย ฿${newPaidTotal.toLocaleString()} / ฿${total.toLocaleString()} — โอนเพิ่มอีก ฿${newRemaining.toLocaleString()}`, { icon: '💰', duration: 8000 })
-            } else if (overpaid > 1) {
-                // Overpaid
-                toast.success(`ยอดครบแล้ว! ✅ (โอนเกิน ฿${overpaid.toLocaleString()} กรุณา Add Line: @skibkk เพื่อรับเงินคืน)`, { duration: 8000 })
-            } else {
-                toast.success('ยอดครบแล้ว! ตรวจสอบสลิปสำเร็จ ✅')
             }
         } catch {
+            setSlipVerifyState({ phase: 'error', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง' })
             toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
         } finally {
             setSlipVerifying(false)
@@ -544,7 +590,13 @@ export default function BookingPage() {
     const canSubmit = paymentMethod === 'PACKAGE'
         || (hasTransferChannel && remaining <= 1 && verifiedSlips.length > 0)
 
-    const handleSubmitBooking = async () => {
+    const handleSubmitBooking = async (options?: {
+        verifiedSlipsOverride?: Array<{ amount: number; transRef: string; sender: string; token: string; file?: File | null }>
+    }) => {
+        const effectiveVerifiedSlips = options?.verifiedSlipsOverride ?? verifiedSlips
+        const effectivePaidTotal = effectiveVerifiedSlips.reduce((sum, slip) => sum + slip.amount, 0)
+        const effectiveRemaining = total - effectivePaidTotal
+
         if (!booker.name.trim() || !booker.email.trim() || !booker.phone.trim()) {
             toast.error('กรุณากรอกข้อมูลผู้จองให้ครบ')
             return
@@ -558,11 +610,11 @@ export default function BookingPage() {
             return
         }
         // Require slip verification for PromptPay
-        if (paymentMethod === 'PROMPTPAY' && verifiedSlips.length === 0) {
+        if (paymentMethod === 'PROMPTPAY' && effectiveVerifiedSlips.length === 0) {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
             return
         }
-        if (paymentMethod === 'PROMPTPAY' && remaining > 1) {
+        if (paymentMethod === 'PROMPTPAY' && effectiveRemaining > 1) {
             toast.error('ยอดโอนยังไม่ครบ กรุณาโอนเพิ่มและแนบสลิป')
             return
         }
@@ -672,12 +724,11 @@ export default function BookingPage() {
                 const paymentMethodForRecord = paymentMethod === 'PROMPTPAY' ? 'BANK_TRANSFER' : paymentMethod
                 let slipUrl: string | undefined
 
-                const imageForUpload = verifiedSlips.length === 1 ? verifiedSlips[0]?.image || null : null
+                const fileForUpload = effectiveVerifiedSlips.length === 1 ? effectiveVerifiedSlips[0]?.file || null : null
 
-                if (imageForUpload) {
-                    const uploadFile = await dataUrlToFile(imageForUpload, `payment-slip-${Date.now()}`)
+                if (fileForUpload) {
                     const formData = new FormData()
-                    formData.append('file', uploadFile)
+                    formData.append('file', fileForUpload)
 
                     const uploadRes = await fetch('/api/upload', {
                         method: 'POST',
@@ -701,7 +752,7 @@ export default function BookingPage() {
                         bookingId: data.booking.id,
                         method: paymentMethodForRecord,
                         amount: total,
-                        slipTokens: verifiedSlips.map(s => s.token).filter(Boolean),
+                        slipTokens: effectiveVerifiedSlips.map(s => s.token).filter(Boolean),
                         slipUrl,
                     }),
                 })
@@ -1323,8 +1374,51 @@ export default function BookingPage() {
                                         </>
                                     )}
                                     <input type="file" accept="image/*" style={{ display: 'none' }}
+                                        disabled={slipVerifying}
                                         onChange={(e) => { if (e.target.files?.[0]) handleSlipSelect(e.target.files[0]) }} />
                                 </label>
+
+                                <div style={{
+                                    marginTop: '12px',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(250,204,21,0.1)',
+                                    border: '1px solid rgba(250,204,21,0.18)',
+                                    color: '#B38600',
+                                    fontSize: '12px',
+                                    lineHeight: 1.6,
+                                }}>
+                                    หากเป็นสลิปธนาคารกรุงเทพ ระบบอาจใช้เวลา 1-5 นาทีในการตรวจสอบ กรุณาอย่าออกจากหน้านี้ระหว่างระบบกำลังตรวจสอบ
+                                </div>
+
+                                {slipVerifyState.phase !== 'idle' && (
+                                    <div style={{
+                                        marginTop: '12px',
+                                        padding: '12px 14px',
+                                        borderRadius: '10px',
+                                        background: slipVerifyState.phase === 'success'
+                                            ? 'rgba(16,185,129,0.08)'
+                                            : slipVerifyState.phase === 'error'
+                                                ? 'rgba(225,112,85,0.08)'
+                                                : 'rgba(59,130,246,0.08)',
+                                        border: slipVerifyState.phase === 'success'
+                                            ? '1px solid rgba(16,185,129,0.2)'
+                                            : slipVerifyState.phase === 'error'
+                                                ? '1px solid rgba(225,112,85,0.18)'
+                                                : '1px solid rgba(59,130,246,0.18)',
+                                        color: slipVerifyState.phase === 'success'
+                                            ? '#10b981'
+                                            : slipVerifyState.phase === 'error'
+                                                ? '#e17055'
+                                                : '#60a5fa',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        textAlign: 'center',
+                                    }}>
+                                        {slipVerifying && <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', margin: '0 auto 8px' }} />}
+                                        {slipVerifyState.message}
+                                    </div>
+                                )}
 
                                 {/* Verify button */}
                                 {slipPreview && (
@@ -1335,7 +1429,7 @@ export default function BookingPage() {
                                         style={{ marginTop: '12px', fontWeight: 700 }}
                                     >
                                         {slipVerifying ? (
-                                            <><div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> กำลังตรวจสอบ...</>
+                                            <><div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> {slipVerifyState.phase === 'pending' ? 'ตรวจสอบอยู่ 1-5 นาที...' : 'กำลังตรวจสอบ...'}</>
                                         ) : (
                                             <>🔍 ตรวจสอบสลิป</>
                                         )}
@@ -1374,7 +1468,7 @@ export default function BookingPage() {
                                             )}
                                             {remaining <= 1 && (
                                                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#10b981', fontWeight: 700, textAlign: 'center' }}>
-                                                    ✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย
+                                                    ✅ ยอดครบแล้ว! ระบบจะยืนยันการจองและพาไปหน้าประวัติอัตโนมัติหลังตรวจสลิปเสร็จ
                                                 </div>
                                             )}
                                             {paidTotal > total + 1 && (
@@ -1393,7 +1487,7 @@ export default function BookingPage() {
                     )}
 
                     <div style={{ display: 'flex', gap: '12px' }}>
-                        <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ flex: 1 }}>
+                        <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ flex: 1, opacity: slipVerifying ? 0.6 : 1 }} disabled={slipVerifying}>
                             <ArrowLeft size={18} /> กลับ
                         </button>
                         <motion.button
@@ -1402,7 +1496,7 @@ export default function BookingPage() {
                             onClick={handleSubmitBooking}
                             className="btn btn-success"
                             style={{ flex: 2, opacity: !canSubmit ? 0.5 : 1 }}
-                            disabled={loading || !canSubmit}
+                            disabled={loading || slipVerifying || !canSubmit}
                         >
                             {loading ? <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} /> : <>ยืนยันการจอง <CheckCircle size={18} /></>}
                         </motion.button>
