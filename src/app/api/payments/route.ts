@@ -14,7 +14,7 @@ import {
 } from '@/lib/payment-channel'
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
-const PAYMENT_TOLERANCE = 1
+const PAYMENT_TOLERANCE = 0.01
 
 type SlipVerificationPayload = JWTPayload & {
     purpose?: string

@@ -55,6 +55,7 @@ const readResponseError = async (response: Response, fallback: string) => {
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const PAYMENT_TOLERANCE = 0.01
 
 const dateOnlyUTC = (value: string | Date) => new Date(value).toISOString().split('T')[0]
 
@@ -315,15 +316,15 @@ export default function BookingPage() {
                 setSlipPreview(null)
                 setSlipVerifyState({
                     phase: 'success',
-                    message: newRemaining <= 1
+                    message: newRemaining <= PAYMENT_TOLERANCE
                         ? 'ตรวจสอบสลิปสำเร็จแล้ว สามารถกดยืนยันการจองได้'
                         : 'ตรวจสอบสลิปสำเร็จแล้ว สามารถแนบสลิปเพิ่มได้หากยอดยังไม่ครบ',
                 })
 
-                if (newRemaining > 1) {
+                if (newRemaining > PAYMENT_TOLERANCE) {
                     // Still short — tell customer to transfer more
                     toast(`ตรวจสลิปสำเร็จ ✅ ยอดค้างจ่าย ฿${newPaidTotal.toLocaleString()} / ฿${total.toLocaleString()} — โอนเพิ่มอีก ฿${newRemaining.toLocaleString()}`, { icon: '💰', duration: 8000 })
-                } else if (overpaid > 1) {
+                } else if (overpaid > PAYMENT_TOLERANCE) {
                     // Overpaid
                     toast.success(`ยอดครบแล้ว! ✅ (โอนเกิน ฿${overpaid.toLocaleString()} กรุณา Add Line: @skibkk เพื่อรับเงินคืน)`, { duration: 8000 })
                 } else {
@@ -583,7 +584,7 @@ export default function BookingPage() {
 
 
     const canSubmit = paymentMethod === 'PACKAGE'
-        || (hasTransferChannel && remaining <= 1 && verifiedSlips.length > 0)
+        || (hasTransferChannel && remaining <= PAYMENT_TOLERANCE && verifiedSlips.length > 0)
 
     const handleSubmitBooking = async (options?: {
         verifiedSlipsOverride?: Array<{ amount: number; transRef: string; sender: string; token: string; file?: File | null }>
@@ -609,7 +610,7 @@ export default function BookingPage() {
             toast.error('กรุณาอัปโหลดและตรวจสอบสลิปก่อนยืนยันการจอง')
             return
         }
-        if (paymentMethod === 'PROMPTPAY' && effectiveRemaining > 1) {
+        if (paymentMethod === 'PROMPTPAY' && effectiveRemaining > PAYMENT_TOLERANCE) {
             toast.error('ยอดโอนยังไม่ครบ กรุณาโอนเพิ่มและแนบสลิป')
             return
         }
@@ -1348,8 +1349,8 @@ export default function BookingPage() {
                                 <label style={{
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
                                     padding: slipPreview ? '8px' : '24px', borderRadius: '12px', cursor: 'pointer',
-                                    border: `2px dashed ${remaining <= 1 && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
-                                    background: remaining <= 1 && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
+                                    border: `2px dashed ${remaining <= PAYMENT_TOLERANCE && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                                    background: remaining <= PAYMENT_TOLERANCE && verifiedSlips.length > 0 ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
                                     transition: 'all 0.2s',
                                 }}>
                                     {slipPreview ? (
@@ -1454,19 +1455,19 @@ export default function BookingPage() {
                                                 <strong>฿{paidTotal.toLocaleString()} / ฿{total.toLocaleString()}</strong>
                                             </div>
                                             <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                                                <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 1 ? '#10b981' : '#FACC15', width: `${Math.min(100, (paidTotal / total) * 100)}%`, transition: 'width 0.5s' }} />
+                                                <div style={{ height: '100%', borderRadius: '3px', background: remaining <= PAYMENT_TOLERANCE ? '#10b981' : '#FACC15', width: `${Math.min(100, (paidTotal / total) * 100)}%`, transition: 'width 0.5s' }} />
                                             </div>
-                                            {remaining > 1 && (
+                                            {remaining > PAYMENT_TOLERANCE && (
                                                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#B38600', fontWeight: 700, textAlign: 'center' }}>
                                                     💰 โอนเพิ่มอีก ฿{remaining.toLocaleString()} แล้วแนบสลิปใหม่
                                                 </div>
                                             )}
-                                            {remaining <= 1 && (
+                                            {remaining <= PAYMENT_TOLERANCE && (
                                                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#10b981', fontWeight: 700, textAlign: 'center' }}>
                                                     ✅ ยอดครบแล้ว! กดยืนยันการจองได้เลย
                                                 </div>
                                             )}
-                                            {paidTotal > total + 1 && (
+                                            {paidTotal > total + PAYMENT_TOLERANCE && (
                                                 <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(250,204,21,0.1)', fontSize: '12px', color: '#B38600' }}>
                                                     ⚠️ โอนเกิน ฿{(paidTotal - total).toLocaleString()} กรุณา Add Line: <strong>@skibkk</strong> เพื่อรับเงินคืน
                                                 </div>
