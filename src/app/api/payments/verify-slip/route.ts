@@ -59,7 +59,11 @@ const VERIFY_ENDPOINT = 'https://api.easyslip.com/v2/verify/bank'
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const MIN_IMAGE_SIZE = 1000
 const VERIFY_TIMEOUT_MS = 180000
+const SLIP_PENDING_RETRY_LIMIT = 3
+const SLIP_PENDING_RETRY_DELAY = 1200
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const createSlipVerificationToken = async (payload: {
     transRef: string
@@ -97,6 +101,47 @@ const loadPaymentVerificationConfig = async () => {
 const isTransferPaymentEnabled = async () => {
     const { displayConfig } = await loadPaymentVerificationConfig()
     return displayConfig.enableQrCode !== false || displayConfig.enableBankDetails !== false
+}
+
+const verifySlipImage = async (base64Image: string): Promise<EasySlipV2Response> => {
+    for (let attempt = 1; attempt <= SLIP_PENDING_RETRY_LIMIT; attempt += 1) {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
+
+        try {
+            const slipResponse = await fetch(VERIFY_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ base64: base64Image, checkDuplicate: false }),
+                signal: controller.signal,
+            })
+
+            const result = await slipResponse.json().catch(() => null) as EasySlipV2Response
+            if (result?.error?.code === 'SLIP_PENDING' && attempt < SLIP_PENDING_RETRY_LIMIT) {
+                await sleep(SLIP_PENDING_RETRY_DELAY)
+                continue
+            }
+
+            return result || { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปได้' }
+        } catch (fetchError) {
+            const isTimeout = (fetchError as Error).name === 'AbortError'
+            console.error('[SlipVerify] EasySlip request failed:', isTimeout ? 'TIMEOUT' : fetchError)
+            return { success: false, error: { message: isTimeout ? 'ระบบตรวจสลิปใช้เวลานานเกินไป' : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้' } }
+        } finally {
+            clearTimeout(timeout)
+        }
+    }
+
+    return {
+        success: false,
+        error: {
+            code: 'SLIP_PENDING',
+            message: 'ระบบกำลังตรวจสอบสลิป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง',
+        },
+    }
 }
 
 const extractNameValue = (value?: { th?: string; en?: string } | null) => {
@@ -176,50 +221,8 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
-
-        let easySlipResponse: Response
-        try {
-            easySlipResponse = await fetch(VERIFY_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${easySlipApiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    base64: image,
-                    // Let our own database be the source of truth for duplicate prevention.
-                    // This avoids provider-level duplicate flags before the slip is actually used.
-                    checkDuplicate: false,
-                }),
-                signal: controller.signal,
-            })
-        } catch (fetchError) {
-            const isTimeout = (fetchError as Error).name === 'AbortError'
-            console.error('[SlipVerify] EasySlip request failed:', isTimeout ? 'TIMEOUT' : fetchError)
-            return NextResponse.json({
-                verified: false,
-                error: isTimeout
-                    ? 'ระบบตรวจสลิปใช้เวลานานเกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง (Slip verification took too long. Please wait and try again.)'
-                    : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้ กรุณาลองใหม่อีกครั้ง',
-            }, { status: 500 })
-        } finally {
-            clearTimeout(timeout)
-        }
-
-        let result: EasySlipV2Response
-        try {
-            result = await easySlipResponse.json()
-        } catch {
-            console.error('[SlipVerify] Failed to parse EasySlip response:', easySlipResponse.status)
-            return NextResponse.json({
-                verified: false,
-                error: 'ระบบตรวจสลิปส่งข้อมูลผิดรูปแบบ กรุณาลองใหม่',
-            }, { status: 500 })
-        }
-
-        if (!easySlipResponse.ok || !result.success) {
+        const result = await verifySlipImage(image)
+        if (!result.success) {
             const errorCode = String(result.error?.code || '')
             const errorMessage = String(result.error?.message || result.message || '')
 
@@ -252,8 +255,7 @@ export async function POST(req: NextRequest) {
             }
 
             if (
-                easySlipResponse.status === 404
-                || errorMessage.includes('ไม่พบ')
+                errorMessage.includes('ไม่พบ')
                 || errorMessage.toLowerCase().includes('not found')
                 || errorMessage.includes('No slip')
             ) {
