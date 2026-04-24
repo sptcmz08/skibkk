@@ -230,6 +230,18 @@ const getMatchedBankName = (matchedAccount?: EasySlipMatchedAccount | null) =>
 const getMatchedBankCode = (matchedAccount?: EasySlipMatchedAccount | null) =>
     String(matchedAccount?.bankCode || matchedAccount?.bank?.shortCode || matchedAccount?.bank?.code || '').trim()
 
+const getEasySlipErrorCode = (result: EasySlipV2Response | null | undefined) =>
+    String(result?.error?.code || '').trim()
+
+const getEasySlipErrorMessage = (result: EasySlipV2Response | null | undefined) =>
+    String(result?.error?.message || result?.message || '').trim()
+
+const isSlipPendingResult = (result: EasySlipV2Response | null | undefined) => {
+    const code = getEasySlipErrorCode(result)
+    const message = getEasySlipErrorMessage(result).toLowerCase()
+    return code === 'SLIP_PENDING' || message === 'slip_pending' || message.includes('slip is pending')
+}
+
 export async function POST(req: NextRequest) {
     try {
         await requireAuth()
@@ -294,10 +306,12 @@ export async function POST(req: NextRequest) {
         }
 
         const payloadResult = qrPayload ? await verifySlipPayload(qrPayload) : null
-        const result = payloadResult?.success ? payloadResult : await verifySlipImage(image)
+        const result = payloadResult?.success || isSlipPendingResult(payloadResult)
+            ? payloadResult!
+            : await verifySlipImage(image)
         if (!result.success) {
-            const errorCode = String(result.error?.code || '')
-            const errorMessage = String(result.error?.message || result.message || '')
+            const errorCode = getEasySlipErrorCode(result)
+            const errorMessage = getEasySlipErrorMessage(result)
             const debug = {
                 reason: 'EASYSLIP_ERROR',
                 code: errorCode || null,
