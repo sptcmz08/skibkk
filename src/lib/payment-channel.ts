@@ -34,6 +34,11 @@ const normalizeUnicodeValue = (value: string | null | undefined) =>
 const normalizeThaiDigits = (value: string | null | undefined) =>
     normalizeUnicodeValue(value).replace(/[๐-๙]/g, digit => THAI_DIGIT_MAP[digit] || digit)
 
+const normalizeCommonThaiEnglishWords = (value: string | null | undefined) =>
+    normalizeThaiDigits(value)
+        .replace(/ซี\s*เอ็น/giu, ' cn ')
+        .replace(/เวิลด์|เวิลด|เวิล์ด/giu, ' world ')
+
 const splitCandidateValues = (value: string | null | undefined) =>
     normalizeUnicodeValue(value)
         .split(CANDIDATE_SPLIT_REGEX)
@@ -172,7 +177,7 @@ export const normalizeAccountDigits = (value: string | null | undefined) =>
     normalizeThaiDigits(value).replace(/\D/g, '').trim()
 
 export const normalizeTextValue = (value: string | null | undefined) =>
-    normalizeThaiDigits(value).replace(/\s+/g, ' ').trim().toLowerCase()
+    normalizeCommonThaiEnglishWords(value).replace(/\s+/g, ' ').trim().toLowerCase()
 
 export const normalizeLooseTextValue = (value: string | null | undefined) =>
     normalizeTextValue(value)

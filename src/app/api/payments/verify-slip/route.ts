@@ -159,6 +159,21 @@ const extractNameCandidates = (value?: { th?: string; en?: string } | null) =>
 const joinUniqueValues = (...values: Array<string | null | undefined>) =>
     [...new Set(values.map(item => String(item || '').trim()).filter(Boolean))].join('\n')
 
+const collectStringValues = (value: unknown, depth = 0): string[] => {
+    if (depth > 5 || value == null) return []
+    if (typeof value === 'string' || typeof value === 'number') {
+        const text = String(value).trim()
+        return text ? [text] : []
+    }
+    if (Array.isArray(value)) {
+        return value.flatMap(item => collectStringValues(item, depth + 1))
+    }
+    if (typeof value === 'object') {
+        return Object.values(value as Record<string, unknown>).flatMap(item => collectStringValues(item, depth + 1))
+    }
+    return []
+}
+
 const getMatchedAccountName = (matchedAccount?: EasySlipMatchedAccount | null) =>
     String(matchedAccount?.accountName || matchedAccount?.nameTh || matchedAccount?.nameEn || '').trim()
 
@@ -245,14 +260,15 @@ export async function POST(req: NextRequest) {
         if (!result.success) {
             const errorCode = String(result.error?.code || '')
             const errorMessage = String(result.error?.message || result.message || '')
+            const debug = { reason: 'EASYSLIP_ERROR', code: errorCode || null, message: errorMessage || null }
 
             console.error('[SlipVerify] EasySlip error:', JSON.stringify(result))
 
             if (errorCode === 'SLIP_PENDING' || errorMessage.toLowerCase() === 'slip_pending') {
                 return NextResponse.json({
                     verified: false,
-                    error: 'สลิปธนาคารกรุงเทพอาจใช้เวลา 1-5 นาทีในการตรวจสอบ กรุณารอสักครู่แล้วกดตรวจสอบใหม่',
-                    debug: { code: errorCode, message: errorMessage },
+                    error: 'ผู้ให้บริการยังประมวลผลสลิปนี้อยู่ กรุณารอสักครู่แล้วกดตรวจสอบใหม่',
+                    debug,
                 }, { status: 400 })
             }
 
@@ -260,6 +276,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     verified: false,
                     error: 'ไฟล์สลิปใหญ่เกินไป กรุณาใช้รูปที่มีขนาดไม่เกิน 4MB',
+                    debug,
                 }, { status: 400 })
             }
 
@@ -273,6 +290,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     verified: false,
                     error: 'รูปสลิปไม่ถูกต้อง กรุณาใช้รูปสลิปจากแอปธนาคารโดยตรง',
+                    debug,
                 }, { status: 400 })
             }
 
@@ -286,17 +304,21 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     verified: false,
                     error: 'ไม่พบข้อมูลสลิปในรูปนี้ กรุณาใช้รูปสลิปที่บันทึกจากแอปธนาคารโดยตรง',
+                    debug,
                 }, { status: 400 })
             }
 
             return NextResponse.json({
                 verified: false,
                 error: `ตรวจสอบสลิปไม่สำเร็จ: ${errorMessage || 'กรุณาลองใหม่อีกครั้ง'}`,
+                debug,
             }, { status: 400 })
         }
 
         const slipData = result.data?.rawSlip
         const matchedAccount = result.data?.matchedAccount
+        const receiverRawCandidates = collectStringValues(slipData?.receiver)
+        const matchedAccountCandidates = collectStringValues(matchedAccount)
         const amount = Number(result.data?.amountInSlip || slipData?.amount?.amount || 0)
         const transRef = String(slipData?.transRef || '').trim()
         const sender = extractNameValue(slipData?.sender?.account?.name)
@@ -318,11 +340,15 @@ export async function POST(req: NextRequest) {
         const receiverName = joinUniqueValues(
             ...extractNameCandidates(slipData?.receiver?.account?.name),
             getMatchedAccountName(matchedAccount),
+            ...receiverRawCandidates,
+            ...matchedAccountCandidates,
         )
         const receiverAccount = joinUniqueValues(
             slipData?.receiver?.account?.value,
             slipData?.receiver?.proxy?.value,
             getMatchedAccountNumber(matchedAccount),
+            ...receiverRawCandidates,
+            ...matchedAccountCandidates,
         )
         const receiverBankName = joinUniqueValues(
             slipData?.receiver?.bank?.name,
@@ -330,6 +356,8 @@ export async function POST(req: NextRequest) {
             slipData?.receiver?.bank?.id,
             getMatchedBankName(matchedAccount),
             getMatchedBankCode(matchedAccount),
+            ...receiverRawCandidates,
+            ...matchedAccountCandidates,
         )
         const date = String(slipData?.date || '').trim()
         const bankCode = String(slipData?.sender?.bank?.short || slipData?.sender?.bank?.id || '').trim()
@@ -366,17 +394,44 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const { matched } = receiverValuesMatch({
+        const matchResult = receiverValuesMatch({
             name: receiverName,
             account: receiverAccount,
             bankName: receiverBankName,
         }, activeReceiver)
+        const { matched } = matchResult
         const matchedByEasySlip = Boolean(matchedAccount)
 
         if (!(matched || matchedByEasySlip)) {
+            const debug = {
+                reason: 'RECEIVER_MISMATCH',
+                match: {
+                    name: matchResult.nameMatch,
+                    account: matchResult.accountMatch,
+                    bank: matchResult.bankMatch,
+                    matchedByEasySlip,
+                },
+                actual: {
+                    name: displayReceiverName || null,
+                    account: displayReceiverAccount || null,
+                    bank: displayReceiverBankName || null,
+                },
+                candidates: {
+                    name: receiverName || null,
+                    account: receiverAccount || null,
+                    bank: receiverBankName || null,
+                },
+                expected: {
+                    name: activeReceiver.name,
+                    account: activeReceiver.account,
+                    bank: activeReceiver.bankName,
+                },
+            }
+            console.warn('[SlipVerify] Receiver mismatch:', JSON.stringify(debug))
             return NextResponse.json({
                 verified: false,
                 error: `สลิปนี้ไม่ได้โอนเข้าบัญชีที่ตั้งไว้ (ผู้รับ: ${displayReceiverName || displayReceiverAccount || 'ไม่ทราบ'} / ธนาคาร: ${displayReceiverBankName || 'ไม่ทราบ'})`,
+                debug,
             }, { status: 400 })
         }
 

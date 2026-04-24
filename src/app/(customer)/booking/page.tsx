@@ -54,6 +54,32 @@ const readResponseError = async (response: Response, fallback: string) => {
     return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback
 }
 
+const formatSlipDebug = (debug: unknown) => {
+    if (!debug || typeof debug !== 'object') return ''
+    const data = debug as {
+        reason?: string
+        match?: Record<string, unknown>
+        actual?: Record<string, unknown>
+        expected?: Record<string, unknown>
+        candidates?: Record<string, unknown>
+        code?: string
+        message?: string
+    }
+    const value = (input: unknown) => String(input ?? '-').trim() || '-'
+    const compactRecord = (record?: Record<string, unknown>) => record
+        ? Object.entries(record).map(([key, item]) => `${key}=${value(item).replace(/\n/g, ' | ')}`).join(', ')
+        : '-'
+
+    return [
+        `reason=${value(data.reason || data.code || 'VERIFY_FAILED')}`,
+        data.message ? `provider=${data.message}` : '',
+        `match=${compactRecord(data.match)}`,
+        `actual=${compactRecord(data.actual)}`,
+        `expected=${compactRecord(data.expected)}`,
+        `candidates=${compactRecord(data.candidates)}`,
+    ].filter(Boolean).join('\n')
+}
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const PAYMENT_TOLERANCE = 0.01
 
@@ -68,8 +94,8 @@ const formatCartDate = (dateStr: string) => {
 }
 
 export default function BookingPage() {
-    const BANGKOK_BANK_WAIT_MS = 5 * 60 * 1000
-    const BANGKOK_BANK_RETRY_MS = 15000
+    const SLIP_PENDING_WAIT_MS = 5 * 60 * 1000
+    const SLIP_PENDING_RETRY_MS = 15000
     const router = useRouter()
     const [step, setStep] = useState(1) // 1=participants, 2=payment
     const [cart, setCart] = useState<CartItem[]>([])
@@ -92,7 +118,7 @@ export default function BookingPage() {
     const [termsText, setTermsText] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [slipVerifying, setSlipVerifying] = useState(false)
-    const [slipVerifyState, setSlipVerifyState] = useState<{ phase: 'idle' | 'checking' | 'pending' | 'success' | 'error'; message: string }>({
+    const [slipVerifyState, setSlipVerifyState] = useState<{ phase: 'idle' | 'checking' | 'pending' | 'success' | 'error'; message: string; debug?: string }>({
         phase: 'idle',
         message: '',
     })
@@ -265,18 +291,19 @@ export default function BookingPage() {
 
                 if (!data.verified) {
                     const errMsg: string = data.error || 'สลิปไม่ถูกต้อง'
-                    const isBangkokPending = data?.debug?.code === 'SLIP_PENDING'
+                    const debugText = formatSlipDebug(data.debug)
+                    const isProviderPending = data?.debug?.code === 'SLIP_PENDING'
 
-                    if (isBangkokPending && Date.now() - startedAt < BANGKOK_BANK_WAIT_MS) {
+                    if (isProviderPending && Date.now() - startedAt < SLIP_PENDING_WAIT_MS) {
                         setSlipVerifyState({
                             phase: 'pending',
-                            message: `กำลังตรวจสอบสลิปธนาคารกรุงเทพ อาจใช้เวลา 1-5 นาที โปรดอย่าออกจากหน้านี้ (รอบที่ ${attempt})`,
+                            message: `กำลังตรวจสอบสลิปกับผู้ให้บริการ อาจใช้เวลา 1-5 นาที โปรดอย่าออกจากหน้านี้ (รอบที่ ${attempt})`,
                         })
-                        await delay(BANGKOK_BANK_RETRY_MS)
+                        await delay(SLIP_PENDING_RETRY_MS)
                         continue
                     }
 
-                    setSlipVerifyState({ phase: 'error', message: errMsg })
+                    setSlipVerifyState({ phase: 'error', message: errMsg, debug: debugText })
                     toast.error(errMsg, { duration: 6000 })
                     return
                 }
@@ -1384,7 +1411,7 @@ export default function BookingPage() {
                                     fontSize: '12px',
                                     lineHeight: 1.6,
                                 }}>
-                                    หากเป็นสลิปธนาคารกรุงเทพ ระบบอาจใช้เวลา 1-5 นาทีในการตรวจสอบ กรุณาอย่าออกจากหน้านี้ระหว่างระบบกำลังตรวจสอบ
+                                    บางธนาคารอาจใช้เวลา 1-5 นาทีในการตรวจสอบ กรุณาอย่าออกจากหน้านี้ระหว่างระบบกำลังตรวจสอบ
                                 </div>
 
                                 {slipVerifyState.phase !== 'idle' && (
@@ -1413,6 +1440,23 @@ export default function BookingPage() {
                                     }}>
                                         {slipVerifying && <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', margin: '0 auto 8px' }} />}
                                         {slipVerifyState.message}
+                                        {slipVerifyState.debug && (
+                                            <pre style={{
+                                                margin: '10px 0 0',
+                                                padding: '10px',
+                                                borderRadius: '8px',
+                                                background: 'rgba(0,0,0,0.06)',
+                                                color: 'inherit',
+                                                fontSize: '11px',
+                                                lineHeight: 1.55,
+                                                fontWeight: 600,
+                                                textAlign: 'left',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                            }}>
+                                                {slipVerifyState.debug}
+                                            </pre>
+                                        )}
                                     </div>
                                 )}
 
@@ -1538,63 +1582,5 @@ export default function BookingPage() {
                 </div>
             )}
         </div>
-    )
-}
-
-// Auto-redirect to booking history after success
-function SuccessRedirect({ router, bookingNumber }: { router: ReturnType<typeof useRouter>; bookingNumber: string }) {
-    const [countdown, setCountdown] = useState(3)
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    clearInterval(timer)
-                    router.push('/profile')
-                    return 0
-                }
-                return prev - 1
-            })
-        }, 1000)
-        return () => clearInterval(timer)
-    }, [router])
-
-    return (
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', padding: '40px 0' }}>
-            <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-                style={{
-                    width: '100px', height: '100px', borderRadius: '50%',
-                    background: 'var(--c-gradient-success)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 24px',
-                }}
-            >
-                <CheckCircle size={48} style={{ color: '#0a0a1a' }} />
-            </motion.div>
-            <h2 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>จองสำเร็จ! 🎉</h2>
-            <p style={{ color: 'var(--c-text-secondary)', marginBottom: '24px' }}>
-                การจองของคุณได้รับการบันทึกเรียบร้อยแล้ว
-            </p>
-            <div className="glass-card" style={{ cursor: 'default', display: 'inline-block', padding: '20px 40px', marginBottom: '32px' }}>
-                <p style={{ fontSize: '13px', color: 'var(--c-text-muted)', marginBottom: '4px' }}>หมายเลขการจอง</p>
-                <p style={{ fontSize: '24px', fontWeight: 900, fontFamily: "'Inter'", letterSpacing: 1, background: 'var(--c-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {bookingNumber}
-                </p>
-            </div>
-            <p style={{ color: 'var(--c-text-muted)', fontSize: '14px', marginBottom: '32px' }}>
-                กำลังไปหน้าประวัติการจองใน {countdown} วินาที...
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button onClick={() => router.push('/profile')} className="btn btn-secondary">
-                    ดูประวัติการจอง
-                </button>
-                <button onClick={() => router.push('/courts')} className="btn btn-primary">
-                    จองเพิ่ม
-                </button>
-            </div>
-        </motion.div>
     )
 }
