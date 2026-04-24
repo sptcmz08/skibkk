@@ -4,6 +4,7 @@ import { formatPackageBookingWindow, formatPackageDate, resolvePackageBookingWin
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import jsQR from 'jsqr'
 import { motion } from 'framer-motion'
 import { Users, UserCheck, Plus, Trash2, ArrowRight, ArrowLeft, CreditCard, QrCode, CheckCircle, Upload, Package, AlertTriangle, Timer, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -31,6 +32,14 @@ const cleanProfileEmail = (email?: string | null) => {
 const cleanProfilePhone = (phone?: string | null) => {
     if (!phone || phone.startsWith('LINE-') || phone.startsWith('guest-') || phone.startsWith('temp-')) return ''
     return phone
+}
+
+const splitBookerName = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    return {
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' '),
+    }
 }
 
 const cleanParticipantDraft = (participant: Participant): Participant => ({
@@ -254,6 +263,47 @@ export default function BookingPage() {
         })
     }
 
+    const decodeSlipQrPayload = (file: File): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new window.Image()
+            const canvas = document.createElement('canvas')
+            const reader = new FileReader()
+
+            reader.onload = (event) => {
+                img.onload = () => {
+                    const maxDim = 2600
+                    let { width, height } = img
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round(height * maxDim / width)
+                            width = maxDim
+                        } else {
+                            width = Math.round(width * maxDim / height)
+                            height = maxDim
+                        }
+                    }
+
+                    canvas.width = width
+                    canvas.height = height
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+                    if (!ctx) {
+                        resolve('')
+                        return
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height)
+                    const imageData = ctx.getImageData(0, 0, width, height)
+                    const qr = jsQR(imageData.data, imageData.width, imageData.height)
+                    resolve(qr?.data?.trim() || '')
+                }
+                img.onerror = () => resolve('')
+                img.src = event.target?.result as string
+            }
+            reader.onerror = () => resolve('')
+            reader.readAsDataURL(file)
+        })
+    }
+
     // Handle slip file selection
     const handleSlipSelect = async (file: File) => {
         if (file.size > 10 * 1024 * 1024) {
@@ -282,6 +332,10 @@ export default function BookingPage() {
                 attempt += 1
                 const verifyFormData = new FormData()
                 verifyFormData.append('image', currentFile)
+                const qrPayload = await decodeSlipQrPayload(currentFile)
+                if (qrPayload) {
+                    verifyFormData.append('payload', qrPayload)
+                }
 
                 const res = await fetch('/api/payments/verify-slip', {
                     method: 'POST',
@@ -624,6 +678,11 @@ export default function BookingPage() {
             toast.error('กรุณากรอกข้อมูลผู้จองให้ครบ')
             return
         }
+        const bookerNameParts = splitBookerName(booker.name)
+        if (!bookerNameParts.firstName || !bookerNameParts.lastName) {
+            toast.error('กรุณากรอกชื่อจริงและนามสกุลของผู้จอง')
+            return
+        }
         if (participants.some(p => !p.name || !p.sportType)) {
             toast.error('กรุณากรอกชื่อและประเภทกีฬาของผู้เรียนทุกคน')
             return
@@ -686,7 +745,11 @@ export default function BookingPage() {
             const profileRes = await fetch('/api/auth/me', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(booker),
+                body: JSON.stringify({
+                    ...booker,
+                    firstName: bookerNameParts.firstName,
+                    lastName: bookerNameParts.lastName,
+                }),
             })
             if (!profileRes.ok) {
                 const profileData = await profileRes.json().catch(() => ({}))

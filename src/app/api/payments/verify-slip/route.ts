@@ -47,6 +47,8 @@ type EasySlipV2Response = {
                 account?: {
                     name?: { th?: string; en?: string }
                     value?: string
+                    bank?: { account?: string }
+                    proxy?: { account?: string; value?: string }
                 }
             }
             receiver?: {
@@ -54,10 +56,13 @@ type EasySlipV2Response = {
                 account?: {
                     name?: { th?: string; en?: string }
                     value?: string
+                    bank?: { account?: string }
+                    proxy?: { account?: string; value?: string }
                 }
                 proxy?: {
                     type?: string
                     value?: string
+                    account?: string
                 }
             }
         }
@@ -174,6 +179,37 @@ const collectStringValues = (value: unknown, depth = 0): string[] => {
     return []
 }
 
+const verifySlipPayload = async (payload: string): Promise<EasySlipV2Response> => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
+
+    try {
+        const slipResponse = await fetch(VERIFY_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.EASYSLIP_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                payload,
+                checkDuplicate: false,
+                matchAccount: true,
+            }),
+            signal: controller.signal,
+        })
+
+        const result = await slipResponse.json().catch(() => null) as EasySlipV2Response
+        console.log('[SlipVerify] EasySlip payload response:', JSON.stringify(result))
+        return result || { success: false, message: 'ไม่สามารถอ่านผลตรวจสลิปจาก QR ได้' }
+    } catch (fetchError) {
+        const isTimeout = (fetchError as Error).name === 'AbortError'
+        console.error('[SlipVerify] EasySlip payload request failed:', isTimeout ? 'TIMEOUT' : fetchError)
+        return { success: false, error: { message: isTimeout ? 'ระบบตรวจสลิปใช้เวลานานเกินไป' : 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปด้วย QR ได้' } }
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
 const getMatchedAccountName = (matchedAccount?: EasySlipMatchedAccount | null) =>
     String(matchedAccount?.accountName || matchedAccount?.nameTh || matchedAccount?.nameEn || '').trim()
 
@@ -199,6 +235,7 @@ export async function POST(req: NextRequest) {
         await requireAuth()
         const formData = await req.formData()
         const image = formData.get('image')
+        const qrPayload = String(formData.get('payload') || '').trim()
 
         if (!(await isTransferPaymentEnabled())) {
             return NextResponse.json({
@@ -256,11 +293,20 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const result = await verifySlipImage(image)
+        const payloadResult = qrPayload ? await verifySlipPayload(qrPayload) : null
+        const result = payloadResult?.success ? payloadResult : await verifySlipImage(image)
         if (!result.success) {
             const errorCode = String(result.error?.code || '')
             const errorMessage = String(result.error?.message || result.message || '')
-            const debug = { reason: 'EASYSLIP_ERROR', code: errorCode || null, message: errorMessage || null }
+            const debug = {
+                reason: 'EASYSLIP_ERROR',
+                code: errorCode || null,
+                message: errorMessage || null,
+                payloadFallback: Boolean(qrPayload),
+                payloadMessage: payloadResult && !payloadResult.success
+                    ? String(payloadResult.error?.message || payloadResult.message || '')
+                    : null,
+            }
 
             console.error('[SlipVerify] EasySlip error:', JSON.stringify(result))
 
@@ -325,7 +371,11 @@ export async function POST(req: NextRequest) {
         const displayReceiverName = extractNameValue(slipData?.receiver?.account?.name) || getMatchedAccountName(matchedAccount)
         const displayReceiverAccount = String(
             slipData?.receiver?.account?.value
+            || slipData?.receiver?.account?.bank?.account
+            || slipData?.receiver?.account?.proxy?.account
+            || slipData?.receiver?.account?.proxy?.value
             || slipData?.receiver?.proxy?.value
+            || slipData?.receiver?.proxy?.account
             || getMatchedAccountNumber(matchedAccount)
             || '',
         ).trim()
@@ -345,7 +395,11 @@ export async function POST(req: NextRequest) {
         )
         const receiverAccount = joinUniqueValues(
             slipData?.receiver?.account?.value,
+            slipData?.receiver?.account?.bank?.account,
+            slipData?.receiver?.account?.proxy?.account,
+            slipData?.receiver?.account?.proxy?.value,
             slipData?.receiver?.proxy?.value,
+            slipData?.receiver?.proxy?.account,
             getMatchedAccountNumber(matchedAccount),
             ...receiverRawCandidates,
             ...matchedAccountCandidates,
