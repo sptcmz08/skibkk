@@ -19,7 +19,7 @@ const toDateNoonUTC = (dateStr: string) => new Date(dateStr.split('T')[0] + 'T12
 
 export const dynamic = 'force-dynamic'
 
-const EDITABLE_PAYMENT_METHODS = new Set(['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'])
+const EDITABLE_PAYMENT_METHODS = new Set(['PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD'])
 
 type BookingSlotInput = {
     id?: string
@@ -267,6 +267,12 @@ export async function POST(req: NextRequest) {
         const user = await requireAuth()
         const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
+
+        if (body.paymentMethod !== undefined && body.paymentMethod !== null && body.paymentMethod !== '') {
+            if (!EDITABLE_PAYMENT_METHODS.has(String(body.paymentMethod))) {
+                return NextResponse.json({ error: 'วิธีชำระเงินไม่ถูกต้อง' }, { status: 400 })
+            }
+        }
 
         // Admin can create bookings on behalf of customers
         let bookingUserId = user.id

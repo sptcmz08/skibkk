@@ -39,7 +39,6 @@ const paymentStatusMap: Record<string, { label: string; color: string }> = {
 
 const paymentMethodMap: Record<string, string> = {
     PROMPTPAY: 'PromptPay',
-    QR_PROMPTPAY: 'QR PromptPay',
     BANK_TRANSFER: 'โอนเงิน',
     CASH: 'เงินสด',
     PACKAGE: 'แพ็กเกจ',

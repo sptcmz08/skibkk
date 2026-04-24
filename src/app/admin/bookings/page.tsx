@@ -31,14 +31,13 @@ const paymentStatusMap: Record<string, { label: string; color: string }> = {
 
 const paymentMethodMap: Record<string, string> = {
     PROMPTPAY: '📱 PromptPay',
-    QR_PROMPTPAY: '📱 QR PromptPay',
     BANK_TRANSFER: '🏦 โอนเงิน',
     CASH: '💵 เงินสด',
     PACKAGE: '📦 แพ็คเกจ',
     CREDIT_CARD: '💳 บัตรเครดิต',
 }
 
-const paymentMethodOptions = ['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'] as const
+const paymentMethodOptions = ['PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD'] as const
 
 export default function BookingsManagement() {
     const router = useRouter()

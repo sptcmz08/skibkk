@@ -15,6 +15,8 @@ import {
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '')
 const PAYMENT_TOLERANCE = 0.01
+const ALLOWED_TRANSFER_PAYMENT_METHODS = new Set(['PROMPTPAY', 'BANK_TRANSFER'])
+type TransferPaymentMethod = 'PROMPTPAY' | 'BANK_TRANSFER'
 
 type SlipVerificationPayload = JWTPayload & {
     purpose?: string
@@ -80,6 +82,12 @@ const loadExpectedReceiver = async () => {
     }
 }
 
+const hasCode = (error: unknown, code: string): error is { code: string } =>
+    typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === code
+
+const isTransferPaymentMethod = (value: string): value is TransferPaymentMethod =>
+    ALLOWED_TRANSFER_PAYMENT_METHODS.has(value)
+
 export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth()
@@ -138,7 +146,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'ระบบชำระเงินยังตั้งค่าไม่ครบ กรุณาให้ผู้ดูแลตรวจสอบข้อมูลบัญชีก่อนรับชำระ' }, { status: 503 })
         }
 
-        const paymentMethod = method || 'PROMPTPAY'
+        const paymentMethodInput = String(method || 'PROMPTPAY')
+        if (!isTransferPaymentMethod(paymentMethodInput)) {
+            return NextResponse.json({ error: 'วิธีชำระเงินไม่ถูกต้อง' }, { status: 400 })
+        }
+
+        const paymentMethod = paymentMethodInput
         const payableAmount = booking.totalAmount
         const activeReceiver = expectedReceiver!
         const uniqueRefs = new Set<string>()
@@ -183,10 +196,19 @@ export async function POST(req: NextRequest) {
             : crypto.createHash('sha256').update(verifiedSlipRefs.sort().join('|')).digest('hex')
 
         const payment = await prisma.$transaction(async tx => {
+            const bookingUpdate = await tx.booking.updateMany({
+                where: { id: bookingId, status: 'PENDING' },
+                data: { status: 'CONFIRMED' },
+            })
+
+            if (bookingUpdate.count !== 1) {
+                throw new Error('BOOKING_NOT_PAYABLE')
+            }
+
             const createdPayment = await tx.payment.create({
                 data: {
                     bookingId,
-                    userId: user.id,
+                    userId: booking.userId,
                     method: paymentMethod,
                     amount: payableAmount,
                     slipUrl: body.slipUrl || null,
@@ -205,11 +227,6 @@ export async function POST(req: NextRequest) {
                     },
                 })
             }
-
-            await tx.booking.update({
-                where: { id: bookingId },
-                data: { status: 'CONFIRMED' },
-            })
 
             return createdPayment
         })
@@ -248,6 +265,12 @@ export async function POST(req: NextRequest) {
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
+        }
+        if ((error as Error).message === 'BOOKING_NOT_PAYABLE') {
+            return NextResponse.json({ error: 'การจองนี้ไม่อยู่ในสถานะที่รับชำระได้ หรือชำระเงินแล้ว' }, { status: 409 })
+        }
+        if (hasCode(error, 'P2002')) {
+            return NextResponse.json({ error: 'มีสลิปที่ถูกใช้งานไปแล้ว กรุณาตรวจสลิปใหม่' }, { status: 409 })
         }
 
         console.error('Payment POST error:', error)

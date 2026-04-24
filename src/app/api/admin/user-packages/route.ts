@@ -207,6 +207,9 @@ export async function PATCH(req: NextRequest) {
         if (booking.userId !== userPkg.userId) {
             return NextResponse.json({ error: 'แพ็คเกจนี้ไม่ใช่ของลูกค้าในการจองนี้' }, { status: 400 })
         }
+        if (booking.status !== 'PENDING') {
+            return NextResponse.json({ error: 'การจองนี้ชำระเงินแล้วหรือไม่อยู่ในสถานะที่ใช้แพ็คเกจได้' }, { status: 409 })
+        }
         const bookingWindow = resolvePackageBookingWindow(
             userPkg.package?.validFrom,
             userPkg.package?.validTo,
@@ -225,10 +228,33 @@ export async function PATCH(req: NextRequest) {
         }
 
         await prisma.$transaction(async tx => {
-            await tx.userPackage.update({
-                where: { id: userPackageId },
+            const packageUpdate = await tx.userPackage.updateMany({
+                where: {
+                    id: userPackageId,
+                    userId: userPkg.userId,
+                    remainingHours: { gte: hoursToDeduct },
+                    expiresAt: { gte: new Date() },
+                },
                 data: { remainingHours: { decrement: hoursToDeduct } },
             })
+
+            if (packageUpdate.count !== 1) {
+                throw new Error('PACKAGE_UNAVAILABLE')
+            }
+
+            const bookingUpdate = await tx.booking.updateMany({
+                where: { id: bookingId, userId: userPkg.userId, status: 'PENDING' },
+                data: {
+                    status: 'CONFIRMED',
+                    totalAmount: 0,
+                    notes: userPkg.package?.name ? `ชำระด้วยแพ็คเกจ: ${userPkg.package.name}` : 'ชำระด้วยแพ็คเกจ',
+                },
+            })
+
+            if (bookingUpdate.count !== 1) {
+                throw new Error('BOOKING_NOT_PAYABLE')
+            }
+
             await tx.payment.create({
                 data: {
                     bookingId,
@@ -244,14 +270,6 @@ export async function PATCH(req: NextRequest) {
             await tx.bookingItem.updateMany({
                 where: { bookingId },
                 data: { price: 0 },
-            })
-            await tx.booking.update({
-                where: { id: bookingId },
-                data: {
-                    status: 'CONFIRMED',
-                    totalAmount: 0,
-                    notes: userPkg.package?.name ? `ชำระด้วยแพ็คเกจ: ${userPkg.package.name}` : 'ชำระด้วยแพ็คเกจ',
-                },
             })
         })
 
@@ -286,6 +304,12 @@ export async function PATCH(req: NextRequest) {
 
         return NextResponse.json({ message: 'ตัดชั่วโมงแพ็คเกจสำเร็จ' })
     } catch (error) {
+        if ((error as Error).message === 'PACKAGE_UNAVAILABLE') {
+            return NextResponse.json({ error: 'ชั่วโมงแพ็คเกจไม่เพียงพอหรือแพ็คเกจหมดอายุแล้ว' }, { status: 409 })
+        }
+        if ((error as Error).message === 'BOOKING_NOT_PAYABLE') {
+            return NextResponse.json({ error: 'การจองนี้ไม่อยู่ในสถานะที่ใช้แพ็คเกจได้ หรือถูกชำระไปแล้ว' }, { status: 409 })
+        }
         console.error('PATCH /api/admin/user-packages error:', error)
         return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
     }

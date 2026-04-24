@@ -39,14 +39,13 @@ interface Teacher { id: string; name: string; specialty: string | null; isActive
 
 const paymentMethodMap: Record<string, string> = {
     PROMPTPAY: '📱 พร้อมเพย์',
-    QR_PROMPTPAY: '📱 QR พร้อมเพย์',
     BANK_TRANSFER: '🏦 โอนเงิน',
     CASH: '💵 เงินสด',
     CREDIT_CARD: '💳 บัตรเครดิต',
     PACKAGE: '📦 แพ็คเกจ',
 }
 
-const paymentMethodOptions = ['PROMPTPAY', 'QR_PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD', 'PACKAGE'] as const
+const paymentMethodOptions = ['PROMPTPAY', 'BANK_TRANSFER', 'CASH', 'CREDIT_CARD'] as const
 
 export default function CalendarPage() {
     const router = useRouter()
