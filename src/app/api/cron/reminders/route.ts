@@ -135,6 +135,28 @@ async function processReminderGroup(
             continue
         }
 
+        // Triple-check: verify no reminder was sent to this booking in the last 1 hour
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
+        const recentReminder = await prisma.lineMessageLog.findFirst({
+            where: {
+                bookingId: booking.id,
+                messageType: { in: ['reminder', 'reminder_sameday'] },
+                success: true,
+                sentAt: { gte: oneHourAgo },
+            },
+        })
+        if (recentReminder) {
+            console.log(`[Reminders] Booking ${bookingId}: reminder already sent at ${recentReminder.sentAt}, skipping`)
+            skippedCount++
+            // Mark items as sent to prevent future duplicate checks
+            await prisma.bookingItem.updateMany({
+                where: { id: { in: itemIds } },
+                data: { reminderSentAt: now },
+            })
+            reminderItemsMarked += itemIds.length
+            continue
+        }
+
         const result = await sendLineBookingReminder(booking.user.lineUserId, message, { messageType, bookingId: booking.id })
 
         if (result.success) {

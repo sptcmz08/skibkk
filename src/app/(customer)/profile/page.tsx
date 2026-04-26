@@ -295,8 +295,8 @@ export default function ProfilePage() {
                                 }),
                             }))
                             .sort((a, b) => {
-                                const ea = a.bookingItems[0]?.date.split('T')[0] || ''
-                                const eb = b.bookingItems[0]?.date.split('T')[0] || ''
+                                const ea = (a.bookingItems[0]?.date.split('T')[0] || '') + (a.bookingItems[0]?.startTime || '')
+                                const eb = (b.bookingItems[0]?.date.split('T')[0] || '') + (b.bookingItems[0]?.startTime || '')
                                 return ea.localeCompare(eb)
                             })
                             .map((booking, i) => {
