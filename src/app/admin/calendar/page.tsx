@@ -1316,10 +1316,28 @@ export default function CalendarPage() {
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
                                                                 const sportLabel = Array.from(new Set(cb.booking.participants.map(p => p.sportType).filter(Boolean))).join(', ') || '-'
                                                                 const teacherLabel = Array.from(new Set(cb.items.map(item => item.teacher?.name).filter(Boolean))).join(', ') || '-'
+                                                                const teacherTimeSegments = cb.items
+                                                                    .filter(item => item.teacher?.name)
+                                                                    .reduce((acc, item) => {
+                                                                        const name = item.teacher!.name
+                                                                        const existing = acc.find(s => s.name === name)
+                                                                        if (existing) {
+                                                                            if (item.startTime < existing.startTime) existing.startTime = item.startTime
+                                                                            if (item.endTime > existing.endTime) existing.endTime = item.endTime
+                                                                        } else {
+                                                                            acc.push({ name, startTime: item.startTime, endTime: item.endTime })
+                                                                        }
+                                                                        return acc
+                                                                    }, [] as Array<{ name: string; startTime: string; endTime: string }>)
+                                                                const allSameTime = teacherTimeSegments.length > 0 && teacherTimeSegments.every(s => s.startTime === cb.startTime && s.endTime === cb.endTime)
                                                                 const customerName = cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'
                                                                 const phoneLabel = cb.booking.user?.phone?.startsWith('LINE-') ? 'LINE' : (cb.booking.user?.phone || '-')
                                                                 const customerLine = `${customerName} | ${phoneLabel} | ${sportLabel}`
-                                                                const timeTeacherLine = `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ครู: ${teacherLabel}`
+                                                                const timeTeacherLine = teacherTimeSegments.length === 0
+                                                                    ? `${cb.startTime}-${cb.endTime} (${hours} ชม.)`
+                                                                    : allSameTime
+                                                                        ? `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ครู: ${teacherLabel}`
+                                                                        : `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ${teacherTimeSegments.map(s => `${s.startTime}-${s.endTime} ${s.name}`).join(', ')}`
 
                                                                 if (hours <= 0) return null
 
