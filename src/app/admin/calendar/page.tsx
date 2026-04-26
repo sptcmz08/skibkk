@@ -1161,17 +1161,6 @@ export default function CalendarPage() {
                                 gridTimes.push(`${h.toString().padStart(2, '0')}:00`)
                             }
 
-                            const sportEmoji: Record<string, string> = {
-                                'ski': '⛷️', 'สกี้': '⛷️', 'สกี': '⛷️',
-                                'snowboard': '🏂', 'สโนบอร์ด': '🏂', 'สโนว์บอร์ด': '🏂',
-                                'ฟุตบอล': '⚽', 'แบดมินตัน': '🏸', 'บาสเกตบอล': '🏀',
-                                'วอลเลย์บอล': '🏐', 'เทนนิส': '🎾',
-                            }
-                            const getSportEmoji = (type: string) => {
-                                const key = type.toLowerCase().trim()
-                                return sportEmoji[key] || '🏟️'
-                            }
-
                             return (
                                 <div style={{ minWidth: gridCourts.length > 2 ? `${gridCourts.length * 220 + 70}px` : 'auto' }}>
                                     {/* Court header row */}
@@ -1242,7 +1231,7 @@ export default function CalendarPage() {
 
                                                         {/* Booking blocks - absolute, with explicit px height */}
                                                         {(() => {
-                                                            const courtBookings: Array<{ booking: Booking; startTime: string; endTime: string; totalPrice: number }> = []
+                                                            const courtBookings: Array<{ booking: Booking; startTime: string; endTime: string; totalPrice: number; items: Booking['bookingItems'] }> = []
                                                             const processed = new Set<string>()
 
                                                             activeBookings.forEach(({ booking, filteredBookingItems }) => {
@@ -1255,8 +1244,10 @@ export default function CalendarPage() {
                                                                     const first = courtItems[i]
                                                                     let lastEnd = first.endTime
                                                                     let totalPrice = first.price
+                                                                    const mergedItems = [first]
                                                                     let j = i + 1
                                                                     while (j < courtItems.length && courtItems[j].startTime === lastEnd) {
+                                                                        mergedItems.push(courtItems[j])
                                                                         totalPrice += courtItems[j].price
                                                                         lastEnd = courtItems[j].endTime
                                                                         j++
@@ -1264,7 +1255,7 @@ export default function CalendarPage() {
                                                                     const mergeKey = `${booking.id}_${court.id}_${first.startTime}`
                                                                     if (!processed.has(mergeKey)) {
                                                                         processed.add(mergeKey)
-                                                                        courtBookings.push({ booking, startTime: first.startTime, endTime: lastEnd, totalPrice })
+                                                                        courtBookings.push({ booking, startTime: first.startTime, endTime: lastEnd, totalPrice, items: mergedItems })
                                                                     }
                                                                     i = j
                                                                 }
@@ -1323,17 +1314,12 @@ export default function CalendarPage() {
                                                                 const heightPx = (endH - startH) * ROW_H
                                                                 const hours = endH - startH
                                                                 const isPaid = cb.booking.status === 'CONFIRMED'
-                                                                const sportTypesArr = cb.booking.participants.map(p => p.sportType).filter(Boolean)
-                                                                const sportLabel = sportTypesArr[0] || ''
-                                                                // Build per-hour teacher map for this block's time range
-                                                                const teacherByHour: Array<{ time: string; name: string }> = []
-                                                                cb.booking.bookingItems
-                                                                    .filter(item => item.courtId === court.id && item.teacher)
-                                                                    .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                                                                    .forEach(item => {
-                                                                        teacherByHour.push({ time: `${item.startTime}-${item.endTime}`, name: item.teacher!.name })
-                                                                    })
-                                                                const hasTeachers = teacherByHour.length > 0
+                                                                const sportLabel = Array.from(new Set(cb.booking.participants.map(p => p.sportType).filter(Boolean))).join(', ') || '-'
+                                                                const teacherLabel = Array.from(new Set(cb.items.map(item => item.teacher?.name).filter(Boolean))).join(', ') || '-'
+                                                                const customerName = cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'
+                                                                const phoneLabel = cb.booking.user?.phone?.startsWith('LINE-') ? 'LINE' : (cb.booking.user?.phone || '-')
+                                                                const customerLine = `${customerName} | ${phoneLabel} | ${sportLabel}`
+                                                                const timeTeacherLine = `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ครู: ${teacherLabel}`
 
                                                                 if (hours <= 0) return null
 
@@ -1342,9 +1328,7 @@ export default function CalendarPage() {
 
                                                                 const isAdminBooking = cb.booking.createdByAdmin
                                                                 const compactCard = calendarZoom === 'compact'
-                                                                const showPhone = hours >= 1
-                                                                const showSport = hours >= 2 || calendarZoom === 'expanded'
-                                                                const showTeacher = hours >= 2 || calendarZoom === 'expanded'
+                                                                const detailFontSize = compactCard ? '10px' : '11px'
                                                                 const bgGrad = isAdminBooking
                                                                     ? 'linear-gradient(135deg, #D4A017, #B8860B)'
                                                                     : 'linear-gradient(135deg, #2196F3, #1976D2)'
@@ -1378,24 +1362,18 @@ export default function CalendarPage() {
                                                                         onMouseEnter={e => { e.currentTarget.style.boxShadow = shadowHover }}
                                                                         onMouseLeave={e => { e.currentTarget.style.boxShadow = shadow }}
                                                                     >
-                                                                        <div style={{ fontWeight: 800, fontSize: hours >= 2 || calendarZoom === 'expanded' ? '14px' : '12px', lineHeight: 1.2, whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: hours >= 2 || calendarZoom === 'expanded' ? 2 : 1, WebkitBoxOrient: 'vertical', wordBreak: 'break-word' }}>
-                                                                            {cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'}
+                                                                        <div
+                                                                            title={customerLine}
+                                                                            style={{ fontWeight: 800, fontSize: compactCard ? '11px' : '12px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                                                        >
+                                                                            {customerLine}
                                                                         </div>
-                                                                        <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 700, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                            🕐 {cb.startTime}–{cb.endTime} ({hours} ชม.)
+                                                                        <div
+                                                                            title={timeTeacherLine}
+                                                                            style={{ fontSize: detailFontSize, fontWeight: 700, opacity: 0.92, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                                                        >
+                                                                            {timeTeacherLine}
                                                                         </div>
-                                                                        {showPhone && (
-                                                                            <>
-                                                                                <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 600, opacity: 0.92, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                    {cb.booking.user?.phone?.startsWith('LINE-') ? '🟢 LINE' : (cb.booking.user?.phone || '-')}
-                                                                                </div>
-                                                                                {showSport && sportLabel && (
-                                                                                    <div style={{ fontSize: compactCard ? '10px' : '11px', fontWeight: 600, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                        {getSportEmoji(sportLabel)} {sportLabel}
-                                                                                    </div>
-                                                                                )}
-                                                                            </>
-                                                                        )}
                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginTop: 'auto' }}>
                                                                             <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: compactCard ? '10px' : '11px', fontWeight: 800, flexShrink: 0 }}>
                                                                                 ฿{cb.totalPrice.toLocaleString()}
@@ -1404,17 +1382,6 @@ export default function CalendarPage() {
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
-                                                                        {showTeacher && hasTeachers && (
-                                                                            <div style={{ fontSize: '10px', opacity: 0.85, lineHeight: 1.35 }}>
-                                                                                {teacherByHour.length === 1 ? (
-                                                                                    <span>🎓 {teacherByHour[0].name}</span>
-                                                                                ) : (
-                                                                                    teacherByHour.map((th, i) => (
-                                                                                        <div key={i}>🎓 {th.time} {th.name}</div>
-                                                                                    ))
-                                                                                )}
-                                                                            </div>
-                                                                        )}
                                                                     </div>
                                                                 )
                                                             })
