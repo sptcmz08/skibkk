@@ -275,7 +275,7 @@ export default function CalendarPage() {
             return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
         }))
         setEditStatus(booking.status)
-        setEditPaymentMethod(booking.payments[0]?.method || '')
+        setEditPaymentMethod(booking.payments[0]?.method || (booking.status === 'CONFIRMED' ? 'BANK_TRANSFER' : ''))
         setEditAmount(booking.totalAmount)
     }
 

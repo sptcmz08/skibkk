@@ -531,7 +531,7 @@ export default function BookingsManagement() {
                                     <button onClick={() => {
                                         setEditMode(true)
                                         setEditStatus(viewBooking.status)
-                                        setEditPaymentMethod(viewBooking.payments[0]?.method || '')
+                                        setEditPaymentMethod(viewBooking.payments[0]?.method || (viewBooking.status === 'CONFIRMED' ? 'BANK_TRANSFER' : ''))
                                         setEditAmount(viewBooking.totalAmount)
                                         setEditBookingItems(sortBookingItems(viewBooking.bookingItems).map(item => ({
                                             ...item,
