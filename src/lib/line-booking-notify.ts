@@ -25,6 +25,10 @@ type BookingNotifyData = {
         startTime: string
         endTime: string
         price: number
+        timeRanges?: Array<{
+            startTime: string
+            endTime: string
+        }>
         original?: {
             courtName?: string
             date?: string
@@ -54,8 +58,11 @@ const formatItemsText = (items: BookingNotifyData['items']) =>
         const originalText = originalParts.length
             ? `\n↩️ เดิม: ${originalParts.join(' | ')}`
             : ''
+        const timeText = item.timeRanges?.length
+            ? item.timeRanges.map(range => `${range.startTime} - ${range.endTime}`).join('\n⏰ ')
+            : `${item.startTime} - ${item.endTime}`
 
-        return `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${item.startTime} - ${item.endTime}${originalText}`
+        return `🏟 ${item.courtName}\n📅 ${item.date}\n⏰ ${timeText}${originalText}`
     }).join('\n\n')
 
 export const normalizeLineEditableNote = (

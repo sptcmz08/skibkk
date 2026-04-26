@@ -55,6 +55,11 @@ async function findDueReminderItems(reminderStartMs: number, reminderEndMs: numb
             booking: {
                 include: {
                     user: { select: { name: true, email: true, lineUserId: true } },
+                    bookingItems: {
+                        where: { reminderSentAt: null },
+                        include: { court: true },
+                        orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+                    },
                 },
             },
         },
@@ -80,6 +85,98 @@ function groupItemsByBooking(items: DueReminderItem[]) {
     return itemsByBooking
 }
 
+function getDateKey(date: Date) {
+    return date.toISOString().split('T')[0]
+}
+
+function getReminderBatchKey(items: DueReminderItem[]) {
+    return items.map(item => item.id).sort().join(':')
+}
+
+function isSameSlotGroup(
+    left: Pick<DueReminderItem, 'bookingId' | 'courtId' | 'date'>,
+    right: Pick<DueReminderItem, 'bookingId' | 'courtId' | 'date'>,
+) {
+    return left.bookingId === right.bookingId
+        && left.courtId === right.courtId
+        && getDateKey(left.date) === getDateKey(right.date)
+}
+
+function buildContinuousReminderBatch(dueItem: DueReminderItem, windowItems: DueReminderItem[]) {
+    const allItems = [...dueItem.booking.bookingItems]
+        .filter(item => item.reminderSentAt === null && isSameSlotGroup(dueItem, item))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    const dueIndex = allItems.findIndex(item => item.id === dueItem.id)
+    if (dueIndex === -1) return [dueItem]
+
+    let startIndex = dueIndex
+    while (startIndex > 0 && allItems[startIndex - 1].endTime === allItems[startIndex].startTime) {
+        startIndex--
+    }
+
+    let endIndex = dueIndex
+    while (endIndex < allItems.length - 1 && allItems[endIndex].endTime === allItems[endIndex + 1].startTime) {
+        endIndex++
+    }
+
+    const batch = allItems.slice(startIndex, endIndex + 1).map(item => ({
+        ...item,
+        booking: dueItem.booking,
+    }))
+    const batchHasDueItemInCurrentWindow = batch.some(item => windowItems.some(windowItem => windowItem.id === item.id))
+    return batchHasDueItemInCurrentWindow ? batch : [dueItem]
+}
+
+function buildReminderBatches(itemsByBooking: Map<string, DueReminderItem[]>) {
+    const batches: DueReminderItem[][] = []
+    const processedBatchKeys = new Set<string>()
+
+    for (const items of itemsByBooking.values()) {
+        for (const item of items) {
+            const batch = buildContinuousReminderBatch(item, items)
+            const key = getReminderBatchKey(batch)
+            if (processedBatchKeys.has(key)) continue
+            processedBatchKeys.add(key)
+            batches.push(batch)
+        }
+    }
+
+    return batches
+}
+
+function buildReminderMessageItems(items: DueReminderItem[]) {
+    const sortedItems = [...items].sort((a, b) => {
+        const dateCompare = getDateKey(a.date).localeCompare(getDateKey(b.date))
+        if (dateCompare !== 0) return dateCompare
+        if (a.court.name !== b.court.name) return a.court.name.localeCompare(b.court.name)
+        return a.startTime.localeCompare(b.startTime)
+    })
+
+    const groupedItems = new Map<string, DueReminderItem[]>()
+    for (const item of sortedItems) {
+        const dateLabel = new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+        const key = `${item.courtId}_${dateLabel}`
+        const group = groupedItems.get(key) || []
+        group.push(item)
+        groupedItems.set(key, group)
+    }
+
+    return [...groupedItems.values()].map(group => {
+        const first = group[0]
+        return {
+            courtName: first.court.name,
+            date: new Date(first.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+            startTime: first.startTime,
+            endTime: group[group.length - 1].endTime,
+            price: group.reduce((sum, item) => sum + item.price, 0),
+            timeRanges: group.length > 1
+                ? group.map(item => ({ startTime: item.startTime, endTime: item.endTime }))
+                : undefined,
+        }
+    })
+}
+
 /**
  * Process a group of reminder bookings: send LINE messages and mark as sent.
  */
@@ -95,9 +192,12 @@ async function processReminderGroup(
     let skippedCount = 0
     let reminderItemsMarked = 0
 
-    console.log(`[Reminders] Processing ${itemsByBooking.size} booking groups for ${messageType}`)
+    const reminderBatches = buildReminderBatches(itemsByBooking)
+
+    console.log(`[Reminders] Processing ${reminderBatches.length} reminder batches for ${messageType}`)
     
-    for (const [bookingId, items] of itemsByBooking.entries()) {
+    for (const items of reminderBatches) {
+        const bookingId = items[0].bookingId
         console.log(`[Reminders] Booking ${bookingId}: ${items.length} items - ${items.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(', ')}`)
         const booking = items[0].booking
         const itemIds = items.map(item => item.id)
@@ -115,13 +215,7 @@ async function processReminderGroup(
         const message = buildLineReminderMessage(reminderTemplate, {
             bookingNumber: booking.bookingNumber,
             customerName: booking.user.name,
-            items: items.map(item => ({
-                courtName: item.court.name,
-                date: new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-                startTime: item.startTime,
-                endTime: item.endTime,
-                price: item.price,
-            })),
+            items: buildReminderMessageItems(items),
             totalAmount: booking.totalAmount,
         }, headerText)
 
@@ -132,28 +226,6 @@ async function processReminderGroup(
         if (stillUnsent !== itemIds.length) {
             console.log(`[Reminders] Booking ${bookingId}: ${itemIds.length - stillUnsent} items already sent, skipping`)
             skippedCount++
-            continue
-        }
-
-        // Triple-check: verify no reminder was sent to this booking in the last 1 hour
-        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-        const recentReminder = await prisma.lineMessageLog.findFirst({
-            where: {
-                bookingId: booking.id,
-                messageType: { in: ['reminder', 'reminder_sameday'] },
-                success: true,
-                sentAt: { gte: oneHourAgo },
-            },
-        })
-        if (recentReminder) {
-            console.log(`[Reminders] Booking ${bookingId}: reminder already sent at ${recentReminder.sentAt}, skipping`)
-            skippedCount++
-            // Mark items as sent to prevent future duplicate checks
-            await prisma.bookingItem.updateMany({
-                where: { id: { in: itemIds } },
-                data: { reminderSentAt: now },
-            })
-            reminderItemsMarked += itemIds.length
             continue
         }
 
