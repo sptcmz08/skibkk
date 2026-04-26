@@ -629,7 +629,6 @@ export default function BookingPage() {
                     updated[i] = { ...updated[i], sportType }
                 }
             }
-
             return updated
         })
         toast.success('ดึงข้อมูลผู้เรียนแล้ว')
@@ -638,12 +637,33 @@ export default function BookingPage() {
     const handleBookerToggle = (checked: boolean) => {
         setIsBookerLearner(checked)
         if (checked) {
-            // Auto-fill first participant with booker info
+            // Auto-fill first participant with booker info and recent participant data if available
             const updated = [...participants]
+            const recent = recentParticipants[0] // Most recent participant
             if (updated.length === 0) {
-                updated.push({ name: booker.name, sportType: '', age: '', shoeSize: '', weight: '', height: '', phone: booker.phone || '', isBooker: true })
+                updated.push({
+                    name: booker.name,
+                    sportType: recent?.sportType || '',
+                    age: recent?.age || '',
+                    shoeSize: recent?.shoeSize || '',
+                    weight: recent?.weight || '',
+                    height: recent?.height || '',
+                    phone: booker.phone || '',
+                    isBooker: true
+                })
             } else {
-                updated[0] = { ...updated[0], name: booker.name, phone: booker.phone || '', isBooker: true }
+                updated[0] = {
+                    ...updated[0],
+                    name: booker.name,
+                    phone: booker.phone || '',
+                    isBooker: true,
+                    // Fill from recent participant if current fields are empty
+                    age: updated[0].age || recent?.age || '',
+                    shoeSize: updated[0].shoeSize || recent?.shoeSize || '',
+                    weight: updated[0].weight || recent?.weight || '',
+                    height: updated[0].height || recent?.height || '',
+                    sportType: updated[0].sportType || recent?.sportType || '',
+                }
             }
             setParticipants(updated)
         }
@@ -661,8 +681,6 @@ export default function BookingPage() {
             return updated
         })
     }
-
-
 
     const canSubmit = paymentMethod === 'PACKAGE'
         || (hasTransferChannel && remaining <= PAYMENT_TOLERANCE && verifiedSlips.length > 0)
