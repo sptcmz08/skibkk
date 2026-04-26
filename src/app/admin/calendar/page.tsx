@@ -1692,11 +1692,8 @@ export default function CalendarPage() {
                                     <>
                                         <div style={{ fontWeight: 600 }}>{(item as any).court?.name || courts.find(c => c.id === (item as any).courtId)?.name}</div>
                                         <div style={{ color: 'var(--a-text-secondary)' }}>
-                                            {new Date((item as any).date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}
+                                            {new Date((item as any).date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}{(item as any).teacher ? ` | 👨‍🏫 ครู ${(item as any).teacher.name} (${(item as any).startTime}-${(item as any).endTime})` : ''}
                                         </div>
-                                        {(item as any).teacher && (
-                                            <div style={{ fontSize: '12px', color: 'var(--a-primary)', marginTop: '4px' }}>👨‍🏫 ครู: {(item as any).teacher.name}</div>
-                                        )}
                                         {/* Show full change history from audit logs (Read-only view) */}
                                         {(() => {
                                             const editItem = item as any
