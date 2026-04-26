@@ -61,10 +61,13 @@ async function findDueReminderItems(reminderStartMs: number, reminderEndMs: numb
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     })
 
-    return candidateItems.filter(item => {
+    const filtered = candidateItems.filter(item => {
         const itemStartMs = getItemStartBangkokTimestamp(item.date, item.startTime)
         return itemStartMs !== null && itemStartMs >= reminderStartMs && itemStartMs < reminderEndMs
     })
+
+    console.log(`[Reminders] Found ${filtered.length} items in window ${formatBangkokMinute(reminderStartMs)} - ${formatBangkokMinute(reminderEndMs)}`)
+    return filtered
 }
 
 function groupItemsByBooking(items: DueReminderItem[]) {
@@ -92,7 +95,10 @@ async function processReminderGroup(
     let skippedCount = 0
     let reminderItemsMarked = 0
 
-    for (const items of itemsByBooking.values()) {
+    console.log(`[Reminders] Processing ${itemsByBooking.size} booking groups for ${messageType}`)
+    
+    for (const [bookingId, items] of itemsByBooking.entries()) {
+        console.log(`[Reminders] Booking ${bookingId}: ${items.length} items - ${items.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(', ')}`)
         const booking = items[0].booking
         const itemIds = items.map(item => item.id)
 
@@ -119,17 +125,32 @@ async function processReminderGroup(
             totalAmount: booking.totalAmount,
         }, headerText)
 
+        // Double-check: verify items are still unsent before sending
+        const stillUnsent = await prisma.bookingItem.count({
+            where: { id: { in: itemIds }, reminderSentAt: null }
+        })
+        if (stillUnsent !== itemIds.length) {
+            console.log(`[Reminders] Booking ${bookingId}: ${itemIds.length - stillUnsent} items already sent, skipping`)
+            skippedCount++
+            continue
+        }
+
         const result = await sendLineBookingReminder(booking.user.lineUserId, message, { messageType, bookingId: booking.id })
 
         if (result.success) {
             sentCount++
-            await prisma.bookingItem.updateMany({
-                where: { id: { in: itemIds } },
-                data: { reminderSentAt: now },
+            // Use transaction to ensure atomic update
+            await prisma.$transaction(async (tx) => {
+                await tx.bookingItem.updateMany({
+                    where: { id: { in: itemIds } },
+                    data: { reminderSentAt: now },
+                })
             })
             reminderItemsMarked += itemIds.length
+            console.log(`[Reminders] Booking ${bookingId}: sent successfully`)
         } else {
             failCount++
+            console.log(`[Reminders] Booking ${bookingId}: failed to send - ${result.error}`)
         }
 
         await new Promise(resolve => setTimeout(resolve, 300))
