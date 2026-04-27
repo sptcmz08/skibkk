@@ -140,6 +140,37 @@ function buildReminderMessageItems(items: DueReminderItem[]) {
     })
 }
 
+async function claimReminderItems(itemIds: string[]) {
+    const claimedAt = new Date()
+    const claimWindowEnd = new Date(claimedAt.getTime() + 1)
+    const result = await prisma.bookingItem.updateMany({
+        where: {
+            id: { in: itemIds },
+            reminderSentAt: null,
+        },
+        data: { reminderSentAt: claimedAt },
+    })
+
+    return {
+        claimedAt,
+        claimWindowEnd,
+        count: result.count,
+    }
+}
+
+async function releaseClaimedReminderItems(itemIds: string[], claimedAt: Date, claimWindowEnd: Date) {
+    await prisma.bookingItem.updateMany({
+        where: {
+            id: { in: itemIds },
+            reminderSentAt: {
+                gte: claimedAt,
+                lt: claimWindowEnd,
+            },
+        },
+        data: { reminderSentAt: null },
+    })
+}
+
 /**
  * Process a group of reminder bookings: send LINE messages and mark as sent.
  */
@@ -169,7 +200,7 @@ async function processReminderGroup(
         if (!booking.user?.lineUserId) {
             skippedCount++
             await prisma.bookingItem.updateMany({
-                where: { id: { in: itemIds } },
+                where: { id: { in: itemIds }, reminderSentAt: null },
                 data: { reminderSentAt: now },
             })
             reminderItemsMarked += itemIds.length
@@ -183,12 +214,11 @@ async function processReminderGroup(
             totalAmount: booking.totalAmount,
         }, headerText)
 
-        // Double-check: verify at least some items are still unsent before sending
-        const stillUnsent = await prisma.bookingItem.count({
-            where: { id: { in: itemIds }, reminderSentAt: null }
-        })
-        if (stillUnsent === 0) {
-            console.log(`[Reminders] Booking ${bookingId}: all items already sent, skipping`)
+        // Claim reminder items before sending so concurrent cron runs cannot
+        // send the same booking twice.
+        const claim = await claimReminderItems(itemIds)
+        if (claim.count === 0) {
+            console.log(`[Reminders] Booking ${bookingId}: already claimed by another run, skipping`)
             skippedCount++
             continue
         }
@@ -197,17 +227,11 @@ async function processReminderGroup(
 
         if (result.success) {
             sentCount++
-            // Mark ALL unsent items of this booking as sent atomically
-            await prisma.$transaction(async (tx) => {
-                await tx.bookingItem.updateMany({
-                    where: { id: { in: itemIds }, reminderSentAt: null },
-                    data: { reminderSentAt: now },
-                })
-            })
-            reminderItemsMarked += itemIds.length
-            console.log(`[Reminders] Booking ${bookingId}: sent successfully (${allItems.length} items in 1 message)`)
+            reminderItemsMarked += claim.count
+            console.log(`[Reminders] Booking ${bookingId}: sent successfully (${claim.count} claimed items in 1 message)`)
         } else {
             failCount++
+            await releaseClaimedReminderItems(itemIds, claim.claimedAt, claim.claimWindowEnd)
             console.log(`[Reminders] Booking ${bookingId}: failed to send - ${result.error}`)
         }
 
