@@ -89,60 +89,23 @@ function getDateKey(date: Date) {
     return date.toISOString().split('T')[0]
 }
 
-function getReminderBatchKey(items: DueReminderItem[]) {
-    return items.map(item => item.id).sort().join(':')
-}
-
-function isSameSlotGroup(
-    left: Pick<DueReminderItem, 'bookingId' | 'courtId' | 'date'>,
-    right: Pick<DueReminderItem, 'bookingId' | 'courtId' | 'date'>,
-) {
-    return left.bookingId === right.bookingId
-        && left.courtId === right.courtId
-        && getDateKey(left.date) === getDateKey(right.date)
-}
-
-function buildContinuousReminderBatch(dueItem: DueReminderItem, windowItems: DueReminderItem[]) {
-    const allItems = [...dueItem.booking.bookingItems]
-        .filter(item => item.reminderSentAt === null && isSameSlotGroup(dueItem, item))
-        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-
-    const dueIndex = allItems.findIndex(item => item.id === dueItem.id)
-    if (dueIndex === -1) return [dueItem]
-
-    let startIndex = dueIndex
-    while (startIndex > 0 && allItems[startIndex - 1].endTime === allItems[startIndex].startTime) {
-        startIndex--
-    }
-
-    let endIndex = dueIndex
-    while (endIndex < allItems.length - 1 && allItems[endIndex].endTime === allItems[endIndex + 1].startTime) {
-        endIndex++
-    }
-
-    const batch = allItems.slice(startIndex, endIndex + 1).map(item => ({
-        ...item,
-        booking: dueItem.booking,
-    }))
-    const batchHasDueItemInCurrentWindow = batch.some(item => windowItems.some(windowItem => windowItem.id === item.id))
-    return batchHasDueItemInCurrentWindow ? batch : [dueItem]
-}
-
-function buildReminderBatches(itemsByBooking: Map<string, DueReminderItem[]>) {
-    const batches: DueReminderItem[][] = []
-    const processedBatchKeys = new Set<string>()
-
-    for (const items of itemsByBooking.values()) {
-        for (const item of items) {
-            const batch = buildContinuousReminderBatch(item, items)
-            const key = getReminderBatchKey(batch)
-            if (processedBatchKeys.has(key)) continue
-            processedBatchKeys.add(key)
-            batches.push(batch)
-        }
-    }
-
-    return batches
+/**
+ * Collect ALL unsent items for a booking (across all courts/dates),
+ * not just those in the current reminder window.
+ * This ensures 1 booking = 1 LINE message.
+ */
+function collectAllUnsentBookingItems(dueItems: DueReminderItem[]): DueReminderItem[] {
+    if (dueItems.length === 0) return []
+    const representative = dueItems[0]
+    const allUnsent = [...representative.booking.bookingItems]
+        .filter(item => item.reminderSentAt === null)
+        .sort((a, b) => {
+            const dateCompare = getDateKey(a.date).localeCompare(getDateKey(b.date))
+            if (dateCompare !== 0) return dateCompare
+            return a.startTime.localeCompare(b.startTime)
+        })
+        .map(item => ({ ...item, booking: representative.booking }))
+    return allUnsent.length > 0 ? allUnsent : dueItems
 }
 
 function buildReminderMessageItems(items: DueReminderItem[]) {
@@ -192,15 +155,16 @@ async function processReminderGroup(
     let skippedCount = 0
     let reminderItemsMarked = 0
 
-    const reminderBatches = buildReminderBatches(itemsByBooking)
+    console.log(`[Reminders] Processing ${itemsByBooking.size} bookings for ${messageType}`)
 
-    console.log(`[Reminders] Processing ${reminderBatches.length} reminder batches for ${messageType}`)
-    
-    for (const items of reminderBatches) {
-        const bookingId = items[0].bookingId
-        console.log(`[Reminders] Booking ${bookingId}: ${items.length} items - ${items.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(', ')}`)
-        const booking = items[0].booking
-        const itemIds = items.map(item => item.id)
+    for (const [bookingId, dueItems] of itemsByBooking.entries()) {
+        // Collect ALL unsent items for this booking (not just window items)
+        // so that 1 booking = 1 LINE message with complete info
+        const allItems = collectAllUnsentBookingItems(dueItems)
+        const itemIds = allItems.map(item => item.id)
+        const booking = allItems[0].booking
+
+        console.log(`[Reminders] Booking ${bookingId}: ${allItems.length} items - ${allItems.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(', ')}`)
 
         if (!booking.user?.lineUserId) {
             skippedCount++
@@ -215,16 +179,16 @@ async function processReminderGroup(
         const message = buildLineReminderMessage(reminderTemplate, {
             bookingNumber: booking.bookingNumber,
             customerName: booking.user.name,
-            items: buildReminderMessageItems(items),
+            items: buildReminderMessageItems(allItems),
             totalAmount: booking.totalAmount,
         }, headerText)
 
-        // Double-check: verify items are still unsent before sending
+        // Double-check: verify at least some items are still unsent before sending
         const stillUnsent = await prisma.bookingItem.count({
             where: { id: { in: itemIds }, reminderSentAt: null }
         })
-        if (stillUnsent !== itemIds.length) {
-            console.log(`[Reminders] Booking ${bookingId}: ${itemIds.length - stillUnsent} items already sent, skipping`)
+        if (stillUnsent === 0) {
+            console.log(`[Reminders] Booking ${bookingId}: all items already sent, skipping`)
             skippedCount++
             continue
         }
@@ -233,15 +197,15 @@ async function processReminderGroup(
 
         if (result.success) {
             sentCount++
-            // Use transaction to ensure atomic update
+            // Mark ALL unsent items of this booking as sent atomically
             await prisma.$transaction(async (tx) => {
                 await tx.bookingItem.updateMany({
-                    where: { id: { in: itemIds } },
+                    where: { id: { in: itemIds }, reminderSentAt: null },
                     data: { reminderSentAt: now },
                 })
             })
             reminderItemsMarked += itemIds.length
-            console.log(`[Reminders] Booking ${bookingId}: sent successfully`)
+            console.log(`[Reminders] Booking ${bookingId}: sent successfully (${allItems.length} items in 1 message)`)
         } else {
             failCount++
             console.log(`[Reminders] Booking ${bookingId}: failed to send - ${result.error}`)
