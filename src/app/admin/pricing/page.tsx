@@ -26,8 +26,10 @@ interface Court {
 }
 
 interface PricingRule {
-    id: string; courtId: string | null; court?: { name: string; venue?: { name: string } }; daysOfWeek: string[]; startTime: string; endTime: string; price: number; includesVat: boolean
+    id: string; courtId: string | null; court?: { name: string; venue?: { name: string } }; daysOfWeek: string[]; validFrom?: string | null; validTo?: string | null; startTime: string; endTime: string; price: number; includesVat: boolean
 }
+
+const toDateInputValue = (value?: string | null) => value ? value.split('T')[0] : ''
 
 export default function PricingPage() {
     const [rules, setRules] = useState<PricingRule[]>([])
@@ -66,7 +68,7 @@ export default function PricingPage() {
 
     const [showModal, setShowModal] = useState(false)
     const [editRule, setEditRule] = useState<PricingRule | null>(null)
-    const [form, setForm] = useState({ courtId: '' as string, daysOfWeek: [] as string[], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
+    const [form, setForm] = useState({ courtId: '' as string, daysOfWeek: [] as string[], validFrom: '', validTo: '', startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
     // Get operating hours for selected court
@@ -79,10 +81,10 @@ export default function PricingPage() {
     const openModal = (rule?: PricingRule) => {
         if (rule) {
             setEditRule(rule)
-            setForm({ courtId: rule.courtId || '', daysOfWeek: rule.daysOfWeek, startTime: rule.startTime, endTime: rule.endTime, price: rule.price.toString(), includesVat: rule.includesVat })
+            setForm({ courtId: rule.courtId || '', daysOfWeek: rule.daysOfWeek, validFrom: toDateInputValue(rule.validFrom), validTo: toDateInputValue(rule.validTo), startTime: rule.startTime, endTime: rule.endTime, price: rule.price.toString(), includesVat: rule.includesVat })
         } else {
             setEditRule(null)
-            setForm({ courtId: '', daysOfWeek: [], startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
+            setForm({ courtId: '', daysOfWeek: [], validFrom: '', validTo: '', startTime: '09:00', endTime: '00:00', price: '', includesVat: false })
         }
         setShowModal(true)
     }
@@ -107,6 +109,8 @@ export default function PricingPage() {
     }
 
     const saveRule = async () => {
+        if ((form.validFrom && !form.validTo) || (!form.validFrom && form.validTo)) { toast.error('กรุณาระบุวันที่เริ่มต้นและสิ้นสุดให้ครบ'); return }
+        if (form.validFrom && form.validTo && form.validFrom > form.validTo) { toast.error('ช่วงวันที่ไม่ถูกต้อง'); return }
         if (form.daysOfWeek.length === 0 || !form.price) { toast.error('กรุณากรอกข้อมูลให้ครบ'); return }
 
         try {
@@ -179,6 +183,7 @@ export default function PricingPage() {
                     <thead>
                         <tr>
                             <th>สนาม</th>
+                            <th>ช่วงวันที่</th>
                             <th>วัน</th>
                             <th>ช่วงเวลา</th>
                             <th>ราคา (บาท/ชม.)</th>
@@ -188,9 +193,9 @@ export default function PricingPage() {
                     </thead>
                     <tbody>
                         {loading && rules.length === 0 ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>กำลังโหลดข้อมูล...</td></tr>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>กำลังโหลดข้อมูล...</td></tr>
                         ) : rules.length === 0 ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>ยังไม่มีการกำหนดราคา</td></tr>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>ยังไม่มีการกำหนดราคา</td></tr>
                         ) : (
                             rules.map(rule => (
                                 <tr key={rule.id}>
@@ -198,6 +203,11 @@ export default function PricingPage() {
                                         <span style={{ fontWeight: 600, color: rule.courtId ? 'var(--a-primary)' : '#888' }}>
                                             {rule.court ? `${rule.court.venue?.name ? rule.court.venue.name + ' / ' : ''}${rule.court.name}` : 'ทุกสนาม'}
                                         </span>
+                                    </td>
+                                    <td style={{ fontWeight: 600, color: rule.validFrom || rule.validTo ? 'var(--a-primary)' : 'var(--a-text-muted)' }}>
+                                        {rule.validFrom || rule.validTo
+                                            ? `${toDateInputValue(rule.validFrom)} - ${toDateInputValue(rule.validTo)}`
+                                            : 'ราคาปกติ'}
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
@@ -244,6 +254,17 @@ export default function PricingPage() {
                                     <option key={c.id} value={c.id}>{c.venue?.name ? c.venue.name + ' / ' : ''}{c.name}</option>
                                 ))}
                             </select>
+                        </div>
+
+                        <div className="input-group" style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--a-text-secondary)', fontSize: '14px' }}>ช่วงวันที่ราคาพิเศษ</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <input type="date" className="admin-input" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })} />
+                                <input type="date" className="admin-input" value={form.validTo} onChange={e => setForm({ ...form, validTo: e.target.value })} />
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '6px' }}>
+                                เว้นว่างไว้สำหรับราคาปกติ ถ้ากำหนดช่วงวันที่ ราคานี้จะมีผลเฉพาะวันในช่วงนั้น
+                            </div>
                         </div>
 
                         {/* Auto-linked operating hours info */}

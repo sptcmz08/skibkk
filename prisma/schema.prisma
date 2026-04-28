@@ -155,6 +155,8 @@ model PricingRule {
   id          String      @id @default(uuid())
   courtId     String? // null = applies to all courts
   daysOfWeek  DayOfWeek[] // which days this rule applies
+  validFrom   DateTime?   @db.Date
+  validTo     DateTime?   @db.Date
   startTime   String // "09:00"
   endTime     String // "15:00"
   price       Float

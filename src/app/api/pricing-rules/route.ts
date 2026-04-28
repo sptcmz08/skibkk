@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, requireAdmin } from '@/lib/auth'
 
+const toDateNoonUTC = (dateStr?: string | null) => dateStr ? new Date(`${dateStr.split('T')[0]}T12:00:00Z`) : null
+
 export async function GET() {
     try {
         await requireAdmin()
@@ -27,12 +29,20 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const { courtId, daysOfWeek, startTime, endTime, price, includesVat, priority } = body
+        const { courtId, daysOfWeek, validFrom, validTo, startTime, endTime, price, includesVat, priority } = body
+        const normalizedValidFrom = toDateNoonUTC(validFrom)
+        const normalizedValidTo = toDateNoonUTC(validTo)
+
+        if (normalizedValidFrom && normalizedValidTo && normalizedValidFrom > normalizedValidTo) {
+            return NextResponse.json({ error: 'Invalid date range' }, { status: 400 })
+        }
 
         const rule = await prisma.pricingRule.create({
             data: {
                 courtId: courtId || null,
                 daysOfWeek,
+                validFrom: normalizedValidFrom,
+                validTo: normalizedValidTo,
                 startTime,
                 endTime,
                 price: parseFloat(price.toString()),
@@ -55,13 +65,21 @@ export async function PUT(req: Request) {
         }
 
         const body = await req.json()
-        const { id, courtId, daysOfWeek, startTime, endTime, price, includesVat, priority } = body
+        const { id, courtId, daysOfWeek, validFrom, validTo, startTime, endTime, price, includesVat, priority } = body
+        const normalizedValidFrom = toDateNoonUTC(validFrom)
+        const normalizedValidTo = toDateNoonUTC(validTo)
+
+        if (normalizedValidFrom && normalizedValidTo && normalizedValidFrom > normalizedValidTo) {
+            return NextResponse.json({ error: 'Invalid date range' }, { status: 400 })
+        }
 
         const rule = await prisma.pricingRule.update({
             where: { id },
             data: {
                 courtId: courtId || null,
                 daysOfWeek,
+                validFrom: normalizedValidFrom,
+                validTo: normalizedValidTo,
                 startTime,
                 endTime,
                 price: parseFloat(price.toString()),

@@ -48,7 +48,14 @@ export async function GET(req: NextRequest) {
             include: {
                 operatingHours: { where: { dayOfWeek } },
                 pricingRules: {
-                    where: { isActive: true, daysOfWeek: { has: dayOfWeek } },
+                    where: {
+                        isActive: true,
+                        daysOfWeek: { has: dayOfWeek },
+                        AND: [
+                            { OR: [{ validFrom: null }, { validFrom: { lte: selectedDate } }] },
+                            { OR: [{ validTo: null }, { validTo: { gte: selectedDate } }] },
+                        ],
+                    },
                     orderBy: { priority: 'desc' },
                 },
             },
@@ -57,7 +64,15 @@ export async function GET(req: NextRequest) {
 
         // Get global pricing rules (courtId is null = applies to ALL courts)
         const globalPricingRules = await prisma.pricingRule.findMany({
-            where: { isActive: true, courtId: null, daysOfWeek: { has: dayOfWeek } },
+            where: {
+                isActive: true,
+                courtId: null,
+                daysOfWeek: { has: dayOfWeek },
+                AND: [
+                    { OR: [{ validFrom: null }, { validFrom: { lte: selectedDate } }] },
+                    { OR: [{ validTo: null }, { validTo: { gte: selectedDate } }] },
+                ],
+            },
             orderBy: { priority: 'desc' },
         })
 

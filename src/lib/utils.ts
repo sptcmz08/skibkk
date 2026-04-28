@@ -107,6 +107,8 @@ type PricingTimeRule = {
     price: number
     priority?: number | null
     courtId?: string | null
+    validFrom?: Date | string | null
+    validTo?: Date | string | null
 }
 
 function parseTimeToMinutes(time: string): number | null {
@@ -146,6 +148,9 @@ export function resolveSlotPrice<T extends PricingTimeRule>(time: string, rules:
             item.range !== null && isTimeInPricingRule(time, item.rule)
         )
         .sort((a, b) => {
+            const dateSpecificDiff = Number(Boolean(b.rule.validFrom || b.rule.validTo)) - Number(Boolean(a.rule.validFrom || a.rule.validTo))
+            if (dateSpecificDiff !== 0) return dateSpecificDiff
+
             const priorityDiff = (b.rule.priority ?? 0) - (a.rule.priority ?? 0)
             if (priorityDiff !== 0) return priorityDiff
 

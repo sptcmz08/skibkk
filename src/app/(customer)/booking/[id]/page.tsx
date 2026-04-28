@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, MapPin, Clock, Calendar, Users, CreditCard, CheckCircle, AlertCircle, XCircle, FileText, Dumbbell, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, MapPin, Clock, Calendar, Users, CreditCard, CheckCircle, AlertCircle, XCircle, FileText, Dumbbell, Plus, Trash2, Edit2, Save } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -37,6 +37,15 @@ type ParticipantDraft = {
     height: string
     phone: string
     isBooker?: boolean
+}
+
+type ScheduleDraft = {
+    id: string
+    courtId: string
+    courtName: string
+    date: string
+    startTime: string
+    endTime: string
 }
 
 type SportTypeResponseItem = {
@@ -73,6 +82,11 @@ const getBookingDisplayStatus = (booking: BookingDetail) => {
     return statusConfig[booking.status] || statusConfig.PENDING
 }
 
+const toDateInputValue = (value: string | Date) => String(value).split('T')[0]
+const toBangkokDateTime = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`)
+const timeOptions = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
+const endTimeOptions = Array.from({ length: 24 }, (_, h) => h + 1 === 24 ? '00:00' : `${String(h + 1).padStart(2, '0')}:00`)
+
 export default function BookingDetailPage() {
     const router = useRouter()
     const params = useParams()
@@ -84,6 +98,9 @@ export default function BookingDetailPage() {
     const [participantDrafts, setParticipantDrafts] = useState<ParticipantDraft[]>([])
     const [savingParticipants, setSavingParticipants] = useState(false)
     const [sportTypes, setSportTypes] = useState<Array<{ name: string; icon: string }>>([])
+    const [editingSchedule, setEditingSchedule] = useState(false)
+    const [scheduleDrafts, setScheduleDrafts] = useState<ScheduleDraft[]>([])
+    const [savingSchedule, setSavingSchedule] = useState(false)
 
     useEffect(() => {
         if (!bookingId) return
@@ -104,6 +121,14 @@ export default function BookingDetailPage() {
                     height: participant.height ? String(participant.height) : '',
                     phone: participant.phone || '',
                     isBooker: participant.isBooker,
+                })))
+                setScheduleDrafts(data.booking.bookingItems.map((item: BookingDetail['bookingItems'][number]) => ({
+                    id: item.id,
+                    courtId: item.courtId,
+                    courtName: item.court.name,
+                    date: toDateInputValue(item.date),
+                    startTime: item.startTime,
+                    endTime: item.endTime,
                 })))
             })
             .catch(() => {
@@ -145,6 +170,61 @@ export default function BookingDetailPage() {
             phone: participant.phone || '',
             isBooker: participant.isBooker,
         })))
+    }
+
+    const resetScheduleDrafts = (nextBooking = booking) => {
+        if (!nextBooking) return
+        setScheduleDrafts(nextBooking.bookingItems.map(item => ({
+            id: item.id,
+            courtId: item.courtId,
+            courtName: item.court.name,
+            date: toDateInputValue(item.date),
+            startTime: item.startTime,
+            endTime: item.endTime,
+        })))
+    }
+
+    const updateScheduleDraft = (index: number, patch: Partial<ScheduleDraft>) => {
+        setScheduleDrafts(prev => prev.map((item, i) => i === index ? { ...item, ...patch } : item))
+    }
+
+    const saveSchedule = async () => {
+        if (!booking) return
+        if (scheduleDrafts.some(item => !item.date || !item.startTime || !item.endTime)) {
+            toast.error('กรุณาระบุวันและเวลาให้ครบ')
+            return
+        }
+
+        setSavingSchedule(true)
+        try {
+            const res = await fetch(`/api/bookings/${bookingId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'reschedule',
+                    bookingItems: scheduleDrafts.map(item => ({
+                        id: item.id,
+                        date: item.date,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                    })),
+                }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(data.error || 'เปลี่ยนวันเวลาไม่สำเร็จ')
+                return
+            }
+
+            setBooking(data.booking)
+            resetScheduleDrafts(data.booking)
+            setEditingSchedule(false)
+            toast.success('เปลี่ยนวันเวลาเรียบร้อยแล้ว')
+        } catch {
+            toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+        } finally {
+            setSavingSchedule(false)
+        }
     }
 
     const addParticipantDraft = () => {
@@ -225,6 +305,11 @@ export default function BookingDetailPage() {
     const sc = getBookingDisplayStatus(booking)
     const StatusIcon = sc.icon
     const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE')
+    const earliestItem = [...booking.bookingItems].sort((a, b) =>
+        `${toDateInputValue(a.date)}T${a.startTime}`.localeCompare(`${toDateInputValue(b.date)}T${b.startTime}`)
+    )[0]
+    const canReschedule = booking.status === 'CONFIRMED' && Boolean(earliestItem) &&
+        Date.now() <= toBangkokDateTime(toDateInputValue(earliestItem.date), earliestItem.startTime).getTime() - 7 * 24 * 60 * 60 * 1000
 
     // Group booking items by date
     const itemsByDate = booking.bookingItems.reduce((acc, item) => {
@@ -319,9 +404,76 @@ export default function BookingDetailPage() {
                     background: 'var(--c-glass)', border: '1px solid var(--c-glass-border)',
                     borderRadius: '20px', padding: '24px', marginBottom: '16px',
                 }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={18} style={{ color: 'var(--c-primary)' }} /> รายละเอียดการจอง
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Calendar size={18} style={{ color: 'var(--c-primary)' }} /> รายละเอียดการจอง
+                    </h3>
+                    {booking.status === 'CONFIRMED' && (
+                        editingSchedule ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                    onClick={() => {
+                                        resetScheduleDrafts()
+                                        setEditingSchedule(false)
+                                    }}
+                                    disabled={savingSchedule}
+                                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-border)', background: '#fff', color: 'var(--c-text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '12px' }}
+                                >
+                                    ยกเลิก
+                                </button>
+                                <button
+                                    onClick={saveSchedule}
+                                    disabled={savingSchedule}
+                                    style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: 'var(--c-gradient)', color: '#2d2a00', cursor: savingSchedule ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '12px', opacity: savingSchedule ? 0.65 : 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <Save size={14} /> {savingSchedule ? 'กำลังบันทึก...' : 'บันทึก'}
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => {
+                                    resetScheduleDrafts()
+                                    setEditingSchedule(true)
+                                }}
+                                disabled={!canReschedule}
+                                title={!canReschedule ? 'ต้องเปลี่ยนก่อนเวลาเดิมอย่างน้อย 7 วัน' : undefined}
+                                style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(250,204,21,0.45)', background: canReschedule ? 'rgba(250,204,21,0.14)' : 'rgba(0,0,0,0.04)', color: canReschedule ? '#2d2a00' : 'var(--c-text-muted)', cursor: canReschedule ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 800, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <Edit2 size={14} /> เปลี่ยนวัน/เวลา
+                            </button>
+                        )
+                    )}
+                </div>
+
+                {booking.status === 'CONFIRMED' && !canReschedule && !editingSchedule && (
+                    <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.16)', color: '#e17055', fontSize: '12px', fontWeight: 700 }}>
+                        เปลี่ยนวันเวลาเองได้เฉพาะก่อนเวลาเดิมอย่างน้อย 7 วัน
+                    </div>
+                )}
+
+                {editingSchedule && (
+                    <div style={{ display: 'grid', gap: '10px', marginBottom: '16px' }}>
+                        {scheduleDrafts.map((item, i) => (
+                            <div key={item.id} style={{ padding: '14px', borderRadius: '14px', background: '#fff', border: '1px solid rgba(250,204,21,0.32)' }}>
+                                <div style={{ fontWeight: 800, color: '#2d2a00', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MapPin size={14} /> {item.courtName}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '8px' }}>
+                                    <input className="input-field" type="date" value={item.date} onChange={e => updateScheduleDraft(i, { date: e.target.value })} style={{ background: '#fff', fontSize: '13px' }} />
+                                    <select className="input-field" value={item.startTime} onChange={e => updateScheduleDraft(i, { startTime: e.target.value })} style={{ background: '#fff', fontSize: '13px' }}>
+                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                    </select>
+                                    <select className="input-field" value={item.endTime} onChange={e => updateScheduleDraft(i, { endTime: e.target.value })} style={{ background: '#fff', fontSize: '13px' }}>
+                                        {endTimeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        ))}
+                        <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', lineHeight: 1.6 }}>
+                            ระบบจะตรวจสอบเวลาว่างและคำนวณราคาตามวันที่ใหม่ให้อัตโนมัติ
+                        </div>
+                    </div>
+                )}
 
                 {Object.entries(itemsByDate).map(([dateStr, items]) => (
                     <div key={dateStr} style={{ marginBottom: '14px' }}>
