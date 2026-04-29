@@ -75,14 +75,15 @@ async function findDueReminderItems(reminderStartMs: number, reminderEndMs: numb
     return filtered
 }
 
-function groupItemsByBooking(items: DueReminderItem[]) {
-    const itemsByBooking = new Map<string, DueReminderItem[]>()
+function groupItemsByBookingDate(items: DueReminderItem[]) {
+    const itemsByBookingDate = new Map<string, DueReminderItem[]>()
     for (const item of items) {
-        const group = itemsByBooking.get(item.bookingId) || []
+        const groupKey = `${item.bookingId}:${getDateKey(item.date)}`
+        const group = itemsByBookingDate.get(groupKey) || []
         group.push(item)
-        itemsByBooking.set(item.bookingId, group)
+        itemsByBookingDate.set(groupKey, group)
     }
-    return itemsByBooking
+    return itemsByBookingDate
 }
 
 function getDateKey(date: Date) {
@@ -90,15 +91,16 @@ function getDateKey(date: Date) {
 }
 
 /**
- * Collect ALL unsent items for a booking (across all courts/dates),
+ * Collect ALL unsent items for a booking date,
  * not just those in the current reminder window.
- * This ensures 1 booking = 1 LINE message.
+ * This ensures 1 booking date = 1 LINE message.
  */
-function collectAllUnsentBookingItems(dueItems: DueReminderItem[]): DueReminderItem[] {
+function collectUnsentBookingDateItems(dueItems: DueReminderItem[]): DueReminderItem[] {
     if (dueItems.length === 0) return []
     const representative = dueItems[0]
+    const targetDateKey = getDateKey(representative.date)
     const allUnsent = [...representative.booking.bookingItems]
-        .filter(item => item.reminderSentAt === null)
+        .filter(item => item.reminderSentAt === null && getDateKey(item.date) === targetDateKey)
         .sort((a, b) => {
             const dateCompare = getDateKey(a.date).localeCompare(getDateKey(b.date))
             if (dateCompare !== 0) return dateCompare
@@ -175,7 +177,7 @@ async function releaseClaimedReminderItems(itemIds: string[], claimedAt: Date, c
  * Process a group of reminder bookings: send LINE messages and mark as sent.
  */
 async function processReminderGroup(
-    itemsByBooking: Map<string, DueReminderItem[]>,
+    itemsByBookingDate: Map<string, DueReminderItem[]>,
     now: Date,
     reminderTemplate: string | undefined,
     headerText: string,
@@ -186,16 +188,16 @@ async function processReminderGroup(
     let skippedCount = 0
     let reminderItemsMarked = 0
 
-    console.log(`[Reminders] Processing ${itemsByBooking.size} bookings for ${messageType}`)
+    console.log(`[Reminders] Processing ${itemsByBookingDate.size} booking dates for ${messageType}`)
 
-    for (const [bookingId, dueItems] of itemsByBooking.entries()) {
-        // Collect ALL unsent items for this booking (not just window items)
-        // so that 1 booking = 1 LINE message with complete info
-        const allItems = collectAllUnsentBookingItems(dueItems)
+    for (const [groupKey, dueItems] of itemsByBookingDate.entries()) {
+        // Collect ALL unsent items for this booking date (not just window items)
+        // so that 1 booking date = 1 LINE message with complete info
+        const allItems = collectUnsentBookingDateItems(dueItems)
         const itemIds = allItems.map(item => item.id)
         const booking = allItems[0].booking
 
-        console.log(`[Reminders] Booking ${bookingId}: ${allItems.length} items - ${allItems.map(i => `${i.court.name} ${i.startTime}-${i.endTime}`).join(', ')}`)
+        console.log(`[Reminders] ${groupKey}: ${allItems.length} items - ${allItems.map(i => `${i.court.name} ${getDateKey(i.date)} ${i.startTime}-${i.endTime}`).join(', ')}`)
 
         if (!booking.user?.lineUserId) {
             skippedCount++
@@ -218,7 +220,7 @@ async function processReminderGroup(
         // send the same booking twice.
         const claim = await claimReminderItems(itemIds)
         if (claim.count === 0) {
-            console.log(`[Reminders] Booking ${bookingId}: already claimed by another run, skipping`)
+            console.log(`[Reminders] ${groupKey}: already claimed by another run, skipping`)
             skippedCount++
             continue
         }
@@ -228,11 +230,11 @@ async function processReminderGroup(
         if (result.success) {
             sentCount++
             reminderItemsMarked += claim.count
-            console.log(`[Reminders] Booking ${bookingId}: sent successfully (${claim.count} claimed items in 1 message)`)
+            console.log(`[Reminders] ${groupKey}: sent successfully (${claim.count} claimed items in 1 message)`)
         } else {
             failCount++
             await releaseClaimedReminderItems(itemIds, claim.claimedAt, claim.claimWindowEnd)
-            console.log(`[Reminders] Booking ${bookingId}: failed to send - ${result.error}`)
+            console.log(`[Reminders] ${groupKey}: failed to send - ${result.error}`)
         }
 
         await new Promise(resolve => setTimeout(resolve, 300))
@@ -260,7 +262,7 @@ export async function GET(req: NextRequest) {
         const reminderStartMs = bangkokNowMs + MS_PER_DAY
         const reminderEndMs = reminderStartMs + windowMinutes * 60 * 1000
         const dueItems = await findDueReminderItems(reminderStartMs, reminderEndMs)
-        const itemsByBooking = groupItemsByBooking(dueItems)
+        const itemsByBookingDate = groupItemsByBookingDate(dueItems)
 
         // Same-day catch-up: bookings starting 1h to 12h from now
         // This covers bookings made less than 24h in advance
@@ -269,7 +271,7 @@ export async function GET(req: NextRequest) {
         const sameDayStartMs = bangkokNowMs + SAME_DAY_MIN_MS
         const sameDayEndMs = bangkokNowMs + SAME_DAY_MAX_MS
         const sameDayItems = await findDueReminderItems(sameDayStartMs, sameDayEndMs)
-        const sameDayByBooking = groupItemsByBooking(sameDayItems)
+        const sameDayByBookingDate = groupItemsByBookingDate(sameDayItems)
 
         // Fetch custom template
         const settings = await prisma.siteSetting.findMany()
@@ -279,13 +281,13 @@ export async function GET(req: NextRequest) {
 
         // Process 24h-ahead reminders ("พรุ่งนี้")
         const result24h = await processReminderGroup(
-            itemsByBooking, now, reminderTemplate,
+            itemsByBookingDate, now, reminderTemplate,
             '📅 แจ้งเตือน: คุณมีจองสนามพรุ่งนี้!', 'reminder',
         )
 
         // Process same-day reminders ("วันนี้")
         const resultSameDay = await processReminderGroup(
-            sameDayByBooking, now, reminderTemplate,
+            sameDayByBookingDate, now, reminderTemplate,
             '⏰ แจ้งเตือน: คุณมีจองสนามวันนี้!', 'reminder_sameday',
         )
 
@@ -295,6 +297,8 @@ export async function GET(req: NextRequest) {
         const totalItemsMarked = result24h.reminderItemsMarked + resultSameDay.reminderItemsMarked
 
         console.log(`LINE Reminder cron: ${totalSent} sent (24h:${result24h.sentCount} sameDay:${resultSameDay.sentCount}), ${totalFailed} failed, ${totalSkipped} skipped (no LINE), ${dueItems.length + sameDayItems.length} due items`)
+
+        const totalBookingDates = itemsByBookingDate.size + sameDayByBookingDate.size
 
         return NextResponse.json({
             success: true,
@@ -308,7 +312,8 @@ export async function GET(req: NextRequest) {
                 start: formatBangkokMinute(sameDayStartMs),
                 end: formatBangkokMinute(sameDayEndMs),
             },
-            totalBookings: itemsByBooking.size + sameDayByBooking.size,
+            totalBookingDates,
+            totalBookings: totalBookingDates,
             totalItems: dueItems.length + sameDayItems.length,
             lineMessagesSent: totalSent,
             lineMessagesSent24h: result24h.sentCount,

@@ -4,7 +4,7 @@ import { FadeIn } from '@/components/Motion'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, MapPin, CheckCircle, XCircle, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CourtAvailability {
@@ -12,10 +12,67 @@ interface CourtAvailability {
     slots: Array<{ startTime: string; endTime: string; price: number; status: 'available' | 'booked' }>
 }
 
+const THAI_MONTH_SHORT = ['มค.', 'กพ.', 'มีค.', 'เมย.', 'พค.', 'มิย.', 'กค.', 'สค.', 'กย.', 'ตค.', 'พย.', 'ธค.']
+
+const addDays = (dateStr: string, days: number) => {
+    const date = new Date(`${dateStr}T12:00:00Z`)
+    date.setUTCDate(date.getUTCDate() + days)
+    return date.toISOString().split('T')[0]
+}
+
+const formatRangeDate = (dateStr: string) => {
+    return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('th-TH', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    })
+}
+
+const formatShortThaiDate = (dateStr: string) => {
+    const date = new Date(`${dateStr}T12:00:00Z`)
+    return `วันที่ ${date.getUTCDate()} ${THAI_MONTH_SHORT[date.getUTCMonth()]}`
+}
+
+const formatCopyTime = (time: string) => time.replace(/^0/, '')
+
+const getDateRange = (from: string, to: string) => {
+    const start = from <= to ? from : to
+    const end = from <= to ? to : from
+    const dates: string[] = []
+    let cursor = start
+    while (cursor <= end && dates.length < 62) {
+        dates.push(cursor)
+        cursor = addDays(cursor, 1)
+    }
+    return dates
+}
+
+const mergeAvailableSlots = (slots: CourtAvailability['slots']) => {
+    const availableSlots = [...new Map(
+        slots
+            .filter(slot => slot.status === 'available')
+            .map(slot => [slot.startTime, slot])
+    ).values()].sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    const ranges: Array<{ startTime: string; endTime: string }> = []
+    for (const slot of availableSlots) {
+        const last = ranges[ranges.length - 1]
+        if (last && last.endTime === slot.startTime) {
+            last.endTime = slot.endTime
+        } else {
+            ranges.push({ startTime: slot.startTime, endTime: slot.endTime })
+        }
+    }
+    return ranges.map(range => `${formatCopyTime(range.startTime)}-${formatCopyTime(range.endTime)}`)
+}
+
 export default function AvailabilityPage() {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+    const [copyFromDate, setCopyFromDate] = useState(selectedDate)
+    const [copyToDate, setCopyToDate] = useState(addDays(selectedDate, 14))
     const [availability, setAvailability] = useState<CourtAvailability[]>([])
     const [loading, setLoading] = useState(true)
+    const [copying, setCopying] = useState(false)
 
     const fetchData = useCallback(async () => {
         setLoading(true)
@@ -37,6 +94,38 @@ export default function AvailabilityPage() {
     const totalSlots = availability.reduce((s, c) => s + c.slots.length, 0)
     const bookedSlots = availability.reduce((s, c) => s + c.slots.filter(sl => sl.status === 'booked').length, 0)
 
+    const buildCopyText = async () => {
+        const dates = getDateRange(copyFromDate, copyToDate)
+        const generatedAt = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }).replace(':', '.')
+        const lines = [
+            `ตารางว่าง ณ วันที่ ${formatRangeDate(dates[0])} ถึง ${formatRangeDate(dates[dates.length - 1])} เวลา ${generatedAt}น.`,
+        ]
+
+        for (const date of dates) {
+            const res = await fetch(`/api/availability?date=${date}`, { cache: 'no-store' })
+            const data = await res.json()
+            const courts = Array.isArray(data.availability) ? data.availability as CourtAvailability[] : []
+            const allSlots = courts.flatMap(court => court.closed ? [] : court.slots)
+            const ranges = mergeAvailableSlots(allSlots)
+            lines.push('', formatShortThaiDate(date), ranges.length > 0 ? ranges.join(' ,') : 'เต็ม')
+        }
+
+        return lines.join('\n')
+    }
+
+    const copyAvailabilityText = async () => {
+        setCopying(true)
+        try {
+            const text = await buildCopyText()
+            await navigator.clipboard.writeText(text)
+            toast.success('คัดลอกตารางว่างแล้ว')
+        } catch {
+            toast.error('คัดลอกตารางว่างไม่สำเร็จ')
+        } finally {
+            setCopying(false)
+        }
+    }
+
     return (
         <FadeIn><div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -50,6 +139,18 @@ export default function AvailabilityPage() {
                 </div>
                 <button onClick={() => changeDate(1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronRight size={18} /></button>
                 <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} className="btn-admin" style={{ padding: '8px 16px', fontSize: '13px' }}>วันนี้</button>
+            </div>
+
+            <div className="admin-card" style={{ padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 800, color: 'var(--a-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Copy size={16} style={{ color: 'var(--a-primary)' }} /> คัดลอกตารางว่าง
+                </div>
+                <DatePickerInput value={copyFromDate} onChange={setCopyFromDate} style={{ width: '170px', fontWeight: 600 }} />
+                <span style={{ color: 'var(--a-text-muted)', fontWeight: 700 }}>ถึง</span>
+                <DatePickerInput value={copyToDate} onChange={setCopyToDate} style={{ width: '170px', fontWeight: 600 }} />
+                <button onClick={copyAvailabilityText} disabled={copying} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', opacity: copying ? 0.65 : 1 }}>
+                    <Copy size={15} /> {copying ? 'กำลังคัดลอก...' : 'Copy text'}
+                </button>
             </div>
 
             {/* Summary */}
