@@ -284,7 +284,7 @@ export async function PATCH(
                     const originalItemStartAt = toBangkokDateTime(normalizeDateOnly(existing.date), existing.startTime)
                     const itemDeadline = originalItemStartAt.getTime() - RESCHEDULE_MIN_NOTICE_DAYS * 24 * 60 * 60 * 1000
                     if (Date.now() > itemDeadline) {
-                        return NextResponse.json({ error: `เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนก่อนถึงวันเวลาเดิมอย่างน้อย${RESCHEDULE_MIN_NOTICE_DAYS}วัน` }, { status: 400 })
+                        return NextResponse.json({ error: `เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนล่วงหน้าอย่างน้อย${RESCHEDULE_MIN_NOTICE_DAYS}วัน` }, { status: 400 })
                     }
                 }
                 if (!await validateCourtOpen(existing.courtId, date, startTime, endTime)) {

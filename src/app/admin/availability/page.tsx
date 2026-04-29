@@ -14,6 +14,11 @@ interface CourtAvailability {
 
 const THAI_MONTH_SHORT = ['มค.', 'กพ.', 'มีค.', 'เมย.', 'พค.', 'มิย.', 'กค.', 'สค.', 'กย.', 'ตค.', 'พย.', 'ธค.']
 
+const toDateInputValue = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const getTodayDateInputValue = () => toDateInputValue(new Date())
+
 const addDays = (dateStr: string, days: number) => {
     const date = new Date(`${dateStr}T12:00:00Z`)
     date.setUTCDate(date.getUTCDate() + days)
@@ -67,7 +72,8 @@ const mergeAvailableSlots = (slots: CourtAvailability['slots']) => {
 }
 
 export default function AvailabilityPage() {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+    const initialDate = getTodayDateInputValue()
+    const [selectedDate, setSelectedDate] = useState(initialDate)
     const [copyFromDate, setCopyFromDate] = useState(selectedDate)
     const [copyToDate, setCopyToDate] = useState(addDays(selectedDate, 14))
     const [availability, setAvailability] = useState<CourtAvailability[]>([])
@@ -86,9 +92,14 @@ export default function AvailabilityPage() {
 
     useEffect(() => { fetchData() }, [fetchData])
 
+    const setActiveDate = (date: string) => {
+        setSelectedDate(date)
+        setCopyFromDate(date)
+        setCopyToDate(addDays(date, 14))
+    }
+
     const changeDate = (delta: number) => {
-        const d = new Date(selectedDate); d.setDate(d.getDate() + delta)
-        setSelectedDate(d.toISOString().split('T')[0])
+        setActiveDate(addDays(selectedDate, delta))
     }
 
     const totalSlots = availability.reduce((s, c) => s + c.slots.length, 0)
@@ -132,25 +143,32 @@ export default function AvailabilityPage() {
                 <button onClick={() => changeDate(-1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronLeft size={18} /></button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={20} style={{ color: 'var(--a-primary)' }} />
-                    <DatePickerInput value={selectedDate} onChange={setSelectedDate} style={{ width: '170px', fontWeight: 600 }} />
+                    <DatePickerInput value={selectedDate} onChange={setActiveDate} style={{ width: '170px', fontWeight: 600 }} />
                     <span style={{ color: 'var(--a-text-secondary)', fontSize: '14px' }}>
                         {new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                 </div>
                 <button onClick={() => changeDate(1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronRight size={18} /></button>
-                <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} className="btn-admin" style={{ padding: '8px 16px', fontSize: '13px' }}>วันนี้</button>
+                <button onClick={() => setActiveDate(getTodayDateInputValue())} className="btn-admin" style={{ padding: '8px 16px', fontSize: '13px' }}>วันนี้</button>
             </div>
 
-            <div className="admin-card" style={{ padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ fontWeight: 800, color: 'var(--a-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="admin-card" style={{ padding: '16px', marginBottom: '20px' }}>
+                <div style={{ fontWeight: 800, color: 'var(--a-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                     <Copy size={16} style={{ color: 'var(--a-primary)' }} /> คัดลอกตารางว่าง
                 </div>
-                <DatePickerInput value={copyFromDate} onChange={setCopyFromDate} style={{ width: '170px', fontWeight: 600 }} />
-                <span style={{ color: 'var(--a-text-muted)', fontWeight: 700 }}>ถึง</span>
-                <DatePickerInput value={copyToDate} onChange={setCopyToDate} style={{ width: '170px', fontWeight: 600 }} />
-                <button onClick={copyAvailabilityText} disabled={copying} className="btn-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', opacity: copying ? 0.65 : 1 }}>
-                    <Copy size={15} /> {copying ? 'กำลังคัดลอก...' : 'Copy text'}
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', alignItems: 'end', gap: '12px' }}>
+                    <label style={{ display: 'grid', gap: '6px', color: 'var(--a-text-muted)', fontSize: '12px', fontWeight: 800 }}>
+                        เริ่มวันที่
+                        <DatePickerInput value={copyFromDate} onChange={setCopyFromDate} style={{ width: '100%', fontWeight: 600 }} />
+                    </label>
+                    <label style={{ display: 'grid', gap: '6px', color: 'var(--a-text-muted)', fontSize: '12px', fontWeight: 800 }}>
+                        ถึงวันที่
+                        <DatePickerInput value={copyToDate} onChange={setCopyToDate} style={{ width: '100%', fontWeight: 600 }} />
+                    </label>
+                    <button onClick={copyAvailabilityText} disabled={copying} className="btn-admin" style={{ minHeight: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', opacity: copying ? 0.65 : 1, width: '100%' }}>
+                        <Copy size={15} /> {copying ? 'กำลังคัดลอก...' : 'Copy text'}
+                    </button>
+                </div>
             </div>
 
             {/* Summary */}

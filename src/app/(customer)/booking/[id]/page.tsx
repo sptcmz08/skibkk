@@ -90,7 +90,7 @@ const getBookingDisplayStatus = (booking: BookingDetail) => {
 const toDateInputValue = (value: string | Date) => String(value).split('T')[0]
 const toBangkokDateTime = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`)
 const timeOptions = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
-const RESCHEDULE_NOTICE_TEXT = 'เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนก่อนถึงวันเวลาเดิมอย่างน้อย7วัน'
+const RESCHEDULE_NOTICE_TEXT = 'เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนล่วงหน้าอย่างน้อย7วัน'
 
 const getHourRange = (startTime: string, endTime: string) => {
     const startHour = parseInt(startTime.split(':')[0], 10)
