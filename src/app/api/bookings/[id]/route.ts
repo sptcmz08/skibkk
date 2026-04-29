@@ -6,10 +6,13 @@ import { getAuditRequestMeta } from '@/lib/audit'
 import { getDayOfWeek, resolveSlotPrice } from '@/lib/utils'
 import { expandSlotStartTimes, getSlotHourRange, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
+import { sendLinePush } from '@/lib/line-messaging'
+import { buildLineUpdateMessage } from '@/lib/line-booking-notify'
 
 const RESCHEDULE_MIN_NOTICE_DAYS = 7
 const toDateNoonUTC = (dateStr: string) => new Date(`${dateStr.split('T')[0]}T12:00:00Z`)
 const toBangkokDateTime = (dateStr: string, time: string) => new Date(`${dateStr.split('T')[0]}T${time}:00+07:00`)
+const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 
 const summarizeParticipantForAudit = (participant: {
     id?: string
@@ -201,6 +204,7 @@ export async function PATCH(
                 include: {
                     bookingItems: { include: { court: true }, orderBy: [{ date: 'asc' }, { startTime: 'asc' }] },
                     payments: true,
+                    user: { select: { name: true, lineUserId: true } },
                 },
             })
 
@@ -214,17 +218,8 @@ export async function PATCH(
                 return NextResponse.json({ error: 'เปลี่ยนวันเวลาได้เฉพาะการจองที่ยืนยันแล้ว' }, { status: 400 })
             }
 
-            const earliestItem = [...booking.bookingItems].sort((a, b) =>
-                `${normalizeDateOnly(a.date)}T${a.startTime}`.localeCompare(`${normalizeDateOnly(b.date)}T${b.startTime}`)
-            )[0]
-            if (!earliestItem) {
+            if (booking.bookingItems.length === 0) {
                 return NextResponse.json({ error: 'ไม่พบรายการจอง' }, { status: 400 })
-            }
-
-            const originalStartAt = toBangkokDateTime(normalizeDateOnly(earliestItem.date), earliestItem.startTime)
-            const deadline = originalStartAt.getTime() - RESCHEDULE_MIN_NOTICE_DAYS * 24 * 60 * 60 * 1000
-            if (Date.now() > deadline) {
-                return NextResponse.json({ error: `ต้องเปลี่ยนก่อนเวลาเดิมอย่างน้อย ${RESCHEDULE_MIN_NOTICE_DAYS} วัน` }, { status: 400 })
             }
 
             const submittedItems = Array.isArray(body.bookingItems) ? body.bookingItems as RescheduleItemInput[] : []
@@ -241,10 +236,16 @@ export async function PATCH(
                 endTime: string
                 price: number
                 teacherId: string | null
+                evaluationSent: boolean
+                reminderSentAt: Date | null
                 originalCourtId: string
                 originalDate: Date
                 originalStartTime: string
                 originalEndTime: string
+                customerRescheduledAt: Date | null
+                customerOriginalDate: Date | null
+                customerOriginalStartTime: string | null
+                customerOriginalEndTime: string | null
             }> = []
             for (const submitted of submittedItems) {
                 if (typeof submitted.id !== 'string') {
@@ -264,8 +265,27 @@ export async function PATCH(
                 if (!getSlotHourRange({ startTime, endTime })) {
                     return NextResponse.json({ error: 'ช่วงเวลาไม่ถูกต้อง' }, { status: 400 })
                 }
+                const existingRange = getSlotHourRange(existing)
+                const nextRange = getSlotHourRange({ startTime, endTime })
+                if (!existingRange || !nextRange || nextRange.endHour - nextRange.startHour !== existingRange.endHour - existingRange.startHour) {
+                    return NextResponse.json({ error: 'ต้องเปลี่ยนเป็นระยะเวลาเท่าเดิมเท่านั้น' }, { status: 400 })
+                }
+                const hasScheduleChange =
+                    normalizeDateOnly(existing.date) !== date ||
+                    existing.startTime !== startTime ||
+                    existing.endTime !== endTime
+                if (hasScheduleChange && existing.customerRescheduledAt) {
+                    return NextResponse.json({ error: 'รายการนี้เคยเปลี่ยนวันเวลาแล้ว ไม่สามารถเปลี่ยนซ้ำได้' }, { status: 400 })
+                }
                 if (toBangkokDateTime(date, startTime).getTime() <= Date.now()) {
                     return NextResponse.json({ error: 'ไม่สามารถเปลี่ยนไปยังเวลาที่ผ่านมาแล้ว' }, { status: 400 })
+                }
+                if (hasScheduleChange) {
+                    const originalItemStartAt = toBangkokDateTime(normalizeDateOnly(existing.date), existing.startTime)
+                    const itemDeadline = originalItemStartAt.getTime() - RESCHEDULE_MIN_NOTICE_DAYS * 24 * 60 * 60 * 1000
+                    if (Date.now() > itemDeadline) {
+                        return NextResponse.json({ error: `เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนก่อนถึงวันเวลาเดิมอย่างน้อย${RESCHEDULE_MIN_NOTICE_DAYS}วัน` }, { status: 400 })
+                    }
                 }
                 if (!await validateCourtOpen(existing.courtId, date, startTime, endTime)) {
                     return NextResponse.json({ error: 'สนามไม่เปิดให้จองในวันเวลาที่เลือก' }, { status: 400 })
@@ -280,10 +300,16 @@ export async function PATCH(
                     endTime,
                     price,
                     teacherId: existing.teacherId,
+                    evaluationSent: existing.evaluationSent,
+                    reminderSentAt: existing.reminderSentAt,
                     originalCourtId: existing.originalCourtId || existing.courtId,
                     originalDate: existing.originalDate || existing.date,
                     originalStartTime: existing.originalStartTime || existing.startTime,
                     originalEndTime: existing.originalEndTime || existing.endTime,
+                    customerRescheduledAt: hasScheduleChange ? new Date() : existing.customerRescheduledAt,
+                    customerOriginalDate: hasScheduleChange ? existing.date : existing.customerOriginalDate,
+                    customerOriginalStartTime: hasScheduleChange ? existing.startTime : existing.customerOriginalStartTime,
+                    customerOriginalEndTime: hasScheduleChange ? existing.endTime : existing.customerOriginalEndTime,
                 })
             }
 
@@ -293,12 +319,21 @@ export async function PATCH(
             }
 
             const beforeItems = booking.bookingItems.map(summarizeBookingItemForAudit)
+            const changedItems = nextItems.filter(item => {
+                const existing = existingById.get(item.id)
+                return existing && (
+                    normalizeDateOnly(existing.date) !== item.date ||
+                    existing.startTime !== item.startTime ||
+                    existing.endTime !== item.endTime
+                )
+            })
             const totalAmount = nextItems.reduce((sum, item) => sum + item.price, 0)
 
             await prisma.$transaction(async tx => {
                 await tx.bookingItem.deleteMany({ where: { bookingId: id } })
                 await tx.bookingItem.createMany({
                     data: nextItems.map(item => ({
+                        id: item.id,
                         bookingId: id,
                         courtId: item.courtId,
                         date: toDateNoonUTC(item.date),
@@ -306,10 +341,16 @@ export async function PATCH(
                         endTime: item.endTime,
                         price: item.price,
                         teacherId: item.teacherId,
+                        evaluationSent: item.evaluationSent,
+                        reminderSentAt: item.reminderSentAt,
                         originalCourtId: item.originalCourtId,
                         originalDate: item.originalDate,
                         originalStartTime: item.originalStartTime,
                         originalEndTime: item.originalEndTime,
+                        customerRescheduledAt: item.customerRescheduledAt,
+                        customerOriginalDate: item.customerOriginalDate,
+                        customerOriginalStartTime: item.customerOriginalStartTime,
+                        customerOriginalEndTime: item.customerOriginalEndTime,
                     })),
                 })
 
@@ -370,6 +411,36 @@ export async function PATCH(
                 courtIds: [...new Set(updated.bookingItems.map(item => item.courtId))],
                 message: 'booking customer rescheduled',
             })
+
+            if (booking.user?.lineUserId && changedItems.length > 0) {
+                const message = buildLineUpdateMessage(
+                    'มีการเปลี่ยนวันเวลาจองเรียบร้อยแล้ว กรุณาตรวจสอบรายละเอียดล่าสุดดังนี้',
+                    {
+                        bookingNumber: booking.bookingNumber,
+                        customerName: booking.user.name,
+                        items: changedItems.map(item => {
+                            const original = existingById.get(item.id)
+                            return {
+                                courtName: original?.court.name || item.courtId,
+                                date: formatLineDate(toDateNoonUTC(item.date)),
+                                startTime: item.startTime,
+                                endTime: item.endTime,
+                                price: item.price,
+                                original: original
+                                    ? {
+                                        courtName: original.court.name,
+                                        date: formatLineDate(original.date),
+                                        startTime: original.startTime,
+                                        endTime: original.endTime,
+                                    }
+                                    : null,
+                            }
+                        }),
+                        totalAmount,
+                    }
+                )
+                sendLinePush(booking.user.lineUserId, [{ type: 'text', text: message }], { messageType: 'update', bookingId: updated.id }).catch(err => console.error('Failed to send LINE reschedule update:', err))
+            }
 
             return NextResponse.json({ booking: updated })
         }

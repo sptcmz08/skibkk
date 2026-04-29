@@ -643,6 +643,10 @@ export async function PATCH(req: NextRequest) {
                         originalDate: origDate,
                         originalStartTime: origStartTime,
                         originalEndTime: origEndTime,
+                        customerRescheduledAt: oldItem?.customerRescheduledAt || null,
+                        customerOriginalDate: oldItem?.customerOriginalDate || null,
+                        customerOriginalStartTime: oldItem?.customerOriginalStartTime || null,
+                        customerOriginalEndTime: oldItem?.customerOriginalEndTime || null,
                     }
                 }),
             })

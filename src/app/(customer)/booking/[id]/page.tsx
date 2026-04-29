@@ -14,6 +14,10 @@ interface BookingDetail {
     bookingItems: Array<{
         id: string; courtId: string; court: { name: string }; date: string
         startTime: string; endTime: string; price: number
+        customerRescheduledAt?: string | null
+        customerOriginalDate?: string | null
+        customerOriginalStartTime?: string | null
+        customerOriginalEndTime?: string | null
         teacher?: { id: string; name: string } | null
     }>
     participants: Array<{
@@ -46,6 +50,7 @@ type ScheduleDraft = {
     date: string
     startTime: string
     endTime: string
+    durationHours: number
 }
 
 type SportTypeResponseItem = {
@@ -85,7 +90,36 @@ const getBookingDisplayStatus = (booking: BookingDetail) => {
 const toDateInputValue = (value: string | Date) => String(value).split('T')[0]
 const toBangkokDateTime = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`)
 const timeOptions = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
-const endTimeOptions = Array.from({ length: 24 }, (_, h) => h + 1 === 24 ? '00:00' : `${String(h + 1).padStart(2, '0')}:00`)
+const RESCHEDULE_NOTICE_TEXT = 'เปลี่ยนวันเวลาจองได้1ครั้ง และต้องเปลี่ยนก่อนถึงวันเวลาเดิมอย่างน้อย7วัน'
+
+const getHourRange = (startTime: string, endTime: string) => {
+    const startHour = parseInt(startTime.split(':')[0], 10)
+    let endHour = parseInt(endTime.split(':')[0], 10)
+    if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return { startHour: 0, endHour: 1 }
+    if (endHour <= startHour) endHour += 24
+    return { startHour, endHour }
+}
+
+const getDurationHours = (startTime: string, endTime: string) => {
+    const range = getHourRange(startTime, endTime)
+    return Math.max(1, range.endHour - range.startHour)
+}
+
+const addHoursToTime = (startTime: string, durationHours: number) => {
+    const startHour = parseInt(startTime.split(':')[0], 10)
+    const nextHour = (startHour + durationHours) % 24
+    return `${String(nextHour).padStart(2, '0')}:00`
+}
+
+const formatScheduleDate = (date: string) => new Date(`${toDateInputValue(date)}T12:00:00Z`).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+const formatScheduleChange = (fromDate: string, fromStart: string, fromEnd: string, toDate: string, toStart: string, toEnd: string) =>
+    `${formatScheduleDate(fromDate)} ${fromStart}-${fromEnd} เป็น ${formatScheduleDate(toDate)} ${toStart}-${toEnd}`
+
+const canRescheduleItem = (bookingStatus: string, item: BookingDetail['bookingItems'][number]) =>
+    bookingStatus === 'CONFIRMED' &&
+    !item.customerRescheduledAt &&
+    Date.now() <= toBangkokDateTime(toDateInputValue(item.date), item.startTime).getTime() - 7 * 24 * 60 * 60 * 1000
 
 export default function BookingDetailPage() {
     const router = useRouter()
@@ -129,6 +163,7 @@ export default function BookingDetailPage() {
                     date: toDateInputValue(item.date),
                     startTime: item.startTime,
                     endTime: item.endTime,
+                    durationHours: getDurationHours(item.startTime, item.endTime),
                 })))
             })
             .catch(() => {
@@ -181,11 +216,17 @@ export default function BookingDetailPage() {
             date: toDateInputValue(item.date),
             startTime: item.startTime,
             endTime: item.endTime,
+            durationHours: getDurationHours(item.startTime, item.endTime),
         })))
     }
 
     const updateScheduleDraft = (index: number, patch: Partial<ScheduleDraft>) => {
-        setScheduleDrafts(prev => prev.map((item, i) => i === index ? { ...item, ...patch } : item))
+        setScheduleDrafts(prev => prev.map((item, i) => {
+            if (i !== index) return item
+            const next = { ...item, ...patch }
+            if (patch.startTime) next.endTime = addHoursToTime(patch.startTime, item.durationHours)
+            return next
+        }))
     }
 
     const saveSchedule = async () => {
@@ -305,11 +346,7 @@ export default function BookingDetailPage() {
     const sc = getBookingDisplayStatus(booking)
     const StatusIcon = sc.icon
     const isPackageBooking = booking.payments.some(payment => payment.method === 'PACKAGE')
-    const earliestItem = [...booking.bookingItems].sort((a, b) =>
-        `${toDateInputValue(a.date)}T${a.startTime}`.localeCompare(`${toDateInputValue(b.date)}T${b.startTime}`)
-    )[0]
-    const canReschedule = booking.status === 'CONFIRMED' && Boolean(earliestItem) &&
-        Date.now() <= toBangkokDateTime(toDateInputValue(earliestItem.date), earliestItem.startTime).getTime() - 7 * 24 * 60 * 60 * 1000
+    const canReschedule = booking.bookingItems.some(item => canRescheduleItem(booking.status, item))
 
     // Group booking items by date
     const itemsByDate = booking.bookingItems.reduce((acc, item) => {
@@ -436,7 +473,7 @@ export default function BookingDetailPage() {
                                     setEditingSchedule(true)
                                 }}
                                 disabled={!canReschedule}
-                                title={!canReschedule ? 'ต้องเปลี่ยนก่อนเวลาเดิมอย่างน้อย 7 วัน' : undefined}
+                                title={!canReschedule ? RESCHEDULE_NOTICE_TEXT : undefined}
                                 style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(250,204,21,0.45)', background: canReschedule ? 'rgba(250,204,21,0.14)' : 'rgba(0,0,0,0.04)', color: canReschedule ? '#2d2a00' : 'var(--c-text-muted)', cursor: canReschedule ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 800, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                             >
                                 <Edit2 size={14} /> เปลี่ยนวัน/เวลา
@@ -447,28 +484,47 @@ export default function BookingDetailPage() {
 
                 {booking.status === 'CONFIRMED' && !canReschedule && !editingSchedule && (
                     <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.16)', color: '#e17055', fontSize: '12px', fontWeight: 700 }}>
-                        เปลี่ยนวันเวลาเองได้เฉพาะก่อนเวลาเดิมอย่างน้อย 7 วัน
+                        {RESCHEDULE_NOTICE_TEXT}
                     </div>
                 )}
 
                 {editingSchedule && (
                     <div style={{ display: 'grid', gap: '10px', marginBottom: '16px' }}>
-                        {scheduleDrafts.map((item, i) => (
-                            <div key={item.id} style={{ padding: '14px', borderRadius: '14px', background: '#fff', border: '1px solid rgba(250,204,21,0.32)' }}>
-                                <div style={{ fontWeight: 800, color: '#2d2a00', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <MapPin size={14} /> {item.courtName}
+                        {scheduleDrafts.map((item, i) => {
+                            const originalItem = booking.bookingItems.find(bookingItem => bookingItem.id === item.id)
+                            const itemCanReschedule = originalItem ? canRescheduleItem(booking.status, originalItem) : false
+                            const hasDraftChange = originalItem && (
+                                toDateInputValue(originalItem.date) !== item.date ||
+                                originalItem.startTime !== item.startTime ||
+                                originalItem.endTime !== item.endTime
+                            )
+                            return (
+                                <div key={item.id} style={{ padding: '14px', borderRadius: '14px', background: itemCanReschedule ? '#fff' : 'rgba(0,0,0,0.03)', border: '1px solid rgba(250,204,21,0.32)', opacity: itemCanReschedule ? 1 : 0.72 }}>
+                                    <div style={{ fontWeight: 800, color: '#2d2a00', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><MapPin size={14} /> {item.courtName}</span>
+                                        {!itemCanReschedule && (
+                                            <span style={{ fontSize: '11px', color: '#e17055', fontWeight: 800 }}>
+                                                {originalItem?.customerRescheduledAt ? 'รายการนี้เคยเปลี่ยนแล้ว' : RESCHEDULE_NOTICE_TEXT}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '8px' }}>
+                                        <input disabled={!itemCanReschedule} className="input-field" type="date" value={item.date} onChange={e => updateScheduleDraft(i, { date: e.target.value })} style={{ background: '#fff', fontSize: '13px' }} />
+                                        <select disabled={!itemCanReschedule} className="input-field" value={item.startTime} onChange={e => updateScheduleDraft(i, { startTime: e.target.value })} style={{ background: '#fff', fontSize: '13px' }}>
+                                            {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                        </select>
+                                        <div className="input-field" style={{ background: '#f8f9fa', fontSize: '13px', color: 'var(--c-text-secondary)', display: 'flex', alignItems: 'center' }}>
+                                            {item.endTime}
+                                        </div>
+                                    </div>
+                                    {originalItem && hasDraftChange && (
+                                        <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(250,204,21,0.12)', color: '#8a6d00', fontSize: '12px', fontWeight: 800 }}>
+                                            เปลี่ยนจาก {formatScheduleChange(toDateInputValue(originalItem.date), originalItem.startTime, originalItem.endTime, item.date, item.startTime, item.endTime)}
+                                        </div>
+                                    )}
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '8px' }}>
-                                    <input className="input-field" type="date" value={item.date} onChange={e => updateScheduleDraft(i, { date: e.target.value })} style={{ background: '#fff', fontSize: '13px' }} />
-                                    <select className="input-field" value={item.startTime} onChange={e => updateScheduleDraft(i, { startTime: e.target.value })} style={{ background: '#fff', fontSize: '13px' }}>
-                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
-                                    </select>
-                                    <select className="input-field" value={item.endTime} onChange={e => updateScheduleDraft(i, { endTime: e.target.value })} style={{ background: '#fff', fontSize: '13px' }}>
-                                        {endTimeOptions.map(time => <option key={time} value={time}>{time}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                         <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', lineHeight: 1.6 }}>
                             ระบบจะตรวจสอบเวลาว่างและคำนวณราคาตามวันที่ใหม่ให้อัตโนมัติ
                         </div>
@@ -487,39 +543,55 @@ export default function BookingDetailPage() {
                                 {new Date(dateStr).toLocaleDateString('th-TH', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </span>
                         </div>
-                        {items.map((item, j) => (
-                            <div key={j} style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '12px 16px', marginBottom: '6px',
-                                background: 'rgba(255,255,255,0.03)', borderRadius: '12px',
-                                border: '1px solid rgba(255,255,255,0.04)',
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{
-                                        width: '36px', height: '36px', borderRadius: '10px',
-                                        background: 'var(--c-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '16px', flexShrink: 0,
-                                    }}>🏟️</div>
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <MapPin size={13} style={{ color: 'var(--c-primary)' }} />
-                                            {item.court.name}
-                                        </div>
-                                        <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                                            <Clock size={12} /> {item.startTime} - {item.endTime}
-                                            {item.teacher && (
-                                                <span style={{ marginLeft: '8px', color: 'var(--c-primary)', fontWeight: 600 }}>
-                                                    👨‍🏫 {item.teacher.name}
-                                                </span>
+                        {items.map((item, j) => {
+                            const hasCustomerChange = Boolean(item.customerOriginalDate && item.customerOriginalStartTime && item.customerOriginalEndTime)
+                            return (
+                                <div key={j} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '12px 16px', marginBottom: '6px',
+                                    background: 'rgba(255,255,255,0.03)', borderRadius: '12px',
+                                    border: '1px solid rgba(255,255,255,0.04)',
+                                    gap: '12px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{
+                                            width: '36px', height: '36px', borderRadius: '10px',
+                                            background: 'var(--c-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '16px', flexShrink: 0,
+                                        }}>🏟️</div>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <MapPin size={13} style={{ color: 'var(--c-primary)' }} />
+                                                {item.court.name}
+                                            </div>
+                                            <div style={{ fontSize: '13px', color: 'var(--c-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                                                <Clock size={12} /> {item.startTime} - {item.endTime}
+                                                {item.teacher && (
+                                                    <span style={{ marginLeft: '8px', color: 'var(--c-primary)', fontWeight: 600 }}>
+                                                        👨‍🏫 {item.teacher.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {hasCustomerChange && (
+                                                <div style={{ marginTop: '6px', padding: '6px 8px', borderRadius: '8px', background: 'rgba(250,204,21,0.12)', color: '#8a6d00', fontSize: '12px', fontWeight: 800 }}>
+                                                    เปลี่ยนจาก {formatScheduleChange(
+                                                        toDateInputValue(item.customerOriginalDate || ''),
+                                                        item.customerOriginalStartTime || '',
+                                                        item.customerOriginalEndTime || '',
+                                                        toDateInputValue(item.date),
+                                                        item.startTime,
+                                                        item.endTime
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     </div>
+                                    <div style={{ fontWeight: 800, fontFamily: "'Inter'", fontSize: '15px', color: 'var(--c-text)', flexShrink: 0 }}>
+                                        ฿{(isPackageBooking ? 0 : item.price).toLocaleString()}
+                                    </div>
                                 </div>
-                                <div style={{ fontWeight: 800, fontFamily: "'Inter'", fontSize: '15px', color: 'var(--c-text)' }}>
-                                    ฿{(isPackageBooking ? 0 : item.price).toLocaleString()}
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 ))}
             </motion.div>

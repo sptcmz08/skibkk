@@ -207,6 +207,10 @@ model BookingItem {
   originalDate      DateTime? @db.Date
   originalStartTime String?
   originalEndTime   String?
+  customerRescheduledAt       DateTime?
+  customerOriginalDate        DateTime? @db.Date
+  customerOriginalStartTime   String?
+  customerOriginalEndTime     String?
 
   booking       Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   court         Court               @relation(fields: [courtId], references: [id])
