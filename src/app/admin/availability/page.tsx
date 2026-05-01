@@ -71,6 +71,22 @@ const mergeAvailableSlots = (slots: CourtAvailability['slots']) => {
     return ranges.map(range => `${formatCopyTime(range.startTime)}-${formatCopyTime(range.endTime)}`)
 }
 
+const buildCourtAvailabilityLines = (courts: CourtAvailability[]) => {
+    const lines: string[] = []
+
+    for (const court of courts) {
+        if (court.closed) {
+            lines.push(`${court.courtName}: ปิดให้บริการ`)
+            continue
+        }
+
+        const ranges = mergeAvailableSlots(court.slots)
+        lines.push(`${court.courtName}: ${ranges.length > 0 ? ranges.join(' ,') : 'เต็ม'}`)
+    }
+
+    return lines.length > 0 ? lines : ['ไม่มีข้อมูลสนาม']
+}
+
 export default function AvailabilityPage() {
     const initialDate = getTodayDateInputValue()
     const [selectedDate, setSelectedDate] = useState(initialDate)
@@ -116,9 +132,7 @@ export default function AvailabilityPage() {
             const res = await fetch(`/api/availability?date=${date}`, { cache: 'no-store' })
             const data = await res.json()
             const courts = Array.isArray(data.availability) ? data.availability as CourtAvailability[] : []
-            const allSlots = courts.flatMap(court => court.closed ? [] : court.slots)
-            const ranges = mergeAvailableSlots(allSlots)
-            lines.push('', formatShortThaiDate(date), ranges.length > 0 ? ranges.join(' ,') : 'เต็ม')
+            lines.push('', formatShortThaiDate(date), ...buildCourtAvailabilityLines(courts))
         }
 
         return lines.join('\n')

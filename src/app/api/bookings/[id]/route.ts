@@ -3,11 +3,12 @@ import type { DayOfWeek } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { getAuditRequestMeta } from '@/lib/audit'
-import { getDayOfWeek, resolveSlotPrice } from '@/lib/utils'
-import { expandSlotStartTimes, getSlotHourRange, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
+import { getDayOfWeek } from '@/lib/utils'
+import { getSlotHourRange, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
 import { publishRealtimeEvent } from '@/lib/realtime-events'
 import { sendLinePush } from '@/lib/line-messaging'
 import { buildLineUpdateMessage } from '@/lib/line-booking-notify'
+import { resolveBookingSlotPrice } from '@/lib/pricing'
 
 const RESCHEDULE_MIN_NOTICE_DAYS = 7
 const toDateNoonUTC = (dateStr: string) => new Date(`${dateStr.split('T')[0]}T12:00:00Z`)
@@ -69,25 +70,6 @@ const summarizeBookingItemForAudit = (item: {
     endTime: item.endTime,
     price: item.price,
 })
-
-const resolveBookingItemPrice = async (courtId: string, date: string, startTime: string, endTime: string) => {
-    const selectedDate = toDateNoonUTC(date)
-    const dayOfWeek = getDayOfWeek(selectedDate) as DayOfWeek
-    const rules = await prisma.pricingRule.findMany({
-        where: {
-            isActive: true,
-            daysOfWeek: { has: dayOfWeek },
-            OR: [{ courtId }, { courtId: null }],
-            AND: [
-                { OR: [{ validFrom: null }, { validFrom: { lte: selectedDate } }] },
-                { OR: [{ validTo: null }, { validTo: { gte: selectedDate } }] },
-            ],
-        },
-        orderBy: { priority: 'desc' },
-    })
-
-    return expandSlotStartTimes({ startTime, endTime }).reduce((sum, time) => sum + resolveSlotPrice(time, rules), 0)
-}
 
 const validateCourtOpen = async (courtId: string, date: string, startTime: string, endTime: string) => {
     const selectedDate = toDateNoonUTC(date)
@@ -291,7 +273,7 @@ export async function PATCH(
                     return NextResponse.json({ error: 'สนามไม่เปิดให้จองในวันเวลาที่เลือก' }, { status: 400 })
                 }
 
-                const price = await resolveBookingItemPrice(existing.courtId, date, startTime, endTime)
+                const price = await resolveBookingSlotPrice(existing.courtId, date, startTime, endTime)
                 nextItems.push({
                     id: existing.id,
                     courtId: existing.courtId,

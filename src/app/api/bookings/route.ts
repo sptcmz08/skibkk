@@ -12,6 +12,7 @@ import {
     DEFAULT_LINE_UPDATE_NOTE,
 } from '@/lib/line-booking-notify'
 import { expandSlotStartTimes, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
+import { resolveBookingSlotPrice } from '@/lib/pricing'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
 // This prevents @db.Date (PostgreSQL DATE) from shifting ±1 day due to timezone offsets
@@ -319,6 +320,12 @@ export async function POST(req: NextRequest) {
 
         await removeCancelledSlotConflicts(requestedItems)
 
+        const pricedItems = await Promise.all(requestedItems.map(async item => ({
+            ...item,
+            price: await resolveBookingSlotPrice(item.courtId, item.date, item.startTime, item.endTime),
+        })))
+        const totalAmount = pricedItems.reduce((sum, item) => sum + item.price, 0)
+
         let bookingNumber = ''
         let booking = null
 
@@ -330,16 +337,16 @@ export async function POST(req: NextRequest) {
                         userId: bookingUserId,
                         bookingNumber,
                         status: 'PENDING',
-                        totalAmount: body.totalAmount,
+                        totalAmount,
                         isBookerLearner: body.isBookerLearner || false,
                         createdByAdmin: body.createdByAdmin || false,
                         bookingItems: {
-                            create: requestedItems.map((item) => ({
+                            create: pricedItems.map((item) => ({
                                 courtId: item.courtId,
                                 date: toDateNoonUTC(item.date),
                                 startTime: item.startTime,
                                 endTime: item.endTime,
-                                price: item.price || 0,
+                                price: item.price,
                                 teacherId: item.teacherId || null,
                             })),
                         },
@@ -383,7 +390,7 @@ export async function POST(req: NextRequest) {
                     bookingId: booking.id,
                     userId: bookingUserId,
                     method: body.paymentMethod, // CASH, BANK_TRANSFER, CREDIT_CARD
-                    amount: body.totalAmount,
+                    amount: totalAmount,
                     bankName: body.bankName || null,
                     status: 'VERIFIED',
                     verifiedAt: new Date(),
@@ -400,14 +407,14 @@ export async function POST(req: NextRequest) {
                 ipAddress: requestMeta.ipAddress,
                 details: JSON.stringify({
                     bookingNumber,
-                    totalAmount: body.totalAmount,
+                    totalAmount,
                     source: body.createdByAdmin ? 'admin' : 'customer',
                     customerId: bookingUserId,
                     items: booking.bookingItems.map(summarizeAuditBookingItem),
                     participants: booking.participants.map(summarizeAuditParticipant),
                     payment: body.paymentMethod ? {
                         method: body.paymentMethod,
-                        amount: body.totalAmount,
+                        amount: totalAmount,
                         bankName: body.bankName || null,
                         status: 'VERIFIED',
                     } : null,
@@ -432,7 +439,7 @@ export async function POST(req: NextRequest) {
                         endTime: item.endTime,
                         price: item.price,
                     })),
-                    totalAmount: body.totalAmount,
+                    totalAmount,
                 })
                 sendLinePush(userRecord.lineUserId, [{ type: 'text', text: message }], { messageType: 'confirmation', bookingId: booking.id }).catch(err => console.error('Failed to send LINE confirmation:', err))
             }
