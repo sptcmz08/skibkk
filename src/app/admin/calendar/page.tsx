@@ -248,6 +248,12 @@ export default function CalendarPage() {
         input.focus()
     }
 
+    const getBookerName = (booking: Booking) => {
+        const profileName = booking.user?.name?.trim()
+        const lineName = booking.user?.lineDisplayName?.trim()
+        return profileName || lineName || '-'
+    }
+
     const fetchHistory = async (bookingId: string) => {
         try {
             const res = await fetch(`/api/audit-logs?entityType=booking&entityId=${bookingId}&limit=100`, { cache: 'no-store' })
@@ -1330,7 +1336,7 @@ export default function CalendarPage() {
                                                                         return acc
                                                                     }, [] as Array<{ name: string; startTime: string; endTime: string }>)
                                                                 const allSameTime = teacherTimeSegments.length > 0 && teacherTimeSegments.every(s => s.startTime === cb.startTime && s.endTime === cb.endTime)
-                                                                const customerName = cb.booking.user?.lineDisplayName || cb.booking.user?.name || '-'
+                                                                const customerName = getBookerName(cb.booking)
                                                                 const phoneLabel = cb.booking.user?.phone?.startsWith('LINE-') ? 'LINE' : (cb.booking.user?.phone || '-')
                                                                 const customerLine = `${customerName} | ${phoneLabel} | ${sportLabel}`
                                                                 const timeTeacherLine = teacherTimeSegments.length === 0
@@ -1456,7 +1462,7 @@ export default function CalendarPage() {
                                         </>
                                     ) : `฿${viewBooking.totalAmount.toLocaleString()}`}
                                 </div>
-                                <div><strong>ลูกค้า:</strong> {viewBooking.user?.lineDisplayName || viewBooking.user?.name}{viewBooking.user?.lineDisplayName && viewBooking.user?.name !== viewBooking.user?.lineDisplayName ? ` (${viewBooking.user?.name})` : ''}</div>
+                                <div><strong>ลูกค้า:</strong> {getBookerName(viewBooking)}{viewBooking.user?.lineDisplayName && viewBooking.user?.lineDisplayName !== getBookerName(viewBooking) ? ` (LINE: ${viewBooking.user.lineDisplayName})` : ''}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>Line ID:</strong> {viewBooking.user?.lineUserId ? <span style={{ color: '#06C755', fontWeight: 600 }}>{viewBooking.user.lineUserId}</span> : '-'}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
