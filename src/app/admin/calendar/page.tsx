@@ -1348,6 +1348,8 @@ export default function CalendarPage() {
                                                                     : allSameTime
                                                                         ? `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ครู: ${teacherLabel}`
                                                                         : `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ${teacherTimeSegments.map(s => `${s.startTime}-${s.endTime} ${s.name}`).join(', ')}`
+                                                                const itemNotes = Array.from(new Set(cb.items.map(item => item.notes?.trim()).filter((note): note is string => Boolean(note))))
+                                                                const noteLine = itemNotes.length > 0 ? itemNotes.join(' | ') : (cb.booking.notes?.trim() || '')
 
                                                                 if (hours <= 0) return null
 
@@ -1402,6 +1404,24 @@ export default function CalendarPage() {
                                                                         >
                                                                             {timeTeacherLine}
                                                                         </div>
+                                                                        {noteLine && (
+                                                                            <div
+                                                                                title={noteLine}
+                                                                                style={{
+                                                                                    fontSize: compactCard ? '10px' : '11px',
+                                                                                    fontWeight: 700,
+                                                                                    lineHeight: 1.25,
+                                                                                    opacity: 0.95,
+                                                                                    overflow: 'hidden',
+                                                                                    display: '-webkit-box',
+                                                                                    WebkitLineClamp: hours > 1 ? 2 : 1,
+                                                                                    WebkitBoxOrient: 'vertical',
+                                                                                    wordBreak: 'break-word',
+                                                                                }}
+                                                                            >
+                                                                                หมายเหตุ: {noteLine}
+                                                                            </div>
+                                                                        )}
                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginTop: 'auto' }}>
                                                                             <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: compactCard ? '10px' : '11px', fontWeight: 800, flexShrink: 0 }}>
                                                                                 ฿{cb.totalPrice.toLocaleString()}
