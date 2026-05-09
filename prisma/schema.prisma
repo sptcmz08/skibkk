@@ -200,6 +200,7 @@ model BookingItem {
   startTime         String // "09:00"
   endTime           String // "10:00"
   price             Float
+  notes             String?
   teacherId         String?
   evaluationSent    Boolean   @default(false)
   reminderSentAt    DateTime?

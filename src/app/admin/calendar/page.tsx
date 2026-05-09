@@ -13,7 +13,8 @@ import { useRealtimeEvents } from '@/lib/use-realtime-events'
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; updatedAt?: string; isBookerLearner: boolean; createdByAdmin: boolean
     user: { name: string; email: string; phone: string; lineUserId?: string | null; lineDisplayName?: string; lineAvatar?: string }
-    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
+    notes?: string | null
+    bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
 }
@@ -70,7 +71,8 @@ export default function CalendarPage() {
     const [viewBooking, setViewBooking] = useState<Booking | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [editParticipants, setEditParticipants] = useState<Array<{ name: string; sportType: string; phone: string; height: string; weight: string; shoeSize: string }>>([])
-    const [editBookingItems, setEditBookingItems] = useState<Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>>([])
+    const [editBookingItems, setEditBookingItems] = useState<Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null }>>([])
+    const [editBookingNotes, setEditBookingNotes] = useState('')
     const [editStatus, setEditStatus] = useState('')
     const [editPaymentMethod, setEditPaymentMethod] = useState('')
     const [editAmount, setEditAmount] = useState(0)
@@ -278,14 +280,15 @@ export default function CalendarPage() {
         })))
         setEditBookingItems(sortBookingItemsBySchedule(booking.bookingItems).map(item => {
             const dateStr = toDateBangkok(item.date)
-            return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, teacherId: item.teacherId || null }
+            return { id: item.id, courtId: item.courtId, date: dateStr, startTime: item.startTime, endTime: item.endTime, price: item.price, notes: item.notes || '', teacherId: item.teacherId || null }
         }))
         setEditStatus(booking.status)
         setEditPaymentMethod(booking.payments[0]?.method || (booking.status === 'CONFIRMED' ? 'BANK_TRANSFER' : ''))
         setEditAmount(booking.totalAmount)
+        setEditBookingNotes(booking.notes || '')
     }
 
-    const syncEditAmount = (items: Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>) => {
+    const syncEditAmount = (items: Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null }>) => {
         setEditAmount(items.reduce((sum, bookingItem) => sum + (bookingItem.price || 0), 0))
     }
 
@@ -315,7 +318,7 @@ export default function CalendarPage() {
 
     const updateEditBookingItem = async (
         index: number,
-        patch: Partial<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; teacherId?: string | null }>,
+        patch: Partial<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null }>,
         opts?: { recalcPrice?: boolean }
     ) => {
         const nextItems = [...editBookingItems]
@@ -364,6 +367,7 @@ export default function CalendarPage() {
                 body: JSON.stringify({
                     bookingId: viewBooking.id,
                     status: editStatus,
+                    notes: editBookingNotes,
                     paymentMethod: editPaymentMethod || undefined,
                     totalAmount: editAmount,
                     participants: editParticipants.map(p => ({
@@ -1499,6 +1503,31 @@ export default function CalendarPage() {
                             </div>
                         </div>
 
+                        {(editMode || viewBooking.notes) && (
+                            <div style={{ marginBottom: '14px' }}>
+                                {editMode ? (
+                                    <>
+                                        <label htmlFor="edit-booking-notes" style={{ fontWeight: 700, marginBottom: '6px', fontSize: '14px', display: 'block' }}>
+                                            หมายเหตุการจอง
+                                        </label>
+                                        <textarea
+                                            id="edit-booking-notes"
+                                            value={editBookingNotes}
+                                            onChange={e => setEditBookingNotes(e.target.value)}
+                                            placeholder="ใส่หมายเหตุสำหรับการจองนี้"
+                                            className="admin-input"
+                                            rows={2}
+                                            style={{ width: '100%', resize: 'vertical', minHeight: '46px', fontSize: '13px' }}
+                                        />
+                                    </>
+                                ) : (
+                                    <div style={{ padding: '10px 12px', border: '1px solid var(--a-border)', borderRadius: '8px', background: '#f8f9fa', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+                                        <strong>หมายเหตุการจอง:</strong> {viewBooking.notes}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
                         {(editMode ? editBookingItems : sortBookingItemsBySchedule(viewBooking.bookingItems)).map((item, i) => (
                             <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
@@ -1627,6 +1656,20 @@ export default function CalendarPage() {
                                                 ))}
                                             </select>
                                         </div>
+                                        <div style={{ marginTop: '6px' }}>
+                                            <textarea
+                                                value={item.notes || ''}
+                                                onChange={e => {
+                                                    const u = [...editBookingItems]
+                                                    u[i] = { ...u[i], notes: e.target.value }
+                                                    setEditBookingItems(u)
+                                                }}
+                                                placeholder="หมายเหตุ"
+                                                className="admin-input"
+                                                rows={2}
+                                                style={{ fontSize: '13px', width: '100%', resize: 'vertical', minHeight: '42px' }}
+                                            />
+                                        </div>
                                         {/* Show full change history from audit logs */}
                                         {(() => {
                                             const editItem = item as typeof editBookingItems[number]
@@ -1700,6 +1743,11 @@ export default function CalendarPage() {
                                         <div style={{ color: 'var(--a-text-secondary)' }}>
                                             {new Date((item as any).date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} | {(item as any).startTime} - {(item as any).endTime} | ฿{(item as any).price.toLocaleString()}{(item as any).teacher ? ` | 👨‍🏫 ครู ${(item as any).teacher.name} (${(item as any).startTime}-${(item as any).endTime})` : ''}
                                         </div>
+                                        {item.notes && (
+                                            <div style={{ marginTop: '6px', color: 'var(--a-text-muted)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+                                                หมายเหตุ: {item.notes}
+                                            </div>
+                                        )}
                                         {/* Show full change history from audit logs (Read-only view) */}
                                         {(() => {
                                             const editItem = item as any

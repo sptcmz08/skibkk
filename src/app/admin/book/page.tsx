@@ -160,6 +160,7 @@ function AdminBookInner() {
     const [selectedUserPackageId, setSelectedUserPackageId] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [isBookerLearner, setIsBookerLearner] = useState(false)
+    const [bookingNotes, setBookingNotes] = useState('')
     const [showConfirmModal, setShowConfirmModal] = useState(false)
     const [lockCountdowns, setLockCountdowns] = useState<Record<string, number>>({})
 
@@ -492,6 +493,7 @@ function AdminBookInner() {
         try {
             const body: any = {
                 items: sortedCart, totalAmount: payableAmount, isBookerLearner,
+                notes: bookingNotes,
                 participants: validParts.map((p, i) => ({
                     name: p.name,
                     sportType: p.sportType,
@@ -956,6 +958,22 @@ function AdminBookInner() {
                             <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '4px' }}>แอดมินกรอก LINE User ID เองไม่ได้ เพื่อป้องกันการแจ้งเตือนผิดบัญชี</div>
                         </div></>
                     )}
+                </div>
+
+                {/* Booking notes */}
+                <div className="admin-card" style={{ padding: '16px 20px', marginBottom: '16px' }}>
+                    <label htmlFor="admin-booking-notes" style={{ fontWeight: 700, fontSize: '14px', marginBottom: '8px', display: 'block' }}>
+                        หมายเหตุ
+                    </label>
+                    <textarea
+                        id="admin-booking-notes"
+                        className="admin-input"
+                        value={bookingNotes}
+                        onChange={e => setBookingNotes(e.target.value)}
+                        placeholder="ใส่หมายเหตุสำหรับการจองนี้"
+                        rows={2}
+                        style={{ width: '100%', resize: 'vertical', minHeight: '48px', fontSize: '13px' }}
+                    />
                 </div>
 
                 {/* Booker is also learner checkbox */}

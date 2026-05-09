@@ -30,6 +30,7 @@ type BookingSlotInput = {
     startTime: string
     endTime: string
     price?: number
+    notes?: string | null
     teacherId?: string | null
 }
 
@@ -46,6 +47,7 @@ const hasTargetField = (error: unknown, field: string) => {
 
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const formatAuditDate = (date: Date | string) => new Date(date).toISOString().split('T')[0]
+const normalizeOptionalText = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null
 
 const findDuplicateSubmittedSlot = (items: BookingSlotInput[]) => {
     for (let i = 0; i < items.length; i++) {
@@ -120,6 +122,7 @@ const summarizeAuditBookingItem = (item: {
     startTime: string
     endTime: string
     price: number
+    notes?: string | null
     teacherId?: string | null
     teacher?: { name?: string | null } | null
 }) => ({
@@ -130,6 +133,7 @@ const summarizeAuditBookingItem = (item: {
     startTime: item.startTime,
     endTime: item.endTime,
     price: item.price,
+    notes: item.notes || null,
     teacherName: item.teacher?.name || null,
     teacherId: item.teacherId || null,
 })
@@ -338,6 +342,7 @@ export async function POST(req: NextRequest) {
                         bookingNumber,
                         status: 'PENDING',
                         totalAmount,
+                        notes: normalizeOptionalText(body.notes),
                         isBookerLearner: body.isBookerLearner || false,
                         createdByAdmin: body.createdByAdmin || false,
                         bookingItems: {
@@ -347,6 +352,7 @@ export async function POST(req: NextRequest) {
                                 startTime: item.startTime,
                                 endTime: item.endTime,
                                 price: item.price,
+                                notes: normalizeOptionalText(item.notes),
                                 teacherId: item.teacherId || null,
                             })),
                         },
@@ -408,6 +414,7 @@ export async function POST(req: NextRequest) {
                 details: JSON.stringify({
                     bookingNumber,
                     totalAmount,
+                    notes: booking.notes || null,
                     source: body.createdByAdmin ? 'admin' : 'customer',
                     customerId: bookingUserId,
                     items: booking.bookingItems.map(summarizeAuditBookingItem),
@@ -514,6 +521,7 @@ export async function PATCH(req: NextRequest) {
         const beforeAudit = {
             status: booking.status,
             totalAmount: booking.totalAmount,
+            notes: booking.notes || null,
             paymentMethod: booking.payments[0]?.method || null,
             items: booking.bookingItems.map(summarizeAuditBookingItem),
             participants: booking.participants.map(summarizeAuditParticipant),
@@ -645,6 +653,7 @@ export async function PATCH(req: NextRequest) {
                         startTime: item.startTime,
                         endTime: item.endTime,
                         price: item.price || 0,
+                        notes: item.notes === undefined ? oldItem?.notes || null : normalizeOptionalText(item.notes),
                         teacherId: item.teacherId || null,
                         originalCourtId: origCourtId,
                         originalDate: origDate,
@@ -673,6 +682,7 @@ export async function PATCH(req: NextRequest) {
             data: {
                 status: updateData.status || undefined,
                 totalAmount: updateData.totalAmount !== undefined ? updateData.totalAmount : undefined,
+                notes: updateData.notes !== undefined ? normalizeOptionalText(updateData.notes) : undefined,
             },
             include: { bookingItems: { include: { court: true, teacher: true, originalCourt: true } }, participants: true, payments: true, user: { select: { name: true, lineUserId: true } } },
         })
@@ -738,6 +748,7 @@ export async function PATCH(req: NextRequest) {
                     changes: {
                         ...(beforeAudit.status !== updatedWithPayments.status && { status: { from: beforeAudit.status, to: updatedWithPayments.status } }),
                         ...(beforeAudit.totalAmount !== updatedWithPayments.totalAmount && { totalAmount: { from: beforeAudit.totalAmount, to: updatedWithPayments.totalAmount } }),
+                        ...(beforeAudit.notes !== (updatedWithPayments.notes || null) && { notes: { from: beforeAudit.notes, to: updatedWithPayments.notes || null } }),
                         ...(beforeAudit.paymentMethod !== (updatedWithPayments.payments[0]?.method || null) && {
                             paymentMethod: { from: beforeAudit.paymentMethod, to: updatedWithPayments.payments[0]?.method || null },
                         }),

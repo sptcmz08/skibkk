@@ -61,6 +61,7 @@ const summarizeBookingItemForAudit = (item: {
     startTime: string
     endTime: string
     price: number
+    notes?: string | null
 }) => ({
     id: item.id,
     courtId: item.courtId,
@@ -69,6 +70,7 @@ const summarizeBookingItemForAudit = (item: {
     startTime: item.startTime,
     endTime: item.endTime,
     price: item.price,
+    notes: item.notes || null,
 })
 
 const validateCourtOpen = async (courtId: string, date: string, startTime: string, endTime: string) => {
@@ -217,6 +219,7 @@ export async function PATCH(
                 startTime: string
                 endTime: string
                 price: number
+                notes: string | null
                 teacherId: string | null
                 evaluationSent: boolean
                 reminderSentAt: Date | null
@@ -281,6 +284,7 @@ export async function PATCH(
                     startTime,
                     endTime,
                     price,
+                    notes: existing.notes || null,
                     teacherId: existing.teacherId,
                     evaluationSent: existing.evaluationSent,
                     reminderSentAt: existing.reminderSentAt,
@@ -322,6 +326,7 @@ export async function PATCH(
                         startTime: item.startTime,
                         endTime: item.endTime,
                         price: item.price,
+                        notes: item.notes,
                         teacherId: item.teacherId,
                         evaluationSent: item.evaluationSent,
                         reminderSentAt: item.reminderSentAt,
