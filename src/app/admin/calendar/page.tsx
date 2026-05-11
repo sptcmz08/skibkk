@@ -973,6 +973,7 @@ export default function CalendarPage() {
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '999px', background: '#f8fafc', border: '1px solid var(--a-border)' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--a-text-secondary)', padding: '0 6px' }}>Aa</span>
                                 {[
                                     { key: 'compact' as const, label: 'S' },
                                     { key: 'comfortable' as const, label: 'M' },
@@ -982,7 +983,8 @@ export default function CalendarPage() {
                                         key={option.key}
                                         type="button"
                                         onClick={() => setCalendarZoom(option.key)}
-                                        title={`ขนาดตาราง ${option.label}`}
+                                        title={`ขนาดตัวอักษร ${option.label}`}
+                                        aria-label={`ขนาดตัวอักษร ${option.label}`}
                                         style={{
                                             minWidth: '32px',
                                             height: '30px',
@@ -992,8 +994,8 @@ export default function CalendarPage() {
                                             cursor: 'pointer',
                                             fontSize: '12px',
                                             fontWeight: 800,
-                                            background: calendarZoom === option.key ? 'var(--a-gradient)' : 'transparent',
-                                            color: calendarZoom === option.key ? '#fff' : 'var(--a-text-secondary)',
+                                            background: calendarZoom === option.key ? '#f5a623' : 'transparent',
+                                            color: calendarZoom === option.key ? '#111827' : 'var(--a-text-secondary)',
                                             boxShadow: calendarZoom === option.key ? '0 4px 12px rgba(250, 204, 21, 0.28)' : 'none',
                                         }}
                                     >
@@ -1196,10 +1198,11 @@ export default function CalendarPage() {
                                         <div />
                                         {gridCourts.map(court => (
                                             <div key={court.id} style={{
-                                                textAlign: 'center', padding: '10px 8px',
+                                                textAlign: 'center', padding: calendarZoom === 'expanded' ? '12px 8px' : '10px 8px',
                                                 background: '#e74c3c', color: '#fff',
                                                 borderRadius: '8px 8px 0 0',
-                                                fontWeight: 800, fontSize: '15px',
+                                                fontWeight: 800,
+                                                fontSize: calendarZoom === 'compact' ? '14px' : calendarZoom === 'expanded' ? '18px' : '15px',
                                             }}>
                                                 {court.name}
                                             </div>
@@ -1225,7 +1228,8 @@ export default function CalendarPage() {
                                                             top: 0, left: 0, right: 0,
                                                             transform: 'translateY(-50%)',
                                                             textAlign: 'center',
-                                                            fontWeight: 700, fontSize: '13px',
+                                                            fontWeight: 700,
+                                                            fontSize: calendarZoom === 'compact' ? '12px' : calendarZoom === 'expanded' ? '15px' : '13px',
                                                             color: 'var(--a-text-secondary)', fontFamily: "'Inter', sans-serif",
                                                             zIndex: 10,
                                                             background: '#fff', // cover row borders slightly for cleaner look
@@ -1374,7 +1378,12 @@ export default function CalendarPage() {
 
                                                                 const isAdminBooking = cb.booking.createdByAdmin
                                                                 const compactCard = calendarZoom === 'compact'
-                                                                const detailFontSize = compactCard ? '10px' : '11px'
+                                                                const expandedCard = calendarZoom === 'expanded'
+                                                                const customerFontSize = compactCard ? '11px' : expandedCard ? '15px' : '13px'
+                                                                const detailFontSize = compactCard ? '10px' : expandedCard ? '14px' : '12px'
+                                                                const noteFontSize = compactCard ? '10px' : expandedCard ? '13px' : '12px'
+                                                                const badgeFontSize = compactCard ? '10px' : expandedCard ? '12px' : '11px'
+                                                                const statusFontSize = compactCard ? '10px' : expandedCard ? '12px' : '10px'
                                                                 const noteLineClamp = compactCard ? Math.max(1, Math.min(3, hours)) : Math.max(2, Math.min(4, hours + 1))
                                                                 const bgGrad = isAdminBooking
                                                                     ? 'linear-gradient(135deg, #D4A017, #B8860B)'
@@ -1397,11 +1406,11 @@ export default function CalendarPage() {
                                                                             height: `${heightPx - 3}px`,
                                                                             maxHeight: `${heightPx - 3}px`,
                                                                             borderRadius: '6px',
-                                                                            padding: compactCard ? '5px 7px' : '7px 9px', cursor: 'pointer',
+                                                                            padding: compactCard ? '5px 7px' : expandedCard ? '9px 11px' : '7px 9px', cursor: 'pointer',
                                                                             background: bgGrad,
                                                                             color: '#fff', transition: 'all 0.15s',
                                                                             display: 'flex', flexDirection: 'column',
-                                                                            gap: compactCard ? '1px' : '3px',
+                                                                            gap: compactCard ? '1px' : expandedCard ? '5px' : '3px',
                                                                             boxShadow: shadow,
                                                                             overflow: 'hidden', zIndex: 2,
                                                                             boxSizing: 'border-box',
@@ -1411,7 +1420,7 @@ export default function CalendarPage() {
                                                                     >
                                                                         <div
                                                                             title={customerLine}
-                                                                            style={{ fontWeight: 800, fontSize: compactCard ? '11px' : '12px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                                                            style={{ fontWeight: 800, fontSize: customerFontSize, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                                                                         >
                                                                             {customerLine}
                                                                         </div>
@@ -1425,7 +1434,7 @@ export default function CalendarPage() {
                                                                             <div
                                                                                 title={noteLine}
                                                                                 style={{
-                                                                                    fontSize: compactCard ? '10px' : '11px',
+                                                                                    fontSize: noteFontSize,
                                                                                     fontWeight: 700,
                                                                                     lineHeight: 1.25,
                                                                                     opacity: 0.95,
@@ -1440,10 +1449,10 @@ export default function CalendarPage() {
                                                                             </div>
                                                                         )}
                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginTop: 'auto' }}>
-                                                                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: '4px', fontSize: compactCard ? '10px' : '11px', fontWeight: 800, flexShrink: 0 }}>
+                                                                            <span style={{ background: 'rgba(255,255,255,0.2)', padding: expandedCard ? '2px 7px' : '1px 6px', borderRadius: '4px', fontSize: badgeFontSize, fontWeight: 800, flexShrink: 0 }}>
                                                                                 ฿{cb.totalPrice.toLocaleString()}
                                                                             </span>
-                                                                            <span style={{ background: isPaid ? '#4caf50' : '#ff9800', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, flexShrink: 0 }}>
+                                                                            <span style={{ background: isPaid ? '#4caf50' : '#ff9800', padding: expandedCard ? '2px 7px' : '1px 6px', borderRadius: '4px', fontSize: statusFontSize, fontWeight: 700, flexShrink: 0 }}>
                                                                                 {isPaid ? 'ชำระแล้ว' : 'รอชำระ'}
                                                                             </span>
                                                                         </div>
