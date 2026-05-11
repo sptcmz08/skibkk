@@ -456,6 +456,16 @@ function AdminBookInner() {
         )))
     }
 
+    const updateCartItemPrice = (item: CartItem, price: number) => {
+        setCart(prev => prev.map(cartItem => (
+            cartItem.courtId === item.courtId &&
+                cartItem.date === item.date &&
+                cartItem.startTime === item.startTime
+                ? { ...cartItem, price: Math.max(0, price) }
+                : cartItem
+        )))
+    }
+
     const bookingDateGroups = Object.entries(
         sortedCart.reduce<Record<string, CartItem[]>>((groups, item) => {
             if (!groups[item.date]) groups[item.date] = []
@@ -916,7 +926,19 @@ function AdminBookInner() {
                                     />
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                                    <span style={{ fontWeight: 800, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
+                                    <div style={{ position: 'relative', width: '112px' }}>
+                                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#f5a623', pointerEvents: 'none' }}>฿</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            className="admin-input"
+                                            value={item.price}
+                                            onChange={e => updateCartItemPrice(item, Number(e.target.value) || 0)}
+                                            aria-label="แก้ไขราคา"
+                                            style={{ paddingLeft: '24px', textAlign: 'right', fontWeight: 800, fontFamily: "'Inter'", color: '#111', fontSize: '14px' }}
+                                        />
+                                    </div>
                                     <button onClick={() => removeCartItem(item)} style={{ background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.2)', borderRadius: '6px', padding: '4px', cursor: 'pointer', color: '#e17055' }}><Trash2 size={14} /></button>
                                 </div>
                             </div>
