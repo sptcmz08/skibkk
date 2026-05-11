@@ -185,11 +185,13 @@ export async function GET(req: NextRequest) {
             const date = searchParams.get('date')
             const status = searchParams.get('status')
             const search = searchParams.get('search')
+            const userId = searchParams.get('userId')
             const from = searchParams.get('from')
             const to = searchParams.get('to')
 
             const where: Record<string, unknown> = {}
             if (status) where.status = status
+            if (userId) where.userId = userId
             if (search) {
                 where.OR = [
                     { user: { name: { contains: search, mode: 'insensitive' } } },

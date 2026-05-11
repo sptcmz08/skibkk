@@ -12,7 +12,7 @@ import { useRealtimeEvents } from '@/lib/use-realtime-events'
 
 interface Booking {
     id: string; bookingNumber: string; status: string; totalAmount: number; createdAt: string; updatedAt?: string; isBookerLearner: boolean; createdByAdmin: boolean
-    user: { name: string; email: string; phone: string; lineUserId?: string | null; lineDisplayName?: string; lineAvatar?: string }
+    user: { id: string; name: string; email: string; phone: string; lineUserId?: string | null; lineDisplayName?: string; lineAvatar?: string }
     notes?: string | null
     bookingItems: Array<{ id?: string; courtId: string; court: { name: string }; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null; teacher?: { id: string; name: string }; originalCourtId?: string | null; originalCourt?: { name: string } | null; originalDate?: string | null; originalStartTime?: string | null; originalEndTime?: string | null }>
     participants: Array<{ name: string; sportType: string; phone: string; height?: number | null; weight?: number | null; shoeSize?: string | null }>
@@ -110,6 +110,7 @@ export default function CalendarPage() {
     const [revenueSummary, setRevenueSummary] = useState<RevenueRangeSummary>({ totalAmount: 0, bookingHours: 0 })
     const [loadingRevenueSummary, setLoadingRevenueSummary] = useState(false)
     const [calendarZoom, setCalendarZoom] = useState<'compact' | 'comfortable' | 'expanded'>('comfortable')
+    const [customerBookingPopup, setCustomerBookingPopup] = useState<{ customer: Booking['user']; bookings: Booking[]; loading: boolean } | null>(null)
 
     const formatDateInputDisplay = (dateStr: string) => {
         if (!dateStr) return ''
@@ -286,6 +287,19 @@ export default function CalendarPage() {
         setEditPaymentMethod(booking.payments[0]?.method || (booking.status === 'CONFIRMED' ? 'BANK_TRANSFER' : ''))
         setEditAmount(booking.totalAmount)
         setEditBookingNotes(booking.notes || '')
+    }
+
+    const openCustomerBookingPopup = async (booking: Booking) => {
+        if (!booking.user?.id) return
+        setCustomerBookingPopup({ customer: booking.user, bookings: [], loading: true })
+        try {
+            const res = await fetch(`/api/bookings?userId=${encodeURIComponent(booking.user.id)}&take=100`, { cache: 'no-store' })
+            const data = await res.json()
+            setCustomerBookingPopup({ customer: booking.user, bookings: data.bookings || [], loading: false })
+        } catch {
+            setCustomerBookingPopup({ customer: booking.user, bookings: [], loading: false })
+            toast.error('โหลดข้อมูลการจองของลูกค้าไม่สำเร็จ')
+        }
     }
 
     const syncEditAmount = (items: Array<{ id?: string; courtId: string; date: string; startTime: string; endTime: string; price: number; notes?: string | null; teacherId?: string | null }>) => {
@@ -1489,7 +1503,29 @@ export default function CalendarPage() {
                                         </>
                                     ) : `฿${viewBooking.totalAmount.toLocaleString()}`}
                                 </div>
-                                <div><strong>ลูกค้า:</strong> {getBookerName(viewBooking)}{viewBooking.user?.lineDisplayName && viewBooking.user?.lineDisplayName !== getBookerName(viewBooking) ? ` (LINE: ${viewBooking.user.lineDisplayName})` : ''}</div>
+                                <div>
+                                    <strong>ลูกค้า:</strong>{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => openCustomerBookingPopup(viewBooking)}
+                                        title="ดูข้อมูลการจองของลูกค้าคนนี้"
+                                        style={{
+                                            border: 'none',
+                                            background: 'none',
+                                            padding: 0,
+                                            color: 'var(--a-primary)',
+                                            fontWeight: 800,
+                                            fontFamily: 'inherit',
+                                            fontSize: '14px',
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline',
+                                            textUnderlineOffset: '2px',
+                                        }}
+                                    >
+                                        {getBookerName(viewBooking)}
+                                    </button>
+                                    {viewBooking.user?.lineDisplayName && viewBooking.user?.lineDisplayName !== getBookerName(viewBooking) ? ` (LINE: ${viewBooking.user.lineDisplayName})` : ''}
+                                </div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>Line ID:</strong> {viewBooking.user?.lineUserId ? <span style={{ color: '#06C755', fontWeight: 600 }}>{viewBooking.user.lineUserId}</span> : '-'}</div>
                                 <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
@@ -1926,6 +1962,106 @@ export default function CalendarPage() {
                                 </>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {customerBookingPopup && (
+                <div className="modal-overlay" onClick={() => setCustomerBookingPopup(null)} style={{ zIndex: 1200 }}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px', maxHeight: '86vh', overflow: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+                            <div>
+                                <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '4px' }}>ข้อมูลการจองลูกค้า</h2>
+                                <div style={{ fontSize: '14px', color: 'var(--a-text-muted)' }}>
+                                    <strong style={{ color: 'var(--a-text)' }}>{customerBookingPopup.customer.name || customerBookingPopup.customer.lineDisplayName || '-'}</strong>
+                                    {customerBookingPopup.customer.phone && !customerBookingPopup.customer.phone.startsWith('LINE-') ? ` | ${customerBookingPopup.customer.phone}` : ''}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setCustomerBookingPopup(null)}
+                                aria-label="ปิดข้อมูลการจองลูกค้า"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                            >
+                                <X size={22} />
+                            </button>
+                        </div>
+
+                        {customerBookingPopup.loading ? (
+                            <div style={{ padding: '28px', textAlign: 'center', color: 'var(--a-text-muted)', fontSize: '14px' }}>
+                                กำลังโหลดข้อมูลการจอง...
+                            </div>
+                        ) : (
+                            (() => {
+                                const customerBookings = customerBookingPopup.bookings
+                                const activeCustomerBookings = customerBookings.filter(booking => booking.status !== 'CANCELLED')
+                                const totalSpent = activeCustomerBookings.reduce((sum, booking) => sum + (booking.totalAmount || 0), 0)
+
+                                return (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                                            <div style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--a-border)', background: '#f8f9fa' }}>
+                                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 700 }}>ทั้งหมด</div>
+                                                <div style={{ fontSize: '20px', fontWeight: 900 }}>{customerBookings.length}</div>
+                                            </div>
+                                            <div style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--a-border)', background: '#f8f9fa' }}>
+                                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 700 }}>ไม่รวมยกเลิก</div>
+                                                <div style={{ fontSize: '20px', fontWeight: 900 }}>{activeCustomerBookings.length}</div>
+                                            </div>
+                                            <div style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--a-border)', background: '#f8f9fa' }}>
+                                                <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', fontWeight: 700 }}>ยอดรวม</div>
+                                                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--a-primary)' }}>฿{totalSpent.toLocaleString()}</div>
+                                            </div>
+                                        </div>
+
+                                        {customerBookings.length === 0 ? (
+                                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--a-text-muted)', border: '1px solid var(--a-border)', borderRadius: '8px' }}>
+                                                ไม่พบข้อมูลการจองของลูกค้าคนนี้
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {customerBookings.map(booking => {
+                                                    const items = sortBookingItemsBySchedule(booking.bookingItems)
+                                                    const firstItem = items[0]
+                                                    const scheduleSummary = firstItem
+                                                        ? `${formatShortDateTH(firstItem.date)} | ${firstItem.startTime}-${firstItem.endTime}${items.length > 1 ? ` (+${items.length - 1})` : ''}`
+                                                        : '-'
+                                                    return (
+                                                        <div key={booking.id} style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--a-border)', background: '#fff' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                                                                <div style={{ minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 800, fontSize: '14px' }}>{booking.bookingNumber}</div>
+                                                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '3px' }}>{scheduleSummary}</div>
+                                                                    <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '3px' }}>
+                                                                        {items.map(item => item.court?.name).filter(Boolean).slice(0, 2).join(', ') || '-'}
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                                    <div style={{ fontWeight: 900, color: 'var(--a-primary)' }}>฿{booking.totalAmount.toLocaleString()}</div>
+                                                                    <div style={{ fontSize: '11px', color: statusMap[booking.status]?.color || 'var(--a-text-muted)', fontWeight: 800 }}>
+                                                                        {statusMap[booking.status]?.label || booking.status}
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setCustomerBookingPopup(null)
+                                                                            openBookingModal(booking)
+                                                                        }}
+                                                                        style={{ marginTop: '6px', border: '1px solid var(--a-primary)', background: 'var(--a-primary-light)', color: 'var(--a-primary)', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}
+                                                                    >
+                                                                        เปิดรายการนี้
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                    </>
+                                )
+                            })()
+                        )}
                     </div>
                 </div>
             )}
