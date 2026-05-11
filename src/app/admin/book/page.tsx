@@ -34,6 +34,7 @@ interface CartItem {
     startTime: string
     endTime: string
     price: number
+    notes?: string
 }
 
 const SPORT_ICONS: Record<string, string> = {
@@ -392,7 +393,7 @@ function AdminBookInner() {
             }
             setCart([...cart, {
                 courtId: court.courtId, courtName: court.courtName,
-                date: selectedDate, startTime: slot.startTime, endTime: slot.endTime, price: slot.price,
+                date: selectedDate, startTime: slot.startTime, endTime: slot.endTime, price: slot.price, notes: '',
             }])
             toast.success(`เพิ่ม ${slot.startTime} ลงรายการแล้ว — Lock 20 นาที`)
         }
@@ -442,6 +443,16 @@ function AdminBookInner() {
             cartItem.courtId === item.courtId &&
             cartItem.date === item.date &&
             cartItem.startTime === item.startTime
+        )))
+    }
+
+    const updateCartItemNotes = (item: CartItem, notes: string) => {
+        setCart(prev => prev.map(cartItem => (
+            cartItem.courtId === item.courtId &&
+                cartItem.date === item.date &&
+                cartItem.startTime === item.startTime
+                ? { ...cartItem, notes }
+                : cartItem
         )))
     }
 
@@ -888,16 +899,26 @@ function AdminBookInner() {
                 <div className="admin-card" style={{ padding: '20px', marginBottom: '16px' }}>
                     <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '12px' }}>📋 รายการจอง ({cart.length})</h3>
                     {sortedCart.map((item, i) => (
-                        <div key={`${item.courtId}-${item.date}-${item.startTime}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < sortedCart.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
-                            <div>
-                                <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={13} /> {item.courtName}</div>
-                                <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                                    <Calendar size={12} /> {formatDateTH(item.date)} · <Clock size={12} /> {item.startTime}–{item.endTime}
+                        <div key={`${item.courtId}-${item.date}-${item.startTime}`} style={{ padding: '10px 0', borderBottom: i < sortedCart.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={13} /> {item.courtName}</div>
+                                    <div style={{ fontSize: '13px', color: 'var(--a-text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                                        <Calendar size={12} /> {formatDateTH(item.date)} · <Clock size={12} /> {item.startTime}–{item.endTime}
+                                    </div>
+                                    <textarea
+                                        className="admin-input"
+                                        value={item.notes || ''}
+                                        onChange={e => updateCartItemNotes(item, e.target.value)}
+                                        placeholder="หมายเหตุรายการจองนี้"
+                                        rows={2}
+                                        style={{ marginTop: '8px', width: '100%', resize: 'vertical', minHeight: '42px', fontSize: '13px' }}
+                                    />
                                 </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontWeight: 800, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
-                                <button onClick={() => removeCartItem(item)} style={{ background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.2)', borderRadius: '6px', padding: '4px', cursor: 'pointer', color: '#e17055' }}><Trash2 size={14} /></button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                                    <span style={{ fontWeight: 800, fontFamily: "'Inter'" }}>฿{item.price.toLocaleString()}</span>
+                                    <button onClick={() => removeCartItem(item)} style={{ background: 'rgba(225,112,85,0.08)', border: '1px solid rgba(225,112,85,0.2)', borderRadius: '6px', padding: '4px', cursor: 'pointer', color: '#e17055' }}><Trash2 size={14} /></button>
+                                </div>
                             </div>
                         </div>
                     ))}

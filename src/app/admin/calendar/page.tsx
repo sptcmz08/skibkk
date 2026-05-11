@@ -1361,6 +1361,7 @@ export default function CalendarPage() {
                                                                 const isAdminBooking = cb.booking.createdByAdmin
                                                                 const compactCard = calendarZoom === 'compact'
                                                                 const detailFontSize = compactCard ? '10px' : '11px'
+                                                                const noteLineClamp = compactCard ? Math.max(1, Math.min(3, hours)) : Math.max(2, Math.min(4, hours + 1))
                                                                 const bgGrad = isAdminBooking
                                                                     ? 'linear-gradient(135deg, #D4A017, #B8860B)'
                                                                     : 'linear-gradient(135deg, #2196F3, #1976D2)'
@@ -1416,7 +1417,7 @@ export default function CalendarPage() {
                                                                                     opacity: 0.95,
                                                                                     overflow: 'hidden',
                                                                                     display: '-webkit-box',
-                                                                                    WebkitLineClamp: hours > 1 ? 2 : 1,
+                                                                                    WebkitLineClamp: noteLineClamp,
                                                                                     WebkitBoxOrient: 'vertical',
                                                                                     wordBreak: 'break-word',
                                                                                 }}
