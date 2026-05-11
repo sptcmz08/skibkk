@@ -1348,8 +1348,10 @@ export default function CalendarPage() {
                                                                     : allSameTime
                                                                         ? `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ครู: ${teacherLabel}`
                                                                         : `${cb.startTime}-${cb.endTime} (${hours} ชม.) | ${teacherTimeSegments.map(s => `${s.startTime}-${s.endTime} ${s.name}`).join(', ')}`
-                                                                const itemNotes = Array.from(new Set(cb.items.map(item => item.notes?.trim()).filter((note): note is string => Boolean(note))))
-                                                                const noteLine = itemNotes.length > 0 ? itemNotes.join(' | ') : (cb.booking.notes?.trim() || '')
+                                                                const noteLine = Array.from(new Set([
+                                                                    cb.booking.notes?.trim(),
+                                                                    ...cb.items.map(item => item.notes?.trim()),
+                                                                ].filter((note): note is string => Boolean(note)))).join(' | ')
 
                                                                 if (hours <= 0) return null
 
