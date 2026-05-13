@@ -48,6 +48,10 @@ const hasTargetField = (error: unknown, field: string) => {
 const formatLineDate = (date: Date | string) => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 const formatAuditDate = (date: Date | string) => new Date(date).toISOString().split('T')[0]
 const normalizeOptionalText = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null
+const normalizeSubmittedPrice = (value: unknown) => {
+    const price = Number(value)
+    return Number.isFinite(price) && price >= 0 ? price : null
+}
 
 const findDuplicateSubmittedSlot = (items: BookingSlotInput[]) => {
     for (let i = 0; i < items.length; i++) {
@@ -274,6 +278,8 @@ export async function POST(req: NextRequest) {
         const user = await requireAuth()
         const requestMeta = getAuditRequestMeta(req)
         const body = await req.json()
+        const isAdminUser = ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)
+        const isAdminCreatedBooking = Boolean(body.createdByAdmin && isAdminUser)
 
         if (body.paymentMethod !== undefined && body.paymentMethod !== null && body.paymentMethod !== '') {
             if (!EDITABLE_PAYMENT_METHODS.has(String(body.paymentMethod))) {
@@ -283,7 +289,7 @@ export async function POST(req: NextRequest) {
 
         // Admin can create bookings on behalf of customers
         let bookingUserId = user.id
-        if (body.createdByAdmin && ['ADMIN', 'SUPERUSER', 'STAFF'].includes(user.role)) {
+        if (isAdminCreatedBooking) {
             if (body.userId) {
                 // Existing customer selected
                 bookingUserId = body.userId
@@ -328,7 +334,9 @@ export async function POST(req: NextRequest) {
 
         const pricedItems = await Promise.all(requestedItems.map(async item => ({
             ...item,
-            price: await resolveBookingSlotPrice(item.courtId, item.date, item.startTime, item.endTime),
+            price: isAdminCreatedBooking
+                ? normalizeSubmittedPrice(item.price) ?? await resolveBookingSlotPrice(item.courtId, item.date, item.startTime, item.endTime)
+                : await resolveBookingSlotPrice(item.courtId, item.date, item.startTime, item.endTime),
         })))
         const totalAmount = pricedItems.reduce((sum, item) => sum + item.price, 0)
 
@@ -346,7 +354,7 @@ export async function POST(req: NextRequest) {
                         totalAmount,
                         notes: normalizeOptionalText(body.notes),
                         isBookerLearner: body.isBookerLearner || false,
-                        createdByAdmin: body.createdByAdmin || false,
+                        createdByAdmin: isAdminCreatedBooking,
                         bookingItems: {
                             create: pricedItems.map((item) => ({
                                 courtId: item.courtId,
@@ -417,7 +425,7 @@ export async function POST(req: NextRequest) {
                     bookingNumber,
                     totalAmount,
                     notes: booking.notes || null,
-                    source: body.createdByAdmin ? 'admin' : 'customer',
+                    source: isAdminCreatedBooking ? 'admin' : 'customer',
                     customerId: bookingUserId,
                     items: booking.bookingItems.map(summarizeAuditBookingItem),
                     participants: booking.participants.map(summarizeAuditParticipant),
@@ -434,7 +442,7 @@ export async function POST(req: NextRequest) {
 
         // Send LINE confirmation immediately only for admin-paid bookings.
         // Customer bookings must send after payment success to avoid false confirmations.
-        if (body.createdByAdmin && body.paymentMethod) {
+        if (isAdminCreatedBooking && body.paymentMethod) {
             const userRecord = await prisma.user.findUnique({ where: { id: bookingUserId }, select: { email: true, name: true, lineUserId: true } })
             if (userRecord?.lineUserId) {
                 const templates = await getLineBookingTemplates()
@@ -459,7 +467,7 @@ export async function POST(req: NextRequest) {
             bookingId: booking.id,
             bookingNumber,
             status: booking.status,
-            source: body.createdByAdmin ? 'admin' : 'customer',
+            source: isAdminCreatedBooking ? 'admin' : 'customer',
             affectedDates: [...new Set(booking.bookingItems.map(item => item.date instanceof Date ? item.date.toISOString().split('T')[0] : String(item.date).split('T')[0]))],
             courtIds: [...new Set(booking.bookingItems.map(item => item.courtId))],
             message: 'booking created',
