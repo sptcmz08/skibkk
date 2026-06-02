@@ -10,32 +10,65 @@ const registerSchema = z.object({
     phone: z.string().min(9, 'กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง'),
 })
 
+const EMAIL_IN_USE_ERROR = 'อีเมลนี้ถูกใช้งานแล้ว'
+const PHONE_IN_USE_ERROR = 'เบอร์โทรนี้ถูกใช้งานแล้ว'
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
         const data = registerSchema.parse(body)
-
-        // Check duplicate email
-        const existingEmail = await prisma.user.findUnique({ where: { email: data.email } })
-        if (existingEmail) {
-            return NextResponse.json({ error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 400 })
-        }
-
-        // Check duplicate phone
-        const existingPhone = await prisma.user.findUnique({ where: { phone: data.phone } })
-        if (existingPhone) {
-            return NextResponse.json({ error: 'เบอร์โทรนี้ถูกใช้งานแล้ว' }, { status: 400 })
-        }
-
         const hashedPassword = await hashPassword(data.password)
-        const user = await prisma.user.create({
-            data: {
-                email: data.email,
-                password: hashedPassword,
-                name: data.name,
-                phone: data.phone,
-            },
-        })
+
+        const [existingEmail, existingPhone] = await Promise.all([
+            prisma.user.findUnique({
+                where: { email: data.email },
+                select: { id: true },
+            }),
+            prisma.user.findUnique({
+                where: { phone: data.phone },
+                select: {
+                    id: true,
+                    password: true,
+                    role: true,
+                    isActive: true,
+                },
+            }),
+        ])
+
+        if (existingEmail && existingEmail.id !== existingPhone?.id) {
+            return NextResponse.json({ error: EMAIL_IN_USE_ERROR }, { status: 400 })
+        }
+
+        let user
+        if (existingPhone) {
+            const canClaimMigratedCustomer =
+                existingPhone.role === 'CUSTOMER' &&
+                existingPhone.isActive &&
+                !existingPhone.password
+
+            if (!canClaimMigratedCustomer) {
+                return NextResponse.json({ error: PHONE_IN_USE_ERROR }, { status: 400 })
+            }
+
+            user = await prisma.user.update({
+                where: { id: existingPhone.id },
+                data: {
+                    email: data.email,
+                    password: hashedPassword,
+                    name: data.name,
+                    phone: data.phone,
+                },
+            })
+        } else {
+            user = await prisma.user.create({
+                data: {
+                    email: data.email,
+                    password: hashedPassword,
+                    name: data.name,
+                    phone: data.phone,
+                },
+            })
+        }
 
         const token = await createToken({
             userId: user.id,
