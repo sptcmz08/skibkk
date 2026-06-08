@@ -112,29 +112,61 @@ export async function GET(req: NextRequest) {
         }
 
         if (!user) {
-            // Create new user from LINE profile
-            // Keep LINE accounts isolated by LINE userId. Do not auto-link by email:
-            // different LINE accounts can expose the same email and must not become one customer.
-            const emailAlreadyUsed = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null
-            const placeholderEmail = email && !emailAlreadyUsed ? email : `line_${profile.userId}@line.local`
-            const placeholderPhone = `LINE-${profile.userId.substring(0, 12)}`
+            // Try to find an existing CUSTOMER record (admin-created) that has no LINE link yet.
+            // Match by email from LINE profile. This lets returning customers who were
+            // previously booked by admin seamlessly link their LINE account.
+            let existingCustomer = null
+            if (email) {
+                existingCustomer = await prisma.user.findFirst({
+                    where: {
+                        email,
+                        role: 'CUSTOMER',
+                        isActive: true,
+                        lineUserId: null,
+                    },
+                })
+            }
 
-            user = await prisma.user.create({
-                data: {
-                    email: placeholderEmail,
-                    name: profile.displayName,
-                    firstName: null,
-                    lastName: null,
-                    phone: placeholderPhone,
-                    lineUserId: profile.userId,
-                    lineDisplayName: profile.displayName,
-                    lineAvatar: profile.pictureUrl || null,
-                    // No password — LINE-only user
-                },
-            })
+            if (existingCustomer) {
+                // Link LINE account to the existing admin-created record
+                user = await prisma.user.update({
+                    where: { id: existingCustomer.id },
+                    data: {
+                        lineUserId: profile.userId,
+                        lineDisplayName: profile.displayName,
+                        lineAvatar: profile.pictureUrl || null,
+                    },
+                })
 
-            // Redirect to profile page to complete registration (fill real phone/email)
-            returnUrl = '/profile?complete=1'
+                // If profile is incomplete, redirect to fill it
+                if (!user.firstName || !user.lastName) {
+                    returnUrl = '/profile?complete=1'
+                }
+            } else {
+                // Create new user from LINE profile
+                // Keep LINE accounts isolated by LINE userId. Do not auto-link by email:
+                // different LINE accounts can expose the same email and must not become one customer.
+                const emailAlreadyUsed = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null
+                const placeholderEmail = email && !emailAlreadyUsed ? email : `line_${profile.userId}@line.local`
+                const placeholderPhone = `LINE-${profile.userId.substring(0, 12)}`
+
+                user = await prisma.user.create({
+                    data: {
+                        email: placeholderEmail,
+                        name: profile.displayName,
+                        firstName: null,
+                        lastName: null,
+                        phone: placeholderPhone,
+                        lineUserId: profile.userId,
+                        lineDisplayName: profile.displayName,
+                        lineAvatar: profile.pictureUrl || null,
+                        // No password — LINE-only user
+                    },
+                })
+
+                // Redirect to profile page to complete registration (fill real phone/email)
+                returnUrl = '/profile?complete=1'
+            }
         }
 
         // Create auth token

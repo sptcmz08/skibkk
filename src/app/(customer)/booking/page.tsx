@@ -760,19 +760,37 @@ export default function BookingPage() {
         setLoading(true)
         let createdBookingId: string | null = null
         try {
-            const profileRes = await fetch('/api/auth/me', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...booker,
-                    firstName: bookerNameParts.firstName,
-                    lastName: bookerNameParts.lastName,
-                }),
-            })
-            if (!profileRes.ok) {
-                const profileData = await profileRes.json().catch(() => ({}))
-                toast.error(profileData.error || 'บันทึกข้อมูลผู้จองไม่สำเร็จ')
-                return
+            // Fetch current profile to check if update is actually needed
+            const currentProfileRes = await fetch('/api/auth/me', { cache: 'no-store' })
+            const currentProfileData = await currentProfileRes.json().catch(() => ({}))
+            const currentUser = currentProfileData?.user
+
+            const profileNeedsUpdate = !currentUser ||
+                currentUser.firstName !== bookerNameParts.firstName ||
+                currentUser.lastName !== bookerNameParts.lastName ||
+                currentUser.email !== booker.email.trim() ||
+                currentUser.phone !== booker.phone.trim()
+
+            if (profileNeedsUpdate) {
+                const profileRes = await fetch('/api/auth/me', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...booker,
+                        firstName: bookerNameParts.firstName,
+                        lastName: bookerNameParts.lastName,
+                    }),
+                })
+                if (!profileRes.ok) {
+                    const profileData = await profileRes.json().catch(() => ({}))
+                    // If the error is a duplicate conflict, provide a more helpful message
+                    if (profileRes.status === 409) {
+                        toast.error(profileData.error || 'อีเมลหรือเบอร์โทรนี้ถูกใช้งานแล้วในระบบ กรุณาตรวจสอบข้อมูล')
+                    } else {
+                        toast.error(profileData.error || 'บันทึกข้อมูลผู้จองไม่สำเร็จ')
+                    }
+                    return
+                }
             }
 
             // Step 1: Create booking
