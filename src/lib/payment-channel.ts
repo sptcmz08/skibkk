@@ -203,6 +203,35 @@ export const normalizeLooseTextValue = (value: string | null | undefined) =>
         .replace(/ltd/gu, '')
         .trim()
 
+const normalizeForPartialMatch = (value: string | null | undefined) =>
+    normalizeUnicodeValue(value)
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, '')
+        .replace(/บริษัท/gu, '')
+        .replace(/จำกัดมหาชน/gu, '')
+        .replace(/จำกัด/gu, '')
+        .replace(/บจก/gu, '')
+        .replace(/บมจ/gu, '')
+        .replace(/หจก/gu, '')
+        .replace(/มหาชน/gu, '')
+        .replace(/ร้าน/gu, '')
+        .replace(/นาย/gu, '')
+        .replace(/นางสาว/gu, '')
+        .replace(/นาง/gu, '')
+        .replace(/คุณ/gu, '')
+        .trim()
+
+const getPartialMatchTokens = (value: string | null | undefined) =>
+    normalizeUnicodeValue(value)
+        .toLowerCase()
+        .replace(/บริษัท|จำกัดมหาชน|จำกัด|บจก|บมจ|หจก|มหาชน|ร้าน|นางสาว|นาง|นาย|คุณ/gu, ' ')
+        .replace(/\b(?:public company limited|company limited|co ltd|co\. ltd|co\.ltd|corporation|corp|incorporated|inc|limited|company|plc|llc|holdings?|group)\b/gu, ' ')
+        .split(/[^\p{L}\p{N}]+/gu)
+        .map(t => t.trim())
+        .filter(t => t.length >= 2)
+
+const MIN_PARTIAL_LENGTH = 4
+
 const getEnglishNameTokens = (value: string | null | undefined) =>
     normalizeTextValue(value)
         .replace(/[&]/g, ' and ')
@@ -282,6 +311,53 @@ const englishAbbreviationValuesMatch = (actual: string | null | undefined, expec
     })
 
     return tokensMatch && sawAbbreviation
+}
+
+const partialTextMatch = (actual: string | null | undefined, expected: string | null | undefined) => {
+    const actualCandidates = splitCandidateValues(actual)
+    const expectedCandidates = splitCandidateValues(expected)
+
+    return actualCandidates.some(actualCandidate => expectedCandidates.some(expectedCandidate => {
+        // --- Strategy 1: raw-character substring match ---
+        // Works on raw Thai/English characters (no Thai→English word conversion)
+        // because bank QR truncation happens at the character level.
+        const actualRaw = normalizeForPartialMatch(actualCandidate)
+        const expectedRaw = normalizeForPartialMatch(expectedCandidate)
+
+        if (actualRaw.length >= MIN_PARTIAL_LENGTH && expectedRaw.length >= MIN_PARTIAL_LENGTH) {
+            if (actualRaw === expectedRaw) return true
+
+            const shorter = actualRaw.length <= expectedRaw.length ? actualRaw : expectedRaw
+            const longer = actualRaw.length > expectedRaw.length ? actualRaw : expectedRaw
+
+            // Covers: end-truncated (prefix), beginning-truncated (suffix),
+            // and middle extraction (contiguous substring)
+            if (longer.includes(shorter)) return true
+        }
+
+        // --- Strategy 2: word-token overlap ---
+        // Handles cases where individual words match but order differs,
+        // or some words are missing entirely.
+        const actualTokens = getPartialMatchTokens(actualCandidate)
+        const expectedTokens = getPartialMatchTokens(expectedCandidate)
+
+        if (actualTokens.length >= 1 && expectedTokens.length >= 1) {
+            const shorter2 = actualTokens.length <= expectedTokens.length ? actualTokens : expectedTokens
+            const longer2 = actualTokens.length > expectedTokens.length ? actualTokens : expectedTokens
+
+            // Count how many tokens from the shorter list appear (as prefix) in the longer list
+            const matchedCount = shorter2.filter(sToken =>
+                longer2.some(lToken => lToken.startsWith(sToken) || sToken.startsWith(lToken)),
+            ).length
+
+            // At least half the tokens match AND at least 1 meaningful token
+            if (matchedCount >= 1 && matchedCount >= Math.ceil(shorter2.length * 0.5)) {
+                return true
+            }
+        }
+
+        return false
+    }))
 }
 
 export const normalizeBankValue = (value: string | null | undefined) => {
@@ -406,13 +482,14 @@ export const receiverValuesMatch = (
     }
 
     const nameMatch = textValuesMatch(actual.name, expected.name)
+    const partialNameMatch = !nameMatch && partialTextMatch(actual.name, expected.name)
     const accountMatch = accountValuesMatch(actual.account, expected.account)
     const bankMatch = bankValuesMatch(actual.bankName, expected.bankName)
     const hasActualBank = splitCandidateValues(actual.bankName).length > 0
 
     return {
-        matched: (bankMatch && (accountMatch || nameMatch)) || (!hasActualBank && accountMatch && nameMatch),
-        nameMatch,
+        matched: (bankMatch && (accountMatch || nameMatch || partialNameMatch)) || (!hasActualBank && accountMatch && nameMatch),
+        nameMatch: nameMatch || partialNameMatch,
         accountMatch,
         bankMatch,
     }
