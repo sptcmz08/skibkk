@@ -5,7 +5,7 @@ import ConfirmModal from '@/components/ConfirmModal'
 import DatePickerInput from '@/components/DatePickerInput'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Eye, MapPin, X, Clock, UserPlus, Search, Plus, ArrowLeft, ArrowRight, Trash2, Bell } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useRealtimeEvents } from '@/lib/use-realtime-events'
@@ -111,6 +111,16 @@ export default function CalendarPage() {
     const [loadingRevenueSummary, setLoadingRevenueSummary] = useState(false)
     const [calendarZoom, setCalendarZoom] = useState<'compact' | 'comfortable' | 'expanded'>('comfortable')
     const [customerBookingPopup, setCustomerBookingPopup] = useState<{ customer: Booking['user']; bookings: Booking[]; loading: boolean } | null>(null)
+
+    // Notification state
+    const [notifOpen, setNotifOpen] = useState(false)
+    const [notifBookings, setNotifBookings] = useState<Booking[]>([])
+    const [notifLoading, setNotifLoading] = useState(false)
+    const [notifLastSeen, setNotifLastSeen] = useState<string>(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('skibkk_notif_last_seen') || ''
+        return ''
+    })
+    const notifRef = useRef<HTMLDivElement>(null)
 
     const formatDateInputDisplay = (dateStr: string) => {
         if (!dateStr) return ''
@@ -502,6 +512,45 @@ export default function CalendarPage() {
         }).catch(() => { })
     }, [])
 
+    // Notification: fetch recent bookings
+    const fetchNotifBookings = useCallback(async () => {
+        setNotifLoading(true)
+        try {
+            const res = await fetch('/api/bookings?take=20&sort=newest', { cache: 'no-store' })
+            const data = await res.json()
+            setNotifBookings(data.bookings || [])
+        } catch { /* ignore */ }
+        finally { setNotifLoading(false) }
+    }, [])
+
+    useEffect(() => {
+        fetchNotifBookings()
+        const interval = setInterval(fetchNotifBookings, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifBookings])
+
+    // Close notification dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
+
+    const notifUnreadCount = notifBookings.filter(b => !notifLastSeen || b.createdAt > notifLastSeen).length
+
+    const handleOpenNotif = () => {
+        setNotifOpen(prev => !prev)
+        if (!notifOpen) fetchNotifBookings()
+    }
+
+    const handleMarkAllRead = () => {
+        const latest = notifBookings[0]?.createdAt || new Date().toISOString()
+        setNotifLastSeen(latest)
+        localStorage.setItem('skibkk_notif_last_seen', latest)
+    }
+
     // Fetch monthly summary (booking counts) — with polling
     useEffect(() => {
         fetchMonthlySummary()
@@ -829,7 +878,118 @@ export default function CalendarPage() {
                         </div>
                         <div style={{ fontSize: '14px', color: 'var(--a-text-muted)' }}>{viewYear + 543}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {/* Notification Bell */}
+                        <div ref={notifRef} style={{ position: 'relative' }}>
+                            <button
+                                onClick={handleOpenNotif}
+                                style={{
+                                    position: 'relative',
+                                    padding: '8px',
+                                    borderRadius: '10px',
+                                    border: '1px solid var(--a-border)',
+                                    background: notifOpen ? 'var(--a-primary-light)' : 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <Bell size={20} style={{ color: notifOpen ? 'var(--a-primary)' : 'var(--a-text-secondary)' }} />
+                                {notifUnreadCount > 0 && (
+                                    <span style={{
+                                        position: 'absolute', top: '-4px', right: '-4px',
+                                        minWidth: '18px', height: '18px', borderRadius: '9px',
+                                        background: '#e74c3c', color: 'white', fontSize: '10px',
+                                        fontWeight: 800, display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', padding: '0 4px',
+                                        fontFamily: "'Inter', sans-serif",
+                                        border: '2px solid white',
+                                    }}>
+                                        {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                                    </span>
+                                )}
+                            </button>
+                            {notifOpen && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', right: 0, marginTop: '8px',
+                                    width: '380px', maxHeight: '500px', overflowY: 'auto',
+                                    background: 'white', borderRadius: '12px',
+                                    boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: '1px solid var(--a-border)',
+                                    zIndex: 100,
+                                }}>
+                                    <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--a-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ fontWeight: 700, fontSize: '15px' }}>🔔 การจองล่าสุด</div>
+                                        {notifUnreadCount > 0 && (
+                                            <button onClick={handleMarkAllRead} style={{
+                                                fontSize: '12px', color: 'var(--a-primary)', fontWeight: 600,
+                                                background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                                            }}>
+                                                อ่านทั้งหมดแล้ว
+                                            </button>
+                                        )}
+                                    </div>
+                                    {notifLoading ? (
+                                        <div style={{ padding: '30px', textAlign: 'center' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)', margin: '0 auto' }} /></div>
+                                    ) : notifBookings.length === 0 ? (
+                                        <div style={{ padding: '30px', textAlign: 'center', color: 'var(--a-text-muted)', fontSize: '14px' }}>ยังไม่มีการจอง</div>
+                                    ) : (
+                                        notifBookings.map(nb => {
+                                            const isNew = !notifLastSeen || nb.createdAt > notifLastSeen
+                                            const firstItem = nb.bookingItems[0]
+                                            const statusInfo = statusMap[nb.status]
+                                            return (
+                                                <div
+                                                    key={nb.id}
+                                                    onClick={() => {
+                                                        const itemDate = firstItem ? toDateBangkok(firstItem.date) : null
+                                                        if (itemDate) {
+                                                            const d = new Date(itemDate)
+                                                            setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); setSelectedDate(itemDate)
+                                                        }
+                                                        setNotifOpen(false)
+                                                    }}
+                                                    style={{
+                                                        padding: '12px 16px', borderBottom: '1px solid var(--a-border)',
+                                                        cursor: 'pointer', transition: 'background 0.15s',
+                                                        background: isNew ? '#fffff0' : 'white',
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget.style.background = '#f8f9fa')}
+                                                    onMouseLeave={e => (e.currentTarget.style.background = isNew ? '#fffff0' : 'white')}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                                                {isNew && <span style={{ width: '8px', height: '8px', borderRadius: '4px', background: '#e74c3c', flexShrink: 0 }} />}
+                                                                <span style={{ fontWeight: 700, fontSize: '13px', fontFamily: "'Inter', sans-serif" }}>{nb.bookingNumber}</span>
+                                                                <span style={{
+                                                                    fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '4px',
+                                                                    background: statusInfo?.bg || '#f3f4f6', color: statusInfo?.color || '#666',
+                                                                }}>{statusInfo?.label || nb.status}</span>
+                                                                {nb.createdByAdmin
+                                                                    ? <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: '#fce4ec', color: '#c62828', fontWeight: 600 }}>👤 Admin</span>
+                                                                    : <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}>🌐 เว็บ</span>
+                                                                }
+                                                            </div>
+                                                            <div style={{ fontSize: '13px', color: 'var(--a-text)' }}>{getBookerName(nb)}</div>
+                                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)', marginTop: '2px' }}>
+                                                                {firstItem ? `${firstItem.court?.name || '-'} | ${new Date(firstItem.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${firstItem.startTime}-${firstItem.endTime}` : '-'}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                            <div style={{ fontWeight: 700, fontSize: '13px', fontFamily: "'Inter', sans-serif" }}>฿{nb.totalAmount.toLocaleString()}</div>
+                                                            <div style={{ fontSize: '10px', color: 'var(--a-text-muted)', marginTop: '2px' }}>
+                                                                {new Date(nb.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit' })} {new Date(nb.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <button onClick={() => { setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); setSelectedDate(todayStr) }} className="btn-admin" style={{ padding: '8px 16px', fontSize: '13px' }}>วันนี้</button>
                         <button onClick={() => changeMonth(1)} className="btn-admin-outline" style={{ padding: '8px' }}><ChevronRight size={18} /></button>
                     </div>
@@ -1537,7 +1697,7 @@ export default function CalendarPage() {
                                 </div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone?.startsWith('LINE-') ? <span style={{ color: '#06C755', fontWeight: 600 }}>🟢 LINE User</span> : (viewBooking.user?.phone || '-')}</div>
                                 <div><strong>Line ID:</strong> {viewBooking.user?.lineUserId ? <span style={{ color: '#06C755', fontWeight: 600 }}>{viewBooking.user.lineUserId}</span> : '-'}</div>
-                                <div><strong>วันที่จอง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+                                <div><strong>วันที่ทำรายการ:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                                 {(viewBooking.payments[0] || editMode) && (
                                     <div>
                                         <strong>วิธีชำระ:</strong>{' '}
@@ -1596,9 +1756,9 @@ export default function CalendarPage() {
                             </div>
                         )}
 
-                        <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px' }}>รายการจอง</h3>
+                        <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #fff8e1, #fff3cd)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f5d77d' }}>📌 รายการจอง</h3>
                         {(editMode ? editBookingItems : sortBookingItemsBySchedule(viewBooking.bookingItems)).map((item, i) => (
-                            <div key={i} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--a-border)', marginBottom: '8px', fontSize: '14px' }}>
+                            <div key={i} style={{ padding: '12px', borderRadius: '8px', border: '2px solid #f5d77d', background: '#fffef5', marginBottom: '8px', fontSize: '14px' }}>
                                 {editMode ? (
                                     <>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>

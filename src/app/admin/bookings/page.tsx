@@ -407,6 +407,7 @@ export default function BookingsManagement() {
                                     <tr>
                                         <th>เลขจอง</th>
                                         <th>ลูกค้า</th>
+                                        <th>วันที่ทำรายการ</th>
                                         <th>วันที่จอง</th>
                                         <th>สนาม / เวลา</th>
                                         <th>ยอดเงิน</th>
@@ -434,7 +435,10 @@ export default function BookingsManagement() {
                                                     <div style={{ fontWeight: 600 }}>{b.user?.name || '-'}</div>
                                                     <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{b.user?.phone || ''}</div>
                                                 </td>
-                                                <td style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                <td style={{ fontSize: '13px', whiteSpace: 'nowrap', color: 'var(--a-text-muted)' }}>
+                                                    {new Date(b.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                </td>
+                                                <td style={{ fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 600 }}>
                                                     {firstItem ? new Date(firstItem.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                                                 </td>
                                                 <td>
@@ -552,7 +556,7 @@ export default function BookingsManagement() {
                                 <div><strong>ลูกค้า:</strong> {viewBooking.user?.name}</div>
                                 <div><strong>โทร:</strong> {viewBooking.user?.phone || '-'}</div>
                                 <div><strong>อีเมล:</strong> {viewBooking.user?.email || '-'}</div>
-                                <div><strong>วันที่สร้าง:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                <div><strong>วันที่ทำรายการ:</strong> {new Date(viewBooking.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                 {editMode && (
                                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
                                         <div style={{ flex: 1, minWidth: '140px' }}>
@@ -582,12 +586,12 @@ export default function BookingsManagement() {
                         </div>
 
                         {/* Booking Items */}
-                        <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <MapPin size={16} style={{ color: 'var(--a-primary)' }} /> รายการจอง ({editMode ? editBookingItems.length : viewBooking.bookingItems.length})
+                        <h3 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #fff8e1, #fff3cd)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f5d77d' }}>
+                            <MapPin size={18} style={{ color: '#d4a017' }} /> รายการจอง ({editMode ? editBookingItems.length : viewBooking.bookingItems.length})
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                             {(editMode ? editBookingItems : sortBookingItems(viewBooking.bookingItems)).map((item, i) => (
-                                <div key={i} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--a-border)', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                <div key={i} style={{ padding: '12px 14px', borderRadius: '8px', border: '2px solid #f5d77d', background: '#fffef5', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600 }}>{item.court.name}</div>
                                         {item.court.venue && <div style={{ fontSize: '11px', color: 'var(--a-primary)', fontWeight: 600 }}>Venue: {item.court.venue.name}</div>}
