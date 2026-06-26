@@ -150,19 +150,40 @@ export async function GET(req: NextRequest) {
                 const placeholderEmail = email && !emailAlreadyUsed ? email : `line_${profile.userId}@line.local`
                 const placeholderPhone = `LINE-${profile.userId.substring(0, 12)}`
 
-                user = await prisma.user.create({
-                    data: {
-                        email: placeholderEmail,
-                        name: profile.displayName,
-                        firstName: null,
-                        lastName: null,
-                        phone: placeholderPhone,
-                        lineUserId: profile.userId,
-                        lineDisplayName: profile.displayName,
-                        lineAvatar: profile.pictureUrl || null,
-                        // No password — LINE-only user
-                    },
-                })
+                try {
+                    user = await prisma.user.create({
+                        data: {
+                            email: placeholderEmail,
+                            name: profile.displayName,
+                            firstName: null,
+                            lastName: null,
+                            phone: placeholderPhone,
+                            lineUserId: profile.userId,
+                            lineDisplayName: profile.displayName,
+                            lineAvatar: profile.pictureUrl || null,
+                            // No password — LINE-only user
+                        },
+                    })
+                } catch (createError: unknown) {
+                    // Handle unique constraint violation — use fully unique fallbacks
+                    if (typeof createError === 'object' && createError !== null && 'code' in createError && (createError as { code?: string }).code === 'P2002') {
+                        const uniqueSuffix = `${profile.userId}_${Date.now()}`
+                        user = await prisma.user.create({
+                            data: {
+                                email: `line_${uniqueSuffix}@line.local`,
+                                name: profile.displayName,
+                                firstName: null,
+                                lastName: null,
+                                phone: `LINE-${uniqueSuffix.substring(0, 20)}`,
+                                lineUserId: profile.userId,
+                                lineDisplayName: profile.displayName,
+                                lineAvatar: profile.pictureUrl || null,
+                            },
+                        })
+                    } else {
+                        throw createError
+                    }
+                }
 
                 // Redirect to profile page to complete registration (fill real phone/email)
                 returnUrl = '/profile?complete=1'

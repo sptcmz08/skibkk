@@ -48,14 +48,19 @@ export async function PUT(req: NextRequest) {
                     { phone: nextPhone },
                 ],
             },
-            select: { id: true, email: true, phone: true, lineUserId: true, lineDisplayName: true, lineAvatar: true, role: true, isActive: true },
+            select: { id: true, email: true, phone: true, password: true, lineUserId: true, lineDisplayName: true, lineAvatar: true, role: true, isActive: true },
         })
 
         if (duplicate) {
             // Check if we can merge the current temporary LINE account with the existing customer record
+            // Allow merge when:
+            // 1. Duplicate is an active customer, AND
+            // 2. Duplicate has no password (admin-created placeholder) OR has no LINE account linked OR same LINE account
+            const isAdminCreatedPlaceholder = !duplicate.password
+            const hasNoLineOrSameLine = duplicate.lineUserId === null || duplicate.lineUserId === '' || duplicate.lineUserId === currentUserWithLine?.lineUserId
             const canMerge = duplicate.role === 'CUSTOMER' &&
                 duplicate.isActive &&
-                (duplicate.lineUserId === null || duplicate.lineUserId === '' || duplicate.lineUserId === currentUserWithLine?.lineUserId)
+                (isAdminCreatedPlaceholder || hasNoLineOrSameLine)
 
             if (canMerge && currentUserWithLine) {
                 // Determine LINE profile to transfer
