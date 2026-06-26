@@ -59,7 +59,9 @@ export default function CalendarPage() {
     // Helper: convert UTC ISO date string to YYYY-MM-DD in Bangkok timezone
     const toDateBangkok = (isoDate: string | Date) => {
         const d = new Date(isoDate)
-        return new Date(d.getTime() + (7 * 60 * 60 * 1000)).toISOString().split('T')[0]
+        // Use Intl.DateTimeFormat for correct timezone conversion (handles both old +07:00 and new noon-UTC storage)
+        const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+        return parts // en-CA formats as YYYY-MM-DD
     }
     const initDate = dateParam ? new Date(dateParam) : null
     const [viewYear, setViewYear] = useState(initDate ? initDate.getFullYear() : now.getFullYear())
