@@ -437,7 +437,10 @@ export default function CalendarPage() {
                         if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
                         const d = toDateBangkok(item.date)
                         if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
-                        summaries[d].count++
+                        // Calculate actual hours from startTime/endTime (e.g., 10:00-12:00 = 2 hours)
+                        const startH = parseInt(item.startTime.split(':')[0])
+                        const endH = parseInt(item.endTime.split(':')[0]) || 24
+                        summaries[d].count += Math.max(1, endH - startH)
                         summaries[d].totalAmount += item.price
                     })
                 })
@@ -486,7 +489,9 @@ export default function CalendarPage() {
                     if (itemDate < normalizedFrom || itemDate > normalizedTo) return
                     if (venueCourtIds && !venueCourtIds.has(item.courtId)) return
                     totalAmount += item.price || 0
-                    bookingHours += 1
+                    const startH = parseInt(item.startTime.split(':')[0])
+                    const endH = parseInt(item.endTime.split(':')[0]) || 24
+                    bookingHours += Math.max(1, endH - startH)
                 })
             })
 
@@ -786,7 +791,9 @@ export default function CalendarPage() {
                         b.bookingItems.forEach(item => {
                             const d = toDateBangkok(item.date)
                             if (!summaries[d]) summaries[d] = { date: d, count: 0, totalAmount: 0 }
-                            summaries[d].count++
+                            const startH = parseInt(item.startTime.split(':')[0])
+                            const endH = parseInt(item.endTime.split(':')[0]) || 24
+                            summaries[d].count += Math.max(1, endH - startH)
                             summaries[d].totalAmount += item.price
                         })
                     })
