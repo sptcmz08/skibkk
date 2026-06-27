@@ -765,9 +765,12 @@ export default function BookingPage() {
             const currentProfileData = await currentProfileRes.json().catch(() => ({}))
             const currentUser = currentProfileData?.user
 
+            // Compare using combined name to avoid firstName/lastName split mismatch
+            const currentFullName = [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ').trim()
+            const formFullName = [bookerNameParts.firstName, bookerNameParts.lastName].filter(Boolean).join(' ').trim()
+
             const profileNeedsUpdate = !currentUser ||
-                currentUser.firstName !== bookerNameParts.firstName ||
-                currentUser.lastName !== bookerNameParts.lastName ||
+                (currentFullName !== formFullName && currentUser.name !== formFullName) ||
                 currentUser.email !== booker.email.trim() ||
                 currentUser.phone !== booker.phone.trim()
 
@@ -782,14 +785,15 @@ export default function BookingPage() {
                     }),
                 })
                 if (!profileRes.ok) {
+                    // Profile update failed — warn but DON'T block the booking
+                    // The user can fix their profile later; booking should always proceed
                     const profileData = await profileRes.json().catch(() => ({}))
-                    // If the error is a duplicate conflict, provide a more helpful message
                     if (profileRes.status === 409) {
-                        toast.error(profileData.error || 'อีเมลหรือเบอร์โทรนี้ถูกใช้งานแล้วในระบบ กรุณาตรวจสอบข้อมูล')
+                        console.warn('Profile update conflict (will proceed with booking):', profileData.error)
                     } else {
-                        toast.error(profileData.error || 'บันทึกข้อมูลผู้จองไม่สำเร็จ')
+                        console.warn('Profile update failed (will proceed with booking):', profileData.error)
                     }
-                    return
+                    // Continue to booking — don't return
                 }
             }
 
