@@ -26,7 +26,7 @@ interface Booking {
     bookingItems: BookingItem[]
     participants: Array<{ name: string; sportType: string }>
     payments: Array<{ method: string; status: string; amount: number; bankName?: string | null }>
-    invoice?: { id: string; invoiceNumber: string; isIssued: boolean; issuedAt: string } | null
+    invoice?: { id: string; invoiceNumber: string; isIssued: boolean; issuedAt: string; grandTotal?: number | null; customData?: Record<string, unknown> | null } | null
 }
 interface UserPackageInvoiceSource {
     id: string
@@ -92,6 +92,24 @@ const buildContinuousInvoiceNumberMap = (rows: InvoiceRow[]) => {
     }
 
     return invoiceNumbers
+}
+
+// Helper: get effective amount (use saved invoice grandTotal if available, otherwise original)
+const getEffectiveBookingAmount = (b: Booking) =>
+    (b.invoice?.grandTotal != null && b.invoice.grandTotal > 0) ? b.invoice.grandTotal : b.totalAmount
+const getEffectivePackageAmount = (sale: PackageSaleEntry) =>
+    (sale.invoice?.grandTotal != null && sale.invoice.grandTotal > 0) ? sale.invoice.grandTotal : sale.price
+
+// Helper: get effective display date (use saved issueDate from customData if available)
+const getEffectiveBookingDate = (b: Booking): string => {
+    const cd = b.invoice?.customData
+    if (cd && typeof cd.issueDate === 'string' && cd.issueDate) return cd.issueDate
+    return new Date(b.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+const getEffectivePackageDate = (sale: PackageSaleEntry): string => {
+    const cd = sale.invoice?.customData as Record<string, unknown> | undefined
+    if (cd && typeof cd.issueDate === 'string' && cd.issueDate) return cd.issueDate
+    return new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 const INVOICE_DEFAULTS = {
@@ -395,7 +413,7 @@ export default function InvoicesPage() {
         // Data rows
         invoiceRows.forEach((row, idx) => {
             const isPackage = row.type === 'package'
-            const amount = isPackage ? row.sale.price : row.booking.totalAmount
+            const amount = isPackage ? getEffectivePackageAmount(row.sale) : getEffectiveBookingAmount(row.booking)
             const beforeVat = Math.round((amount / 1.07) * 100) / 100
             const vatAmt = Math.round((amount - beforeVat) * 100) / 100
             const createdAt = isPackage ? row.sale.createdAt : row.booking.createdAt
@@ -403,7 +421,7 @@ export default function InvoicesPage() {
             const payMethod = isPackage
                 ? 'โอนเงิน'
                 : row.booking.payments[0]?.method === 'PROMPTPAY' ? 'พร้อมเพย์' : (row.booking.payments[0]?.method || '-')
-            const payAmount = isPackage ? row.sale.price : row.booking.payments[0]?.amount || row.booking.totalAmount
+            const payAmount = isPackage ? getEffectivePackageAmount(row.sale) : row.booking.payments[0]?.amount || getEffectiveBookingAmount(row.booking)
             const uniqueCourts = isPackage ? [] : [...new Set(row.booking.bookingItems.map(i => i.court.name))]
             const sportType = isPackage ? '' : row.booking.participants[0]?.sportType || ''
             const itemName = isPackage
@@ -434,7 +452,7 @@ export default function InvoicesPage() {
         })
 
         // Totals row
-        const totalAll = invoiceRows.reduce((sum, row) => sum + (row.type === 'package' ? row.sale.price : row.booking.totalAmount), 0)
+        const totalAll = invoiceRows.reduce((sum, row) => sum + (row.type === 'package' ? getEffectivePackageAmount(row.sale) : getEffectiveBookingAmount(row.booking)), 0)
         const totalBV = Math.round((totalAll / 1.07) * 100) / 100
         const totalV = Math.round((totalAll - totalBV) * 100) / 100
         rows.push([
@@ -675,25 +693,23 @@ export default function InvoicesPage() {
             if (res.ok) {
                 const data = await res.json()
                 if (selectedBooking) {
+                    const savedInvoice = data.invoice ? {
+                        id: data.invoice.id,
+                        invoiceNumber: data.invoice.invoiceNumber,
+                        isIssued: data.invoice.isIssued,
+                        issuedAt: data.invoice.issuedAt,
+                        grandTotal: data.invoice.grandTotal ?? itemTotal,
+                        customData: data.invoice.customData ?? customData,
+                    } : null
                     setBookings(current => current.map(booking => booking.id === selectedBooking.id
                         ? {
                             ...booking,
-                            invoice: data.invoice ? {
-                                id: data.invoice.id,
-                                invoiceNumber: data.invoice.invoiceNumber,
-                                isIssued: data.invoice.isIssued,
-                                issuedAt: data.invoice.issuedAt,
-                            } : booking.invoice,
+                            invoice: savedInvoice || booking.invoice,
                         }
                         : booking))
                     setSelectedBooking(current => current ? {
                         ...current,
-                        invoice: data.invoice ? {
-                            id: data.invoice.id,
-                            invoiceNumber: data.invoice.invoiceNumber,
-                            isIssued: data.invoice.isIssued,
-                            issuedAt: data.invoice.issuedAt,
-                        } : current.invoice,
+                        invoice: savedInvoice || current.invoice,
                     } : current)
                 }
                 if (selectedPackageSale) {
@@ -1192,8 +1208,9 @@ export default function InvoicesPage() {
                         ) : invoiceRows.map(row => {
                             if (row.type === 'package') {
                                 const sale = row.sale
-                                const bv = sale.price / 1.07
-                                const v = sale.price - bv
+                                const effectiveAmount = getEffectivePackageAmount(sale)
+                                const bv = effectiveAmount / 1.07
+                                const v = effectiveAmount - bv
                                 return (
                                     <tr key={`package-${sale.id}`}>
                                         <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber)}</td>
@@ -1204,7 +1221,7 @@ export default function InvoicesPage() {
                                         </td>
                                         <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                         <td>฿{v.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                                        <td style={{ fontWeight: 700 }}>฿{sale.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ fontWeight: 700 }}>฿{effectiveAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                         <td>
                                             <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap' }}>
                                                 โอนเงิน
@@ -1225,7 +1242,7 @@ export default function InvoicesPage() {
                                                 {sale.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
                                             </span>
                                         </td>
-                                        <td>{new Date(sale.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                        <td>{getEffectivePackageDate(sale)}</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '6px' }}>
                                                 <button onClick={() => selectPackageSale(sale, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">
@@ -1240,8 +1257,9 @@ export default function InvoicesPage() {
                                 )
                             }
                             const b = row.booking
-                            const bv = b.totalAmount / 1.07
-                            const v = b.totalAmount - bv
+                            const effectiveAmount = getEffectiveBookingAmount(b)
+                            const bv = effectiveAmount / 1.07
+                            const v = effectiveAmount - bv
                             return (
                                 <tr key={b.id}>
                                     <td style={{ fontWeight: 600, fontFamily: "'Inter'" }}>{getBookingDocumentNumber(b)}</td>
@@ -1249,7 +1267,7 @@ export default function InvoicesPage() {
                                     <td>{b.user.name}</td>
                                     <td>฿{bv.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                     <td>฿{v.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                                    <td style={{ fontWeight: 700 }}>฿{b.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ fontWeight: 700 }}>฿{effectiveAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                                     <td>
                                         {(() => {
                                             const pm = b.payments[0]
@@ -1283,7 +1301,7 @@ export default function InvoicesPage() {
                                             {b.invoice?.isIssued ? 'ออกแล้ว' : 'ยังไม่ออก'}
                                         </span>
                                     </td>
-                                    <td>{new Date(b.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                    <td>{getEffectiveBookingDate(b)}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '6px' }}>
                                             <button onClick={() => selectBooking(b, 'full')} className="btn-admin" style={{ padding: '6px 10px', fontSize: '12px' }} title="ใบกำกับภาษี">
