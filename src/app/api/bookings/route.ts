@@ -11,7 +11,7 @@ import {
     DEFAULT_LINE_CONFIRMATION_NOTE,
     DEFAULT_LINE_UPDATE_NOTE,
 } from '@/lib/line-booking-notify'
-import { expandSlotStartTimes, normalizeDateOnly, slotRangesOverlap } from '@/lib/booking-slots'
+import { expandSlotStartTimes, normalizeDateOnly, slotRangesOverlap, getSlotHourRange } from '@/lib/booking-slots'
 import { resolveBookingSlotPrice } from '@/lib/pricing'
 
 // Helper: convert date string "YYYY-MM-DD" to Date at noon UTC
@@ -510,6 +510,41 @@ export async function PATCH(req: NextRequest) {
         let scheduleChanged = false
 
         if (action === 'cancel') {
+            if (booking.status === 'CANCELLED') {
+                return NextResponse.json({ message: 'ยกเลิกการจองสำเร็จ' }) // Already cancelled
+            }
+            let refundedHours = 0
+            if (booking.payments[0]?.method === 'PACKAGE' && booking.payments[0].packageId) {
+                const packageId = booking.payments[0].packageId
+                const hoursToRefund = booking.bookingItems.reduce((total, item) => {
+                    const range = getSlotHourRange({ startTime: item.startTime, endTime: item.endTime })
+                    if (range) {
+                        return total + (range.endHour - range.startHour)
+                    }
+                    return total
+                }, 0)
+
+                if (hoursToRefund > 0) {
+                    const userPkg = await prisma.userPackage.findFirst({
+                        where: {
+                            userId: booking.userId,
+                            packageId: packageId,
+                        },
+                        orderBy: {
+                            expiresAt: 'desc'
+                        }
+                    })
+
+                    if (userPkg) {
+                        await prisma.userPackage.update({
+                            where: { id: userPkg.id },
+                            data: { remainingHours: { increment: hoursToRefund } }
+                        })
+                        refundedHours = hoursToRefund
+                    }
+                }
+            }
+
             await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } })
             await prisma.auditLog.create({
                 data: {
@@ -521,6 +556,7 @@ export async function PATCH(req: NextRequest) {
                         before: { status: booking.status },
                         after: { status: 'CANCELLED' },
                         items: booking.bookingItems.map(summarizeAuditBookingItem),
+                        packageRefund: refundedHours > 0 ? { hours: refundedHours } : null,
                         request: requestMeta,
                     }),
                 },
@@ -684,6 +720,40 @@ export async function PATCH(req: NextRequest) {
                     where: { bookingId },
                     data: { teacherId: assignedTeacherId },
                 })
+            }
+        }
+
+        let refundedHoursAdminEdit = 0
+        if (updateData.status === 'CANCELLED' && booking.status !== 'CANCELLED') {
+            if (booking.payments[0]?.method === 'PACKAGE' && booking.payments[0].packageId) {
+                const packageId = booking.payments[0].packageId
+                const hoursToRefund = booking.bookingItems.reduce((total, item) => {
+                    const range = getSlotHourRange({ startTime: item.startTime, endTime: item.endTime })
+                    if (range) {
+                        return total + (range.endHour - range.startHour)
+                    }
+                    return total
+                }, 0)
+
+                if (hoursToRefund > 0) {
+                    const userPkg = await prisma.userPackage.findFirst({
+                        where: {
+                            userId: booking.userId,
+                            packageId: packageId,
+                        },
+                        orderBy: {
+                            expiresAt: 'desc'
+                        }
+                    })
+
+                    if (userPkg) {
+                        await prisma.userPackage.update({
+                            where: { id: userPkg.id },
+                            data: { remainingHours: { increment: hoursToRefund } }
+                        })
+                        refundedHoursAdminEdit = hoursToRefund
+                    }
+                }
             }
         }
 
