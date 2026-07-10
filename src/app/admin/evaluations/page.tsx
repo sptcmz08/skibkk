@@ -61,6 +61,7 @@ export default function EvaluationsPage() {
     const [generatedUrl, setGeneratedUrl] = useState('')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
+    const [viewCustomerHistory, setViewCustomerHistory] = useState<Evaluation | null>(null)
 
     useEffect(() => {
         let cancelled = false
@@ -284,32 +285,15 @@ export default function EvaluationsPage() {
                                     {ev.evaluatorName || ev.bookingItem?.booking?.user?.name || '-'}
                                     {ev.bookingItem?.booking?.user?.phone ? <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '2px' }}>{ev.bookingItem.booking.user.phone}</div> : null}
                                 </td>
-                                <td style={{ minWidth: '220px', fontSize: '12px', color: 'var(--a-text-secondary)' }}>
+                                <td>
                                     {ev.customerEvaluationHistory?.count ? (
-                                        <div>
-                                            <div style={{ fontWeight: 800, color: 'var(--a-text)', marginBottom: '6px' }}>
-                                                เคยประเมิน {ev.customerEvaluationHistory.count} ครั้ง
-                                            </div>
-                                            <div style={{ display: 'grid', gap: '6px', maxHeight: '180px', overflow: 'auto' }}>
-                                                {ev.customerEvaluationHistory.items.map((historyItem, index) => (
-                                                    <div key={historyItem.id} style={{ paddingBottom: '6px', borderBottom: index < ev.customerEvaluationHistory.items.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
-                                                        <div style={{ fontWeight: 700, color: 'var(--a-text)' }}>
-                                                            {historyItem.bookingItem ? formatDateTH(historyItem.bookingItem.date) : formatDateTH(historyItem.submittedAt)}
-                                                            {historyItem.bookingItem ? ` ${historyItem.bookingItem.startTime}-${historyItem.bookingItem.endTime}` : ''}
-                                                        </div>
-                                                        <div>{historyItem.teacherName} • {formatEvaluationSummary(historyItem)}</div>
-                                                        <div>
-                                                            ฝึก:{ratingText(historyItem.trainingQuality)} / สื่อ:{ratingText(historyItem.communication)} / ใส่ใจ:{ratingText(historyItem.dedication)}
-                                                        </div>
-                                                        <div>
-                                                            บริการ:{ratingText(historyItem.serviceRating)} / สถานที่:{ratingText(historyItem.venueRating)}
-                                                        </div>
-                                                        <div>เรียนซ้ำ: {comebackLabels[historyItem.comebackPref || 0] || '-'}</div>
-                                                        {historyItem.comment ? <div style={{ color: 'var(--a-text-muted)' }}>{historyItem.comment}</div> : null}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <button
+                                            onClick={() => setViewCustomerHistory(ev)}
+                                            className="btn-admin-outline"
+                                            style={{ padding: '6px 10px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                                        >
+                                            ดูประวัติ ({ev.customerEvaluationHistory.count})
+                                        </button>
                                     ) : '-'}
                                 </td>
                                 <td style={{ fontWeight: 600 }}>{ev.teacher.name}</td>
@@ -329,6 +313,78 @@ export default function EvaluationsPage() {
                     </tbody>
                 </table>
             </div>
+
+            {viewCustomerHistory && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+                    padding: '20px',
+                }} onClick={() => setViewCustomerHistory(null)}>
+                    <div onClick={e => e.stopPropagation()}
+                        style={{ background: 'white', borderRadius: '16px', padding: '24px', maxWidth: '760px', width: '100%', maxHeight: '88vh', overflow: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--a-text)', marginBottom: '4px' }}>
+                                    ประวัติการประเมินของลูกค้า
+                                </h3>
+                                <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)' }}>
+                                    {viewCustomerHistory.evaluatorName || viewCustomerHistory.bookingItem?.booking?.user?.name || '-'}
+                                    {viewCustomerHistory.bookingItem?.booking?.user?.phone ? ` • ${viewCustomerHistory.bookingItem.booking.user.phone}` : ''}
+                                </div>
+                            </div>
+                            <button onClick={() => setViewCustomerHistory(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--a-text-muted)', padding: '2px' }}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '12px 14px', background: '#f8f9fa', border: '1px solid var(--a-border)', borderRadius: '10px', marginBottom: '14px', fontWeight: 800 }}>
+                            เคยประเมินทั้งหมด {viewCustomerHistory.customerEvaluationHistory.count} ครั้ง
+                        </div>
+
+                        <div style={{ display: 'grid', gap: '10px' }}>
+                            {viewCustomerHistory.customerEvaluationHistory.items.map((historyItem, index) => (
+                                <div key={historyItem.id} style={{ border: '1px solid var(--a-border)', borderRadius: '10px', padding: '14px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 800, color: 'var(--a-text)' }}>
+                                                ครั้งที่ {viewCustomerHistory.customerEvaluationHistory.count - index}
+                                            </div>
+                                            <div style={{ fontSize: '13px', color: 'var(--a-text-secondary)', marginTop: '2px' }}>
+                                                ส่งเมื่อ {formatDateTH(historyItem.submittedAt)}
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontWeight: 800, color: 'var(--a-primary)' }}>{formatEvaluationSummary(historyItem)}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--a-text-muted)' }}>{historyItem.teacherName}</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px', fontSize: '13px', marginBottom: '10px' }}>
+                                        <div><strong>วันเรียน:</strong> {historyItem.bookingItem ? formatDateTH(historyItem.bookingItem.date) : '-'}</div>
+                                        <div><strong>เวลา:</strong> {historyItem.bookingItem ? `${historyItem.bookingItem.startTime}-${historyItem.bookingItem.endTime}` : '-'}</div>
+                                        <div><strong>สถานที่:</strong> {historyItem.bookingItem?.court?.name || '-'}</div>
+                                        <div><strong>เรียนซ้ำ:</strong> {comebackLabels[historyItem.comebackPref || 0] || '-'}</div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '13px', color: 'var(--a-text-secondary)' }}>
+                                        <div>ฝึกสอน: <strong>{ratingText(historyItem.trainingQuality)}</strong></div>
+                                        <div>สื่อสาร: <strong>{ratingText(historyItem.communication)}</strong></div>
+                                        <div>ใส่ใจ: <strong>{ratingText(historyItem.dedication)}</strong></div>
+                                        <div>บริการ: <strong>{ratingText(historyItem.serviceRating)}</strong></div>
+                                        <div>สถานที่: <strong>{ratingText(historyItem.venueRating)}</strong></div>
+                                    </div>
+
+                                    {historyItem.comment && (
+                                        <div style={{ marginTop: '10px', padding: '10px', background: '#fafafa', borderRadius: '8px', fontSize: '13px', color: 'var(--a-text-secondary)' }}>
+                                            {historyItem.comment}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Create Link Modal */}
             {showCreateModal && (
