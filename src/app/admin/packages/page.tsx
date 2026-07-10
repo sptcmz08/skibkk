@@ -65,6 +65,11 @@ export default function PackagesPage() {
     const [pendingDeletePkg, setPendingDeletePkg] = useState<string | null>(null)
     const [pendingDeleteUserPkg, setPendingDeleteUserPkg] = useState<string | null>(null)
     const [viewUsage, setViewUsage] = useState<UserPkg | null>(null)
+    const [packageCustomerSearch, setPackageCustomerSearch] = useState('')
+    const [packageFilter, setPackageFilter] = useState('')
+    const [purchasedDateFilter, setPurchasedDateFilter] = useState('')
+    const [expiresDateFilter, setExpiresDateFilter] = useState('')
+    const [packageStatusFilter, setPackageStatusFilter] = useState('')
 
     const fetchData = async () => {
         setLoading(true)
@@ -175,10 +180,32 @@ export default function PackagesPage() {
     }
 
     const isExpired = (d: string) => new Date(d) < new Date()
+    const getUserPackageStatus = (up: UserPkg) => {
+        if (isExpired(up.expiresAt)) return 'expired'
+        if (up.remainingHours <= 0) return 'empty'
+        return 'active'
+    }
+    const getDateKey = (value: string) => {
+        const d = new Date(value)
+        if (Number.isNaN(d.getTime())) return value.split('T')[0]
+        return d.toISOString().split('T')[0]
+    }
     const getBookingWindowLabel = (validFrom: string | null, validTo: string | null) => {
         const window = formatPackageBookingWindow(validFrom, validTo)
         return window ? `จองสนามได้วันที่ ${window}` : null
     }
+    const filteredUserPackages = userPackages.filter(up => {
+        const customerTerm = packageCustomerSearch.trim().toLowerCase()
+        const customerMatches = !customerTerm || [up.user.name, up.user.phone, up.user.email]
+            .filter(Boolean)
+            .some(value => value.toLowerCase().includes(customerTerm))
+        const packageMatches = !packageFilter || up.package.id === packageFilter
+        const purchasedMatches = !purchasedDateFilter || getDateKey(up.purchasedAt) === purchasedDateFilter
+        const expiresMatches = !expiresDateFilter || getDateKey(up.expiresAt) === expiresDateFilter
+        const statusMatches = !packageStatusFilter || getUserPackageStatus(up) === packageStatusFilter
+        return customerMatches && packageMatches && purchasedMatches && expiresMatches && statusMatches
+    })
+    const hasPackageFilters = Boolean(packageCustomerSearch || packageFilter || purchasedDateFilter || expiresDateFilter || packageStatusFilter)
 
     if (loading) return <div style={{ textAlign: 'center', padding: '80px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)' }} /></div>
 
@@ -266,10 +293,51 @@ export default function PackagesPage() {
             {/* User Packages Table */}
             <div className="admin-card" style={{ padding: '24px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Users size={20} style={{ color: 'var(--a-primary)' }} /> ลูกค้าที่มีแพ็คเกจ ({userPackages.length})
+                    <Users size={20} style={{ color: 'var(--a-primary)' }} /> ลูกค้าที่มีแพ็คเกจ ({filteredUserPackages.length}{hasPackageFilters ? `/${userPackages.length}` : ''})
                 </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) auto', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ position: 'relative' }}>
+                        <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--a-text-muted)' }} />
+                        <input
+                            className="admin-input"
+                            value={packageCustomerSearch}
+                            onChange={e => setPackageCustomerSearch(e.target.value)}
+                            placeholder="ชื่อลูกค้า / เบอร์โทร"
+                            style={{ paddingLeft: '36px' }}
+                        />
+                    </div>
+                    <select className="admin-input" value={packageFilter} onChange={e => setPackageFilter(e.target.value)}>
+                        <option value="">ทุกแพ็คเกจ</option>
+                        {packages.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
+                    </select>
+                    <DatePickerInput value={purchasedDateFilter} onChange={setPurchasedDateFilter} placeholder="วันที่ซื้อ" style={{ width: '100%' }} />
+                    <DatePickerInput value={expiresDateFilter} onChange={setExpiresDateFilter} placeholder="วันหมดอายุ" style={{ width: '100%' }} />
+                    <select className="admin-input" value={packageStatusFilter} onChange={e => setPackageStatusFilter(e.target.value)}>
+                        <option value="">ทุกสถานะ</option>
+                        <option value="active">ใช้งานอยู่</option>
+                        <option value="empty">ใช้หมด</option>
+                        <option value="expired">หมดอายุ</option>
+                    </select>
+                    {hasPackageFilters && (
+                        <button
+                            onClick={() => {
+                                setPackageCustomerSearch('')
+                                setPackageFilter('')
+                                setPurchasedDateFilter('')
+                                setExpiresDateFilter('')
+                                setPackageStatusFilter('')
+                            }}
+                            className="btn-admin-outline"
+                            style={{ whiteSpace: 'nowrap', padding: '9px 12px' }}
+                        >
+                            ล้าง
+                        </button>
+                    )}
+                </div>
                 {userPackages.length === 0 ? (
                     <p style={{ color: 'var(--a-text-muted)', textAlign: 'center', padding: '32px', fontSize: '14px' }}>ยังไม่มีลูกค้าที่มีแพ็คเกจ</p>
+                ) : filteredUserPackages.length === 0 ? (
+                    <p style={{ color: 'var(--a-text-muted)', textAlign: 'center', padding: '32px', fontSize: '14px' }}>ไม่พบข้อมูลแพ็คเกจตามเงื่อนไขที่เลือก</p>
                 ) : (
                     <div style={{ overflowX: 'auto' }}>
                         <table className="admin-table" style={{ width: '100%', fontSize: '14px' }}>
@@ -286,9 +354,10 @@ export default function PackagesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {userPackages.map(up => {
-                                    const expired = isExpired(up.expiresAt)
-                                    const empty = up.remainingHours <= 0
+                                {filteredUserPackages.map(up => {
+                                    const status = getUserPackageStatus(up)
+                                    const expired = status === 'expired'
+                                    const empty = status === 'empty'
                                     const bookingWindowLabel = getBookingWindowLabel(up.package.validFrom, up.package.validTo)
                                     return (
                                         <tr key={up.id}>

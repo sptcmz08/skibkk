@@ -3,8 +3,8 @@
 import { FadeIn } from '@/components/Motion'
 import DatePickerInput from '@/components/DatePickerInput'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Star, BarChart3, Copy, Link, MessageSquare, Users, TrendingUp, Calendar, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { BarChart3, Copy, Link, MessageSquare, Calendar, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface TeacherStat {
@@ -19,10 +19,36 @@ interface Evaluation {
     serviceRating: number | null; venueRating: number | null; comebackPref: number | null
     rating: number; comment: string | null; submittedAt: string
     teacher: { name: string }
+    bookingItem: { date: string; startTime: string; endTime: string; court: { name: string }; booking?: { user?: { name: string; phone: string | null } } } | null
+    customerEvaluationHistory: {
+        count: number
+        items: Array<{
+            id: string
+            submittedAt: string
+            teacherName: string
+            trainingQuality: number | null
+            communication: number | null
+            dedication: number | null
+            serviceRating: number | null
+            venueRating: number | null
+            comebackPref: number | null
+            rating: number
+            comment: string | null
+            bookingItem: { date: string; startTime: string; endTime: string; court: { name: string } } | null
+        }>
+    }
 }
 
 const ratingLabels = ['', 'ปรับปรุง', 'พอใช้', 'ดี', 'ดีมาก']
 const comebackLabels = ['', 'ไม่ต้องการ', 'ไม่แน่ใจ', 'ต้องการ']
+const formatDateTH = (value: string) => new Date(value).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const ratingText = (value: number | null) => ratingLabels[value || 0] || '-'
+const formatEvaluationSummary = (ev: Pick<Evaluation, 'trainingQuality' | 'communication' | 'dedication' | 'serviceRating' | 'venueRating'>) => {
+    const ratings = [ev.trainingQuality, ev.communication, ev.dedication, ev.serviceRating, ev.venueRating].filter((rating): rating is number => Boolean(rating))
+    if (ratings.length === 0) return '-'
+    const avg = Math.round(ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length)
+    return ratingLabels[avg] || '-'
+}
 
 export default function EvaluationsPage() {
     const [stats, setStats] = useState<TeacherStat[]>([])
@@ -36,8 +62,8 @@ export default function EvaluationsPage() {
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
 
-    const fetchEvaluations = useCallback(() => {
-        setLoading(true)
+    useEffect(() => {
+        let cancelled = false
         const params = new URLSearchParams()
         if (dateFrom) params.set('from', dateFrom)
         if (dateTo) params.set('to', dateTo)
@@ -47,16 +73,20 @@ export default function EvaluationsPage() {
             fetch(`/api/evaluations${qs}`).then(r => r.json()),
             fetch('/api/teachers').then(r => r.json()),
         ]).then(([evalData, teachersData]) => {
+            if (cancelled) return
             setStats(evalData.teacherStats || [])
             setEvaluations(evalData.evaluations || [])
             setTeachers(teachersData.teachers || [])
-        }).catch(() => toast.error('โหลดข้อมูลไม่สำเร็จ'))
-            .finally(() => setLoading(false))
-    }, [dateFrom, dateTo])
+        }).catch(() => {
+            if (!cancelled) toast.error('โหลดข้อมูลไม่สำเร็จ')
+        }).finally(() => {
+            if (!cancelled) setLoading(false)
+        })
 
-    useEffect(() => {
-        fetchEvaluations()
-    }, [fetchEvaluations])
+        return () => {
+            cancelled = true
+        }
+    }, [dateFrom, dateTo])
 
     const handleCreateLink = async () => {
         if (!createTeacherId) { toast.error('กรุณาเลือกเทรนเนอร์'); return }
@@ -220,8 +250,11 @@ export default function EvaluationsPage() {
                 <table className="admin-table">
                     <thead>
                         <tr>
-                            <th>วันที่</th>
+                            <th>ส่งเมื่อ</th>
+                            <th>วันเรียน</th>
+                            <th>เวลาเรียน</th>
                             <th>ผู้ประเมิน</th>
+                            <th>ประวัติลูกค้า</th>
                             <th>เทรนเนอร์</th>
                             <th>ฝึกสอน</th>
                             <th>สื่อสาร</th>
@@ -235,14 +268,50 @@ export default function EvaluationsPage() {
                     <tbody>
                         {filteredEvals.length === 0 ? (
                             <tr>
-                                <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
+                                <td colSpan={13} style={{ textAlign: 'center', padding: '40px', color: 'var(--a-text-muted)' }}>
                                     ยังไม่มีแบบประเมินที่ส่งแล้ว
                                 </td>
                             </tr>
                         ) : filteredEvals.map(ev => (
                             <tr key={ev.id}>
-                                <td style={{ fontSize: '13px' }}>{new Date(ev.submittedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                                <td>{ev.evaluatorName || '-'}</td>
+                                <td style={{ fontSize: '13px' }}>{formatDateTH(ev.submittedAt)}</td>
+                                <td style={{ fontSize: '13px' }}>{ev.bookingItem ? formatDateTH(ev.bookingItem.date) : '-'}</td>
+                                <td style={{ fontSize: '12px', color: 'var(--a-text-secondary)' }}>
+                                    {ev.bookingItem ? `${ev.bookingItem.startTime}-${ev.bookingItem.endTime}` : '-'}
+                                    {ev.bookingItem?.court?.name ? <div style={{ marginTop: '2px' }}>{ev.bookingItem.court.name}</div> : null}
+                                </td>
+                                <td>
+                                    {ev.evaluatorName || ev.bookingItem?.booking?.user?.name || '-'}
+                                    {ev.bookingItem?.booking?.user?.phone ? <div style={{ fontSize: '11px', color: 'var(--a-text-muted)', marginTop: '2px' }}>{ev.bookingItem.booking.user.phone}</div> : null}
+                                </td>
+                                <td style={{ minWidth: '220px', fontSize: '12px', color: 'var(--a-text-secondary)' }}>
+                                    {ev.customerEvaluationHistory?.count ? (
+                                        <div>
+                                            <div style={{ fontWeight: 800, color: 'var(--a-text)', marginBottom: '6px' }}>
+                                                เคยประเมิน {ev.customerEvaluationHistory.count} ครั้ง
+                                            </div>
+                                            <div style={{ display: 'grid', gap: '6px', maxHeight: '180px', overflow: 'auto' }}>
+                                                {ev.customerEvaluationHistory.items.map((historyItem, index) => (
+                                                    <div key={historyItem.id} style={{ paddingBottom: '6px', borderBottom: index < ev.customerEvaluationHistory.items.length - 1 ? '1px solid var(--a-border)' : 'none' }}>
+                                                        <div style={{ fontWeight: 700, color: 'var(--a-text)' }}>
+                                                            {historyItem.bookingItem ? formatDateTH(historyItem.bookingItem.date) : formatDateTH(historyItem.submittedAt)}
+                                                            {historyItem.bookingItem ? ` ${historyItem.bookingItem.startTime}-${historyItem.bookingItem.endTime}` : ''}
+                                                        </div>
+                                                        <div>{historyItem.teacherName} • {formatEvaluationSummary(historyItem)}</div>
+                                                        <div>
+                                                            ฝึก:{ratingText(historyItem.trainingQuality)} / สื่อ:{ratingText(historyItem.communication)} / ใส่ใจ:{ratingText(historyItem.dedication)}
+                                                        </div>
+                                                        <div>
+                                                            บริการ:{ratingText(historyItem.serviceRating)} / สถานที่:{ratingText(historyItem.venueRating)}
+                                                        </div>
+                                                        <div>เรียนซ้ำ: {comebackLabels[historyItem.comebackPref || 0] || '-'}</div>
+                                                        {historyItem.comment ? <div style={{ color: 'var(--a-text-muted)' }}>{historyItem.comment}</div> : null}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : '-'}
+                                </td>
                                 <td style={{ fontWeight: 600 }}>{ev.teacher.name}</td>
                                 <td>{ratingLabels[ev.trainingQuality || 0] || '-'}</td>
                                 <td>{ratingLabels[ev.communication || 0] || '-'}</td>

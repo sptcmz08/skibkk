@@ -42,8 +42,79 @@ export async function GET(req: NextRequest) {
                 isSubmitted: true,
                 ...(Object.keys(dateFilter).length > 0 ? { submittedAt: dateFilter } : {}),
             },
-            include: { teacher: { select: { id: true, name: true, specialty: true } } },
+            include: {
+                teacher: { select: { id: true, name: true, specialty: true } },
+                bookingItem: {
+                    select: {
+                        date: true,
+                        startTime: true,
+                        endTime: true,
+                        court: { select: { name: true } },
+                        booking: { select: { userId: true, user: { select: { id: true, name: true, phone: true } } } },
+                    },
+                },
+            },
             orderBy: { submittedAt: 'desc' },
+        })
+        const customerIds = [...new Set(evaluations.map(evaluation => evaluation.bookingItem?.booking?.userId).filter((id): id is string => Boolean(id)))]
+        const customerEvaluationHistory = customerIds.length > 0
+            ? await prisma.teacherEvaluation.findMany({
+                where: {
+                    isSubmitted: true,
+                    bookingItem: { booking: { userId: { in: customerIds } } },
+                },
+                include: {
+                    teacher: { select: { name: true } },
+                    bookingItem: {
+                        select: {
+                            date: true,
+                            startTime: true,
+                            endTime: true,
+                            court: { select: { name: true } },
+                            booking: { select: { userId: true } },
+                        },
+                    },
+                },
+                orderBy: { submittedAt: 'desc' },
+            })
+            : []
+        const historyByCustomerId = customerEvaluationHistory.reduce<Record<string, typeof customerEvaluationHistory>>((groups, evaluation) => {
+            const customerId = evaluation.bookingItem?.booking?.userId
+            if (!customerId) return groups
+            if (!groups[customerId]) groups[customerId] = []
+            groups[customerId].push(evaluation)
+            return groups
+        }, {})
+        const evaluationsWithCustomerHistory = evaluations.map(evaluation => {
+            const customerId = evaluation.bookingItem?.booking?.userId
+            const history = customerId ? historyByCustomerId[customerId] || [] : []
+            return {
+                ...evaluation,
+                customerEvaluationHistory: {
+                    count: history.length,
+                    items: history.map(historyItem => ({
+                        id: historyItem.id,
+                        submittedAt: historyItem.submittedAt,
+                        teacherName: historyItem.teacher.name,
+                        trainingQuality: historyItem.trainingQuality,
+                        communication: historyItem.communication,
+                        dedication: historyItem.dedication,
+                        serviceRating: historyItem.serviceRating,
+                        venueRating: historyItem.venueRating,
+                        comebackPref: historyItem.comebackPref,
+                        rating: historyItem.rating,
+                        comment: historyItem.comment,
+                        bookingItem: historyItem.bookingItem
+                            ? {
+                                date: historyItem.bookingItem.date,
+                                startTime: historyItem.bookingItem.startTime,
+                                endTime: historyItem.bookingItem.endTime,
+                                court: historyItem.bookingItem.court,
+                            }
+                            : null,
+                    })),
+                },
+            }
         })
 
         // Calculate averages per teacher
@@ -70,7 +141,7 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        return NextResponse.json({ evaluations, teacherStats })
+        return NextResponse.json({ evaluations: evaluationsWithCustomerHistory, teacherStats })
     } catch (error) {
         if ((error as Error).message === 'Unauthorized') {
             return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 })
