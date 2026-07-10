@@ -67,8 +67,10 @@ export default function PackagesPage() {
     const [viewUsage, setViewUsage] = useState<UserPkg | null>(null)
     const [packageCustomerSearch, setPackageCustomerSearch] = useState('')
     const [packageFilter, setPackageFilter] = useState('')
-    const [purchasedDateFilter, setPurchasedDateFilter] = useState('')
-    const [expiresDateFilter, setExpiresDateFilter] = useState('')
+    const [purchasedFromFilter, setPurchasedFromFilter] = useState('')
+    const [purchasedToFilter, setPurchasedToFilter] = useState('')
+    const [expiresFromFilter, setExpiresFromFilter] = useState('')
+    const [expiresToFilter, setExpiresToFilter] = useState('')
     const [packageStatusFilter, setPackageStatusFilter] = useState('')
 
     const fetchData = async () => {
@@ -190,6 +192,10 @@ export default function PackagesPage() {
         if (Number.isNaN(d.getTime())) return value.split('T')[0]
         return d.toISOString().split('T')[0]
     }
+    const isDateInRange = (value: string, from: string, to: string) => {
+        const dateKey = getDateKey(value)
+        return (!from || dateKey >= from) && (!to || dateKey <= to)
+    }
     const getBookingWindowLabel = (validFrom: string | null, validTo: string | null) => {
         const window = formatPackageBookingWindow(validFrom, validTo)
         return window ? `จองสนามได้วันที่ ${window}` : null
@@ -200,12 +206,12 @@ export default function PackagesPage() {
             .filter(Boolean)
             .some(value => value.toLowerCase().includes(customerTerm))
         const packageMatches = !packageFilter || up.package.id === packageFilter
-        const purchasedMatches = !purchasedDateFilter || getDateKey(up.purchasedAt) === purchasedDateFilter
-        const expiresMatches = !expiresDateFilter || getDateKey(up.expiresAt) === expiresDateFilter
+        const purchasedMatches = isDateInRange(up.purchasedAt, purchasedFromFilter, purchasedToFilter)
+        const expiresMatches = isDateInRange(up.expiresAt, expiresFromFilter, expiresToFilter)
         const statusMatches = !packageStatusFilter || getUserPackageStatus(up) === packageStatusFilter
         return customerMatches && packageMatches && purchasedMatches && expiresMatches && statusMatches
     })
-    const hasPackageFilters = Boolean(packageCustomerSearch || packageFilter || purchasedDateFilter || expiresDateFilter || packageStatusFilter)
+    const hasPackageFilters = Boolean(packageCustomerSearch || packageFilter || purchasedFromFilter || purchasedToFilter || expiresFromFilter || expiresToFilter || packageStatusFilter)
 
     if (loading) return <div style={{ textAlign: 'center', padding: '80px' }}><div className="spinner" style={{ borderTopColor: 'var(--a-primary)' }} /></div>
 
@@ -295,7 +301,7 @@ export default function PackagesPage() {
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Users size={20} style={{ color: 'var(--a-primary)' }} /> ลูกค้าที่มีแพ็คเกจ ({filteredUserPackages.length}{hasPackageFilters ? `/${userPackages.length}` : ''})
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) auto', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
                     <div style={{ position: 'relative' }}>
                         <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--a-text-muted)' }} />
                         <input
@@ -310,8 +316,10 @@ export default function PackagesPage() {
                         <option value="">ทุกแพ็คเกจ</option>
                         {packages.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
                     </select>
-                    <DatePickerInput value={purchasedDateFilter} onChange={setPurchasedDateFilter} placeholder="วันที่ซื้อ" style={{ width: '100%' }} />
-                    <DatePickerInput value={expiresDateFilter} onChange={setExpiresDateFilter} placeholder="วันหมดอายุ" style={{ width: '100%' }} />
+                    <DatePickerInput value={purchasedFromFilter} onChange={setPurchasedFromFilter} placeholder="วันที่ซื้อ จาก" style={{ width: '100%' }} />
+                    <DatePickerInput value={purchasedToFilter} onChange={setPurchasedToFilter} placeholder="วันที่ซื้อ ถึง" style={{ width: '100%' }} />
+                    <DatePickerInput value={expiresFromFilter} onChange={setExpiresFromFilter} placeholder="วันหมดอายุ จาก" style={{ width: '100%' }} />
+                    <DatePickerInput value={expiresToFilter} onChange={setExpiresToFilter} placeholder="วันหมดอายุ ถึง" style={{ width: '100%' }} />
                     <select className="admin-input" value={packageStatusFilter} onChange={e => setPackageStatusFilter(e.target.value)}>
                         <option value="">ทุกสถานะ</option>
                         <option value="active">ใช้งานอยู่</option>
@@ -323,8 +331,10 @@ export default function PackagesPage() {
                             onClick={() => {
                                 setPackageCustomerSearch('')
                                 setPackageFilter('')
-                                setPurchasedDateFilter('')
-                                setExpiresDateFilter('')
+                                setPurchasedFromFilter('')
+                                setPurchasedToFilter('')
+                                setExpiresFromFilter('')
+                                setExpiresToFilter('')
                                 setPackageStatusFilter('')
                             }}
                             className="btn-admin-outline"
