@@ -68,57 +68,58 @@ export async function PUT(req: NextRequest) {
                 const lineDisplayName = currentUserWithLine.lineDisplayName || duplicate.lineDisplayName || null
                 const lineAvatar = currentUserWithLine.lineAvatar || duplicate.lineAvatar || null
 
-                // 1. Update duplicate user (migrated record) with new profile and LINE credentials
-                const updatedDuplicate = await prisma.user.update({
-                    where: { id: duplicate.id },
-                    data: {
-                        name: nextName,
-                        firstName: nextFirstName,
-                        lastName: nextLastName,
-                        email: nextEmail,
-                        phone: nextPhone,
-                        lineUserId,
-                        lineDisplayName,
-                        lineAvatar,
-                    },
-                    select: {
-                        id: true,
-                        name: true,
-                        firstName: true,
-                        lastName: true,
-                        email: true,
-                        phone: true,
-                        role: true,
-                        isActive: true,
-                        lineDisplayName: true,
-                        lineAvatar: true,
-                    },
+                const updatedDuplicate = await prisma.$transaction(async tx => {
+                    // Move all customer history before removing the temporary LINE account.
+                    await tx.booking.updateMany({
+                        where: { userId: user.id },
+                        data: { userId: duplicate.id },
+                    })
+                    await tx.payment.updateMany({
+                        where: { userId: user.id },
+                        data: { userId: duplicate.id },
+                    })
+                    await tx.userPackage.updateMany({
+                        where: { userId: user.id },
+                        data: { userId: duplicate.id },
+                    })
+                    await tx.auditLog.updateMany({
+                        where: { userId: user.id },
+                        data: { userId: duplicate.id },
+                    })
+
+                    // Release unique LINE/email/phone values before assigning them to the existing customer.
+                    await tx.user.delete({
+                        where: { id: user.id },
+                    })
+
+                    return tx.user.update({
+                        where: { id: duplicate.id },
+                        data: {
+                            name: nextName,
+                            firstName: nextFirstName,
+                            lastName: nextLastName,
+                            email: nextEmail,
+                            phone: nextPhone,
+                            lineUserId,
+                            lineDisplayName,
+                            lineAvatar,
+                        },
+                        select: {
+                            id: true,
+                            name: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true,
+                            phone: true,
+                            role: true,
+                            isActive: true,
+                            lineDisplayName: true,
+                            lineAvatar: true,
+                        },
+                    })
                 })
 
-                // 2. Transfer all existing child records (bookings, payments, packages, logs) to the merged user
-                await prisma.booking.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: duplicate.id },
-                })
-                await prisma.payment.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: duplicate.id },
-                })
-                await prisma.userPackage.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: duplicate.id },
-                })
-                await prisma.auditLog.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: duplicate.id },
-                })
-
-                // 3. Clean up the current temporary user record
-                await prisma.user.delete({
-                    where: { id: user.id },
-                })
-
-                // 4. Create new JWT token for the merged user
+                // Create a new JWT for the retained customer record.
                 const token = await createToken({
                     userId: updatedDuplicate.id,
                     role: updatedDuplicate.role,
@@ -126,7 +127,7 @@ export async function PUT(req: NextRequest) {
                     name: updatedDuplicate.name,
                 })
 
-                // 5. Respond with updated user and set auth-token cookie to maintain session
+                // Keep the customer signed in as the retained customer record.
                 const response = NextResponse.json({ user: updatedDuplicate })
                 response.cookies.set('auth-token', token, {
                     httpOnly: true,
