@@ -95,11 +95,19 @@ export default function InvoiceReportPage() {
     const getBookingInvoiceNumber = (booking: Booking) =>
         invoiceNumbers.get(booking.id) || formatInvoiceNumberFromBookingNumber(booking.bookingNumber)
 
+    const getBangkokDateStr = (dateVal: string | Date) => {
+        try {
+            return new Date(dateVal).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
+        } catch {
+            return String(dateVal).split('T')[0]
+        }
+    }
+
     // Filter confirmed bookings where booking items fall on the selected date
     const filtered = bookings.filter(b => {
         if (b.status === 'CANCELLED') return false
         if (isPackageBooking(b)) return false
-        return b.bookingItems.some(item => item.date.split('T')[0] === selectedDate)
+        return b.bookingItems.some(item => getBangkokDateStr(item.date) === selectedDate || String(item.date).split('T')[0] === selectedDate)
     })
 
     const totalRevenue = filtered.reduce((s, b) => s + b.totalAmount, 0)

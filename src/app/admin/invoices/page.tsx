@@ -285,38 +285,71 @@ export default function InvoicesPage() {
         return formatPackageSaleInvoiceNumber(sale.saleNumber)
     }
 
+    const getBangkokDateStr = (dateVal: string | Date) => {
+        try {
+            return new Date(dateVal).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
+        } catch {
+            return new Date(dateVal).toISOString().slice(0, 10)
+        }
+    }
+
     const filtered = bookings.filter(b => {
-        const term = search.toLowerCase()
-        const invoiceNumber = getBookingDocumentNumber(b).toLowerCase()
-        const legacyInvoiceNumber = formatInvoiceNumberFromBookingNumber(b.bookingNumber).toLowerCase()
-        const matchSearch = !term ||
-            b.bookingNumber.toLowerCase().includes(term) ||
-            invoiceNumber.includes(term) ||
-            legacyInvoiceNumber.includes(term) ||
-            b.user.name.toLowerCase().includes(term)
-        if (!matchSearch) return false
+        const term = search.trim().toLowerCase()
+        if (term) {
+            const invoiceNumber = getBookingDocumentNumber(b).toLowerCase()
+            const legacyInvoiceNumber = formatInvoiceNumberFromBookingNumber(b.bookingNumber).toLowerCase()
+            const savedInvoiceNumber = (b.invoice?.invoiceNumber || '').toLowerCase()
+            const customerName = (b.user?.name || '').toLowerCase()
+            const customerPhone = (b.user?.phone || '').toLowerCase()
+            const customerEmail = (b.user?.email || '').toLowerCase()
+            const bookingNo = (b.bookingNumber || '').toLowerCase()
+
+            const matchSearch =
+                bookingNo.includes(term) ||
+                invoiceNumber.includes(term) ||
+                legacyInvoiceNumber.includes(term) ||
+                savedInvoiceNumber.includes(term) ||
+                customerName.includes(term) ||
+                customerPhone.includes(term) ||
+                customerEmail.includes(term)
+
+            if (!matchSearch) return false
+        }
         if (dateFrom) {
-            const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
+            const bDate = getBangkokDateStr(b.createdAt)
             if (bDate < dateFrom) return false
         }
         if (dateTo) {
-            const bDate = new Date(b.createdAt).toISOString().slice(0, 10)
+            const bDate = getBangkokDateStr(b.createdAt)
             if (bDate > dateTo) return false
         }
         return true
     })
     const filteredPackageSales = packageSales.filter(sale => {
-        const term = search.toLowerCase()
-        const invoiceNumber = getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber).toLowerCase()
-        const legacyInvoiceNumber = formatPackageSaleInvoiceNumber(sale.saleNumber).toLowerCase()
-        const matchSearch = !term ||
-            sale.saleNumber.toLowerCase().includes(term) ||
-            invoiceNumber.includes(term) ||
-            legacyInvoiceNumber.includes(term) ||
-            sale.customerName.toLowerCase().includes(term) ||
-            sale.packageName.toLowerCase().includes(term)
-        if (!matchSearch) return false
-        const saleDate = new Date(sale.createdAt).toISOString().slice(0, 10)
+        const term = search.trim().toLowerCase()
+        if (term) {
+            const invoiceNumber = getPackageSaleDocumentNumber(sale, sale.invoice?.invoiceNumber).toLowerCase()
+            const legacyInvoiceNumber = formatPackageSaleInvoiceNumber(sale.saleNumber).toLowerCase()
+            const savedInvoiceNumber = (sale.invoice?.invoiceNumber || '').toLowerCase()
+            const customerName = (sale.customerName || '').toLowerCase()
+            const customerPhone = (sale.customerPhone || '').toLowerCase()
+            const customerEmail = (sale.customerEmail || '').toLowerCase()
+            const packageName = (sale.packageName || '').toLowerCase()
+            const saleNo = (sale.saleNumber || '').toLowerCase()
+
+            const matchSearch =
+                saleNo.includes(term) ||
+                invoiceNumber.includes(term) ||
+                legacyInvoiceNumber.includes(term) ||
+                savedInvoiceNumber.includes(term) ||
+                customerName.includes(term) ||
+                customerPhone.includes(term) ||
+                customerEmail.includes(term) ||
+                packageName.includes(term)
+
+            if (!matchSearch) return false
+        }
+        const saleDate = getBangkokDateStr(sale.createdAt)
         if (dateFrom && saleDate < dateFrom) return false
         if (dateTo && saleDate > dateTo) return false
         return true
