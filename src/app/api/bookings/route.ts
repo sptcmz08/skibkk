@@ -731,6 +731,7 @@ export async function PATCH(req: NextRequest) {
                         price: item.price || 0,
                         notes: item.notes === undefined ? oldItem?.notes || null : normalizeOptionalText(item.notes),
                         teacherId: item.teacherId || null,
+                        reminderSentAt: oldItem?.reminderSentAt || null,
                         originalCourtId: origCourtId,
                         originalDate: origDate,
                         originalStartTime: origStartTime,

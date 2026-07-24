@@ -27,7 +27,7 @@ function getItemStartBangkokTimestamp(date: Date, startTime: string) {
     const hours = Number(hoursRaw)
     const minutes = Number(minutesRaw)
     const dateKey = date.toISOString().split('T')[0]
-    const dayStart = Date.parse(`${dateKey}T00:00:00.000Z`)
+    const dayStart = Date.parse(`${dateKey}T00:00:00.000Z`) + BANGKOK_OFFSET_MS
 
     if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
 
